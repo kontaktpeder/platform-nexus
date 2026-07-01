@@ -14,16 +14,291 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      memberships: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      modules: {
+        Row: {
+          api_endpoint: string | null
+          created_at: string
+          default_url: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+          status: Database["public"]["Enums"]["module_status"]
+          version: string
+        }
+        Insert: {
+          api_endpoint?: string | null
+          created_at?: string
+          default_url?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["module_status"]
+          version?: string
+        }
+        Update: {
+          api_endpoint?: string | null
+          created_at?: string
+          default_url?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["module_status"]
+          version?: string
+        }
+        Relationships: []
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          logo_url: string | null
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      themes: {
+        Row: {
+          background: string
+          body_font: string
+          card: string
+          favicon_url: string | null
+          heading_font: string
+          id: string
+          logo_url: string | null
+          primary_color: string
+          radius: string
+          secondary_color: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          background?: string
+          body_font?: string
+          card?: string
+          favicon_url?: string | null
+          heading_font?: string
+          id?: string
+          logo_url?: string | null
+          primary_color?: string
+          radius?: string
+          secondary_color?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          background?: string
+          body_font?: string
+          card?: string
+          favicon_url?: string | null
+          heading_font?: string
+          id?: string
+          logo_url?: string | null
+          primary_color?: string
+          radius?: string
+          secondary_color?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "themes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_modules: {
+        Row: {
+          config: Json
+          created_at: string
+          enabled: boolean
+          module_id: string
+          workspace_id: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          module_id: string
+          workspace_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          module_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_modules_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_modules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          org_id: string
+          slug: string
+          updated_at: string
+          workspace_type: Database["public"]["Enums"]["workspace_type"]
+        }
+        Insert: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          org_id: string
+          slug: string
+          updated_at?: string
+          workspace_type?: Database["public"]["Enums"]["workspace_type"]
+        }
+        Update: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          org_id?: string
+          slug?: string
+          updated_at?: string
+          workspace_type?: Database["public"]["Enums"]["workspace_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspaces_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_org_admin: { Args: { _org: string; _user: string }; Returns: boolean }
+      is_org_member: { Args: { _org: string; _user: string }; Returns: boolean }
+      org_role: {
+        Args: { _org: string; _user: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "owner" | "admin" | "editor" | "viewer"
+      module_status: "available" | "beta" | "coming_soon"
+      workspace_type:
+        | "drift"
+        | "produksjon"
+        | "nettside"
+        | "catering"
+        | "studio"
+        | "garage"
+        | "event"
+        | "annet"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +425,19 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["owner", "admin", "editor", "viewer"],
+      module_status: ["available", "beta", "coming_soon"],
+      workspace_type: [
+        "drift",
+        "produksjon",
+        "nettside",
+        "catering",
+        "studio",
+        "garage",
+        "event",
+        "annet",
+      ],
+    },
   },
 } as const
