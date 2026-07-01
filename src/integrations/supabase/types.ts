@@ -46,6 +46,35 @@ export type Database = {
           },
         ]
       }
+      module_connection_secrets: {
+        Row: {
+          api_key_ciphertext: string
+          connection_id: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          api_key_ciphertext: string
+          connection_id: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          api_key_ciphertext?: string
+          connection_id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_connection_secrets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "module_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       module_connections: {
         Row: {
           connected_at: string | null
@@ -54,10 +83,13 @@ export type Database = {
           error_message: string | null
           external_base_url: string
           external_org_id: string
+          external_org_name: string | null
           id: string
           last_verified_at: string | null
           module_id: string
+          module_slug: string | null
           org_id: string
+          resolved_org_home_url: string | null
           status: Database["public"]["Enums"]["module_connection_status"]
           updated_at: string
           workspace_id: string
@@ -69,10 +101,13 @@ export type Database = {
           error_message?: string | null
           external_base_url: string
           external_org_id: string
+          external_org_name?: string | null
           id?: string
           last_verified_at?: string | null
           module_id: string
+          module_slug?: string | null
           org_id: string
+          resolved_org_home_url?: string | null
           status?: Database["public"]["Enums"]["module_connection_status"]
           updated_at?: string
           workspace_id: string
@@ -84,10 +119,13 @@ export type Database = {
           error_message?: string | null
           external_base_url?: string
           external_org_id?: string
+          external_org_name?: string | null
           id?: string
           last_verified_at?: string | null
           module_id?: string
+          module_slug?: string | null
           org_id?: string
+          resolved_org_home_url?: string | null
           status?: Database["public"]["Enums"]["module_connection_status"]
           updated_at?: string
           workspace_id?: string

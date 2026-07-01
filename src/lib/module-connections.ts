@@ -14,6 +14,9 @@ export type ModuleConnectionRow = {
   connected_at: string | null;
   last_verified_at: string | null;
   error_message: string | null;
+  external_org_name?: string | null;
+  resolved_org_home_url?: string | null;
+  module_slug?: string | null;
 };
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,12 +42,26 @@ export function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+/** @deprecated Bruk resolveModuleOpenUrl — beholdes som fallback for gamle koblinger. */
 export function moduleAppUrl(baseUrl: string, externalOrgId: string, slug: string): string {
   const base = normalizeBaseUrl(baseUrl);
   if (slug === "finance" || slug === "work") {
     return `${base}/orgs/${externalOrgId}`;
   }
   return base;
+}
+
+export function resolveModuleOpenUrl(
+  connection: ModuleConnectionRow,
+  fallbackSlug?: string,
+): string | null {
+  if (connection.status !== "connected") return null;
+  if (connection.resolved_org_home_url) return connection.resolved_org_home_url;
+  return moduleAppUrl(
+    connection.external_base_url,
+    connection.external_org_id,
+    connection.module_slug ?? fallbackSlug ?? "finance",
+  );
 }
 
 export function validateConnectionInput(input: {

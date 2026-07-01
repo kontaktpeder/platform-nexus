@@ -1,0 +1,26 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  retestModuleConnection,
+  verifyAndSaveModuleConnection,
+} from "./module-verify.functions";
+
+export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string) {
+  const fn = useServerFn(verifyAndSaveModuleConnection);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+  });
+}
+
+export function useRetestModuleConnection(orgSlug: string, wsSlug: string) {
+  const fn = useServerFn(retestModuleConnection);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+  });
+}

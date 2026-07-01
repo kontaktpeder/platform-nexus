@@ -51,7 +51,7 @@ export async function loadWorkspaceContext(orgSlug: string, wsSlug: string) {
     supabase
       .from("module_connections")
       .select(
-        "id, org_id, workspace_id, module_id, external_org_id, external_base_url, status, connected_by, connected_at, last_verified_at, error_message",
+        "id, org_id, workspace_id, module_id, external_org_id, external_base_url, status, connected_by, connected_at, last_verified_at, error_message, external_org_name, resolved_org_home_url, module_slug",
       )
       .eq("workspace_id", ws.id),
   ]);
