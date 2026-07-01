@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Blocks } from "lucide-react";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { WidgetSlot } from "@/components/platform/WidgetSlot";
-import { getModuleConnection, moduleAppUrl } from "@/lib/module-connections";
+import { getModuleConnection } from "@/lib/workspaceContext";
+import { moduleAppUrl } from "@/lib/module-connections";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
   component: Dashboard,
