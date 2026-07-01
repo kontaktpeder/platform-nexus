@@ -1,12 +1,33 @@
 # Core Module Contract v1
 
-**Status:** Fasit (normativ)
+> **FROZEN — ikke endre dette dokumentet.**
+>
+> Breaking changes → opprett `docs/MODULE_CONTRACT.v2.md`.
+>
+> v1 forblir normativ for alle som implementerer `contract_version: "1.0"`.
 
-**Versjon:** `1.0`
+| | |
+|--|--|
+| **Contract Version** | `1.0.0` |
+| **Document** | `MODULE_CONTRACT.v1.md` |
+| **Status** | **Stable** |
+| **Breaking changes** | **Not allowed** in this document |
+| **Future additions** | Backward compatible only (new optional fields, capabilities, deep_links) |
+| **Deprecation policy** | Endpoints may be marked deprecated; removal only in next major contract version (`v2`) |
+| **Eier** | Platform Core |
+| **Referanseimplementasjon** | Finance Core (`finance-hub`) |
+| **Gjelder for** | Finance Core, Work Core, Booking Core, fremtidige moduler |
 
-**Eier:** Platform Core
+**Endringsregler:**
 
-**Gjelder for:** Finance Core, Work Core, Booking Core, og alle fremtidige moduler
+- Typo/clarification uten semantikkendring → PR med label `docs: non-breaking`
+- Nye valgfrie JSON-felt → tillatt i v1-implementasjoner
+- Endret required-felt, path, auth, eller response-shape → **v2 dokument**
+- Ingen modul implementerer «v1.1» — kun `1.0` eller `2.0`
+
+---
+
+**Versjon i API-respons:** `"contract_version": "1.0"` (kort form; tilsvarer dokument `1.0.0`)
 
 Dette dokumentet definerer det **obligatoriske plattformgrensesnittet** som hver modul må implementere for å kunne kobles til Platform Core via `module_connections`.
 
