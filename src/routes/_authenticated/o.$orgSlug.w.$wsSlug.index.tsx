@@ -52,9 +52,7 @@ function Dashboard() {
           {activeModules.flatMap((m) => {
             const conn = getModuleConnection(modules, m.slug);
             const connected = conn?.status === "connected";
-            const href = connected && conn
-              ? moduleAppUrl(conn.external_base_url, conn.external_org_id, m.slug)
-              : null;
+            const href = conn ? resolveModuleOpenUrl(conn, m.slug) : null;
             return (widgetsByModule[m.slug] ?? [{ title: m.name }]).map((w, i) => (
               <WidgetSlot
                 key={`${m.id}-${i}`}
