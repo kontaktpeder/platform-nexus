@@ -46,6 +46,76 @@ export type Database = {
           },
         ]
       }
+      module_connections: {
+        Row: {
+          connected_at: string | null
+          connected_by: string | null
+          created_at: string
+          error_message: string | null
+          external_base_url: string
+          external_org_id: string
+          id: string
+          last_verified_at: string | null
+          module_id: string
+          org_id: string
+          status: Database["public"]["Enums"]["module_connection_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_base_url: string
+          external_org_id: string
+          id?: string
+          last_verified_at?: string | null
+          module_id: string
+          org_id: string
+          status?: Database["public"]["Enums"]["module_connection_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          connected_at?: string | null
+          connected_by?: string | null
+          created_at?: string
+          error_message?: string | null
+          external_base_url?: string
+          external_org_id?: string
+          id?: string
+          last_verified_at?: string | null
+          module_id?: string
+          org_id?: string
+          status?: Database["public"]["Enums"]["module_connection_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "module_connections_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_connections_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "module_connections_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       modules: {
         Row: {
           api_endpoint: string | null
@@ -289,6 +359,11 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "editor" | "viewer"
+      module_connection_status:
+        | "pending"
+        | "connected"
+        | "error"
+        | "disconnected"
       module_status: "available" | "beta" | "coming_soon"
       workspace_type:
         | "drift"
@@ -427,6 +502,12 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "editor", "viewer"],
+      module_connection_status: [
+        "pending",
+        "connected",
+        "error",
+        "disconnected",
+      ],
       module_status: ["available", "beta", "coming_soon"],
       workspace_type: [
         "drift",
