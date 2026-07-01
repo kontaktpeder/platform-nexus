@@ -35,17 +35,17 @@ function OrgSettings() {
     enabled: !!org,
     queryKey: ["members", org?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: mem, error } = await supabase
         .from("memberships")
-        .select("id, user_id, role, profiles:profiles!memberships_user_id_fkey(display_name, avatar_url)")
+        .select("id, user_id, role")
         .eq("org_id", org!.id);
-      if (error) {
-        // profiles FK join name may differ — fall back to plain memberships
-        const { data: mem, error: e2 } = await supabase.from("memberships").select("id, user_id, role").eq("org_id", org!.id);
-        if (e2) throw e2;
-        return mem.map((m) => ({ ...m, profiles: null as { display_name: string | null; avatar_url: string | null } | null }));
-      }
-      return data;
+      if (error) throw error;
+      const ids = mem.map((m) => m.user_id);
+      if (ids.length === 0) return [] as Array<typeof mem[number] & { profile: { display_name: string | null; avatar_url: string | null } | null }>;
+      const { data: profs } = await supabase
+        .from("profiles").select("id, display_name, avatar_url").in("id", ids);
+      const map = new Map((profs ?? []).map((p) => [p.id, p]));
+      return mem.map((m) => ({ ...m, profile: map.get(m.user_id) ?? null }));
     },
   });
 
