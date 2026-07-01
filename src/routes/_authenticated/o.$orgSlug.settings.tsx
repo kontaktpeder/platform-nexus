@@ -100,10 +100,10 @@ function OrgSettings() {
             {members?.map((m) => (
               <li key={m.id} className="flex items-center gap-3 py-3">
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-sm font-semibold text-primary">
-                  {(m.profiles?.display_name?.[0] ?? "?").toUpperCase()}
+                  {(m.profile?.display_name?.[0] ?? "?").toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{m.profiles?.display_name ?? m.user_id.slice(0, 8)}</div>
+                  <div className="truncate text-sm font-medium">{m.profile?.display_name ?? m.user_id.slice(0, 8)}</div>
                   <div className="truncate text-xs text-muted-foreground">{m.user_id}</div>
                 </div>
                 {canEdit ? (
