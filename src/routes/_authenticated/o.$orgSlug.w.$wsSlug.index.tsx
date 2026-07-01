@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Blocks } from "lucide-react";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { WidgetSlot } from "@/components/platform/WidgetSlot";
+import { getModuleConnection } from "@/lib/workspaceContext";
+import { moduleAppUrl } from "@/lib/module-connections";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
   component: Dashboard,
@@ -27,7 +29,8 @@ function Dashboard() {
       <section className="mb-6">
         <h1 className="font-heading text-2xl font-bold">Hei igjen 👋</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Arbeidsflaten <span className="font-medium text-foreground">{ws.name}</span> — {activeModules.length} aktive modul{activeModules.length === 1 ? "" : "er"}.
+          Arbeidsflaten <span className="font-medium text-foreground">{ws.name}</span> —{" "}
+          {activeModules.length} aktive modul{activeModules.length === 1 ? "" : "er"}.
         </p>
       </section>
 
@@ -35,7 +38,9 @@ function Dashboard() {
         <div className="surface-card p-8 text-center">
           <Blocks className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <h3 className="font-heading text-lg font-semibold">Ingen moduler aktivert</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Slå på det arbeidsflaten trenger for å se widgets her.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Slå på det arbeidsflaten trenger for å se widgets her.
+          </p>
           <Link to="/o/$orgSlug/w/$wsSlug/modules" params={{ orgSlug, wsSlug }}>
             <button className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
               Åpne modulvelger <ArrowRight className="h-4 w-4" />
@@ -44,11 +49,23 @@ function Dashboard() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {activeModules.flatMap((m) =>
-            (widgetsByModule[m.slug] ?? [{ title: m.name }]).map((w, i) => (
-              <WidgetSlot key={`${m.id}-${i}`} moduleName={m.name} title={w.title} hint={w.hint} />
-            )),
-          )}
+          {activeModules.flatMap((m) => {
+            const conn = getModuleConnection(modules, m.slug);
+            const connected = conn?.status === "connected";
+            const href = connected && conn
+              ? moduleAppUrl(conn.external_base_url, conn.external_org_id, m.slug)
+              : null;
+            return (widgetsByModule[m.slug] ?? [{ title: m.name }]).map((w, i) => (
+              <WidgetSlot
+                key={`${m.id}-${i}`}
+                moduleName={m.name}
+                title={w.title}
+                hint={w.hint}
+                connected={connected}
+                href={href}
+              />
+            ));
+          })}
         </div>
       )}
     </main>
