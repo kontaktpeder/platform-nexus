@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import * as Icons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ModuleConnectionPanel } from "@/components/platform/ModuleConnectionPanel";
+import { isConnectableModule } from "@/lib/module-connections";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/modules")({
   component: ModulesPage,
@@ -20,7 +22,7 @@ function iconFor(name?: string | null): LucideIcon {
 
 function ModulesPage() {
   const { orgSlug, wsSlug } = Route.useParams();
-  const { ws, modules, role } = useWs();
+  const { org, ws, modules, role } = useWs();
   const qc = useQueryClient();
   const canEdit = role === "owner" || role === "admin";
 
@@ -38,29 +40,48 @@ function ModulesPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
       <h1 className="font-heading text-2xl font-bold">Moduler</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Slå på det arbeidsflaten skal bruke. Platform Core kobler dem sammen.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Slå på det arbeidsflaten skal bruke. Platform Core kobler dem sammen.
+      </p>
 
       <ul className="mt-6 grid gap-3">
         {modules.map((m) => {
           const Icon = iconFor(m.icon);
           return (
-            <li key={m.id} className="surface-card flex items-center gap-4 p-4">
-              <div className="grid h-11 w-11 flex-none place-items-center rounded-xl bg-primary-soft text-primary">
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="font-heading text-base font-semibold">{m.name}</div>
-                  {m.status === "beta" && <Badge variant="secondary">Beta</Badge>}
-                  {m.status === "coming_soon" && <Badge variant="outline">Kommer</Badge>}
+            <li key={m.id} className="surface-card p-4">
+              <div className="flex items-center gap-4">
+                <div className="grid h-11 w-11 flex-none place-items-center rounded-xl bg-primary-soft text-primary">
+                  <Icon className="h-5 w-5" />
                 </div>
-                <div className="text-xs text-muted-foreground">{m.description}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="font-heading text-base font-semibold">{m.name}</div>
+                    {m.status === "beta" && <Badge variant="secondary">Beta</Badge>}
+                    {m.status === "coming_soon" && <Badge variant="outline">Kommer</Badge>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{m.description}</div>
+                </div>
+                <Switch
+                  checked={m.enabled}
+                  disabled={!canEdit || m.status === "coming_soon" || toggle.isPending}
+                  onCheckedChange={(v) => toggle.mutate({ moduleId: m.id, enabled: v })}
+                />
               </div>
-              <Switch
-                checked={m.enabled}
-                disabled={!canEdit || m.status === "coming_soon" || toggle.isPending}
-                onCheckedChange={(v) => toggle.mutate({ moduleId: m.id, enabled: v })}
-              />
+
+              {m.enabled && isConnectableModule(m.slug, m.status) && (
+                <ModuleConnectionPanel
+                  orgId={org.id}
+                  workspaceId={ws.id}
+                  moduleId={m.id}
+                  moduleSlug={m.slug}
+                  moduleName={m.name}
+                  enabled={m.enabled}
+                  connection={m.connection}
+                  canEdit={canEdit}
+                  orgSlug={orgSlug}
+                  wsSlug={wsSlug}
+                />
+              )}
             </li>
           );
         })}
