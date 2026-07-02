@@ -85,7 +85,7 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
             external_org_name: result.orgName,
             resolved_org_home_url: result.orgHome,
             module_slug: data.moduleSlug,
-            module_info_snapshot: snapshot,
+            module_info_snapshot: snapshot as unknown as import("@/integrations/supabase/types").Json,
             status: "connected",
             connected_by: userId,
             connected_at: now,
