@@ -17,11 +17,18 @@ export type GlobalWorkspaceEntry = {
   modules: WorkspaceModule[];
 };
 
+export type InboxSourceMeta = {
+  connected: boolean;
+  error: string | null;
+  count: number;
+};
+
 export type GlobalMissionData = {
   orgs: { id: string; name: string; slug: string }[];
   workspaces: GlobalWorkspaceEntry[];
   inbox: InboxAction[];
   inboxSources: { gmail: boolean; slack: boolean };
+  inboxMeta: { gmail: InboxSourceMeta; slack: InboxSourceMeta };
   actionStates: MissionActionState[];
 };
 
