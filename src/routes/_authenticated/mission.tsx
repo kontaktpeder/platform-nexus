@@ -222,7 +222,12 @@ function GlobalMission() {
 
             {!(filter === "gmail" && !gmailHasAny) &&
               !(filter === "slack" && !slackHasAny) && (
-                <GlobalActionList actions={filtered} />
+                <GlobalActionList
+                  actions={filtered}
+                  onAction={handleAction}
+                  busyKey={busyKey}
+                />
+
               )}
           </>
         )}
