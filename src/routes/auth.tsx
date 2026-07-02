@@ -8,7 +8,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getLastWorkspace } from "@/lib/last-workspace";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Logg inn — Platform Core" }] }),
@@ -25,17 +24,9 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   const redirectAfterAuth = useCallback(() => {
-    const last = getLastWorkspace();
-    if (last) {
-      navigate({
-        to: "/o/$orgSlug/w/$wsSlug",
-        params: { orgSlug: last.orgSlug, wsSlug: last.wsSlug },
-        replace: true,
-      });
-    } else {
-      navigate({ to: "/app", replace: true });
-    }
+    navigate({ to: "/mission", replace: true });
   }, [navigate]);
+
 
   useEffect(() => {
     if (!authLoading && user) redirectAfterAuth();

@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { ArrowRight, Blocks, Layers, Palette, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { getLastWorkspace } from "@/lib/last-workspace";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -15,17 +14,9 @@ function Landing() {
 
   useEffect(() => {
     if (loading || !user) return;
-    const last = getLastWorkspace();
-    if (last) {
-      navigate({
-        to: "/o/$orgSlug/w/$wsSlug",
-        params: { orgSlug: last.orgSlug, wsSlug: last.wsSlug },
-        replace: true,
-      });
-    } else {
-      navigate({ to: "/app", replace: true });
-    }
+    navigate({ to: "/mission", replace: true });
   }, [loading, user, navigate]);
+
 
   return (
     <main className="min-h-screen bg-background">

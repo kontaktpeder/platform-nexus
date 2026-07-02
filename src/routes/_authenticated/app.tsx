@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { createOrganization } from "@/lib/organization.functions";
 import { setLastWorkspace } from "@/lib/last-workspace";
 import { TopBar } from "@/components/platform/TopBar";
+import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,10 +56,11 @@ function OrgPicker() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <TopBar title="Mine organisasjoner" subtitle="Velg hvor du vil jobbe i dag" />
+    <div className="flex min-h-screen flex-col bg-background">
+      <TopBar title="Mine organisasjoner" subtitle="Workspaces & organizations" />
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
+
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-heading text-xl font-semibold">Organisasjoner</h2>
           <Dialog open={open} onOpenChange={setOpen}>
@@ -117,6 +120,8 @@ function OrgPicker() {
           </div>
         )}
       </main>
+      <PlatformBottomNav />
     </div>
   );
 }
+
