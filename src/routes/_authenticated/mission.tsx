@@ -70,6 +70,31 @@ function GlobalMission() {
   const gmailHasAny = inbox.some((i) => i.source === "gmail");
   const slackHasAny = inbox.some((i) => i.source === "slack");
 
+  // AI briefing (opt-in). Server fn is called on demand; if it fails we fall
+  // back to the deterministic Morning Brief. No prompts or briefings are
+  // persisted server-side.
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const runBriefing = useServerFn(generateMissionBriefing);
+  const sanitized = useMemo(() => sanitizeActions(filtered), [filtered]);
+  const aiQuery = useQuery({
+    queryKey: ["mission-briefing", sanitized.map((s) => s.key).join("|")],
+    queryFn: () => runBriefing({ data: { actions: sanitized } }),
+    enabled: aiEnabled && sanitized.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const aiRecommended: GlobalMissionAction | null =
+    aiEnabled && aiQuery.data?.recommendedKey
+      ? filtered.find((a) => a.key === aiQuery.data!.recommendedKey) ?? null
+      : null;
+
+  const useAi = aiEnabled && !!aiQuery.data && !aiQuery.error;
+  const recommended = useAi
+    ? aiRecommended ?? brief.recommended
+    : brief.recommended;
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TopBar title="Mission Control" subtitle="All your workspaces" />
