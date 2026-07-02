@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, X, Sparkles, Wand2, Check, Clock } from "lucide-react";
+import { Loader2, Plus, Trash2, Link2, X, Sparkles, Wand2, Check, Clock } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
