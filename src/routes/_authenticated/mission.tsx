@@ -248,5 +248,3 @@ function sanitizeActions(actions: GlobalMissionAction[]) {
   }));
 }
 
-// Silence unused-warning: useMutation kept imported for possible future use.
-void useMutation;
