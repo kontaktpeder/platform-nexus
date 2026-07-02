@@ -171,13 +171,16 @@ export type GlobalMissionAction = {
   wsName?: string;
   // Inbox-only:
   sender?: string;
+  senderEmail?: string | null;
+  channelName?: string | null;
   snippet?: string;
   occurredAt?: string | null;
   threadId?: string | null;
-  // Optional Knowledge enrichment (Knowledge v0):
+  // Optional Knowledge enrichment:
   entityId?: string;
   entityName?: string;
   entitySlug?: string;
+  entityLinkSource?: "manual" | "auto" | null;
 };
 
 function tierFromPriority(p: number): MissionTier {
@@ -214,6 +217,8 @@ export function buildGlobalActions(input: {
     tier: MissionTier;
     occurredAt?: string | null;
     threadId?: string | null;
+    senderEmail?: string | null;
+    channelName?: string | null;
   }>;
   max?: number;
 }): GlobalMissionAction[] {
@@ -251,6 +256,8 @@ export function buildGlobalActions(input: {
       priority: i.priority,
       tier: i.tier,
       sender: i.sender,
+      senderEmail: i.senderEmail ?? null,
+      channelName: i.channelName ?? null,
       snippet: i.snippet,
       occurredAt: i.occurredAt ?? null,
       threadId: i.threadId ?? null,
