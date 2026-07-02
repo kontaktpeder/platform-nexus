@@ -192,16 +192,15 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmailRes, slack, actionStates] = await Promise.all([
+    const [gmailRes, slack, actionStates, openCommitments] = await Promise.all([
       fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
+      loadOpenCommitments(supabase, userId).catch(() => []),
     ]);
     const inbox = [...gmailRes.actions, ...slack];
 
     // Build workspace descriptors so R7/R8 can match by orgSlug/orgName.
-    // Stable per-org external_ref `ws:{orgSlug}` — Mission.tsx falls back to
-    // this key when a widget-specific action.key has no direct link.
     const wsInputs = entries.map((ws) => ({
       orgSlug: ws.orgSlug,
       orgName: ws.orgName,
@@ -232,8 +231,10 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         },
         actionStates,
         entityLinks,
+        openCommitments,
       }),
     ) as any;
   });
+
 
 
