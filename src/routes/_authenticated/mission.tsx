@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { Loader2, Mail, MessageSquare } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
@@ -13,6 +14,7 @@ import {
   type MissionFilter,
 } from "@/components/platform/mission/MissionFilterChips";
 import { GlobalActionList } from "@/components/platform/mission/GlobalActionList";
+import type { MissionActionType } from "@/components/platform/mission/MissionActionBar";
 import {
   getGlobalMissionData,
   type GlobalMissionData,
@@ -24,6 +26,12 @@ import {
 } from "@/lib/mission-actions";
 import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
 import { generateMissionBriefing } from "@/lib/mission-briefing.functions";
+import {
+  executeMissionAction,
+  undoMissionAction,
+} from "@/lib/mission-actions.functions";
+import { filterVisibleActions } from "@/lib/mission-action-state";
+import type { SnoozePreset } from "@/lib/mission-snooze";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
@@ -50,25 +58,83 @@ function GlobalMission() {
     0,
   );
 
-  const actions = useMemo(
-    () => buildGlobalActions({ workspaces, inbox, max: 7 }),
+  const rawActions = useMemo(
+    () => buildGlobalActions({ workspaces, inbox, max: 20 }),
     [workspaces, inbox],
+  );
+
+  const actionStates = data?.actionStates ?? [];
+  const visible = useMemo(
+    () => filterVisibleActions(rawActions, actionStates).slice(0, 7),
+    [rawActions, actionStates],
   );
 
   const counts = useMemo(
     () => ({
-      all: actions.length,
-      gmail: actions.filter((a) => a.source === "gmail").length,
-      slack: actions.filter((a) => a.source === "slack").length,
-      workspace: actions.filter((a) => a.source === "workspace").length,
+      all: visible.length,
+      gmail: visible.filter((a) => a.source === "gmail").length,
+      slack: visible.filter((a) => a.source === "slack").length,
+      workspace: visible.filter((a) => a.source === "workspace").length,
     }),
-    [actions],
+    [visible],
   );
 
-  const filtered = applyMissionFilter(actions, filter);
+  const filtered = applyMissionFilter(visible, filter);
   const brief = useMemo(() => buildMorningBrief(filtered), [filtered]);
-  const gmailHasAny = inbox.some((i) => i.source === "gmail");
-  const slackHasAny = inbox.some((i) => i.source === "slack");
+  const gmailHasAny = visible.some((i) => i.source === "gmail");
+  const slackHasAny = visible.some((i) => i.source === "slack");
+
+  // Mutations for triage
+  const queryClient = useQueryClient();
+  const runExecute = useServerFn(executeMissionAction);
+  const runUndo = useServerFn(undoMissionAction);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const handleAction = async (
+    action: GlobalMissionAction,
+    type: MissionActionType,
+    snoozePreset?: SnoozePreset,
+  ) => {
+    if (type === "open_only") return;
+    setBusyKey(action.key);
+    try {
+      await runExecute({
+        data: { actionKey: action.key, action: type, snoozePreset },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
+      const label =
+        type === "mark_read"
+          ? "Marked as read"
+          : type === "archive"
+            ? "Archived"
+            : type === "handled_locally"
+              ? "Marked handled"
+              : type === "snooze"
+                ? "Snoozed"
+                : "Dismissed";
+      toast(label, {
+        duration: 7000,
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            try {
+              await runUndo({ data: { actionKey: action.key } });
+              await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
+              toast("Restored to Mission list");
+            } catch {
+              toast.error("Could not undo");
+            }
+          },
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Action failed";
+      toast.error(msg);
+    } finally {
+      setBusyKey((k) => (k === action.key ? null : k));
+    }
+  };
+
 
   // AI briefing (opt-in). Server fn is called on demand; if it fails we fall
   // back to the deterministic Morning Brief. No prompts or briefings are
@@ -156,7 +222,12 @@ function GlobalMission() {
 
             {!(filter === "gmail" && !gmailHasAny) &&
               !(filter === "slack" && !slackHasAny) && (
-                <GlobalActionList actions={filtered} />
+                <GlobalActionList
+                  actions={filtered}
+                  onAction={handleAction}
+                  busyKey={busyKey}
+                />
+
               )}
           </>
         )}

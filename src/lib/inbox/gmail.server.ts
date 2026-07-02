@@ -106,3 +106,60 @@ export async function fetchGmailActions(opts?: { max?: number }): Promise<InboxA
     return [];
   }
 }
+
+// ─── Mutators (server-only) ─────────────────────────────────────────────────
+
+async function gmailPost<T>(
+  path: string,
+  apiKey: string,
+  lovableKey: string,
+  body: unknown,
+): Promise<T> {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`gmail ${path} -> ${res.status} ${text.slice(0, 200)}`);
+  }
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+function gmailKeys(): { apiKey: string; lovableKey: string } {
+  const apiKey = process.env.GOOGLE_MAIL_API_KEY;
+  const lovableKey = process.env.LOVABLE_API_KEY;
+  if (!apiKey || !lovableKey) {
+    throw new Error("Gmail is not connected");
+  }
+  return { apiKey, lovableKey };
+}
+
+export async function gmailModify(
+  messageId: string,
+  changes: { addLabelIds?: string[]; removeLabelIds?: string[] },
+): Promise<void> {
+  const { apiKey, lovableKey } = gmailKeys();
+  await gmailPost(
+    `/users/me/messages/${encodeURIComponent(messageId)}/modify`,
+    apiKey,
+    lovableKey,
+    {
+      addLabelIds: changes.addLabelIds ?? [],
+      removeLabelIds: changes.removeLabelIds ?? [],
+    },
+  );
+}
+
+export async function markGmailMessageRead(messageId: string): Promise<void> {
+  await gmailModify(messageId, { removeLabelIds: ["UNREAD"] });
+}
+
+export async function archiveGmailMessage(messageId: string): Promise<void> {
+  await gmailModify(messageId, { removeLabelIds: ["INBOX", "UNREAD"] });
+}

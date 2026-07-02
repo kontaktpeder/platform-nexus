@@ -4,6 +4,7 @@ import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
 import type { InboxAction } from "@/lib/inbox/types";
+import type { MissionActionState } from "@/lib/mission-action-state";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
@@ -21,6 +22,7 @@ export type GlobalMissionData = {
   workspaces: GlobalWorkspaceEntry[];
   inbox: InboxAction[];
   inboxSources: { gmail: boolean; slack: boolean };
+  actionStates: MissionActionState[];
 };
 
 
@@ -41,16 +43,22 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const orgIds = (memberships ?? []).map((m) => m.org_id);
     const { fetchGmailActions } = await import("@/lib/inbox/gmail.server");
     const { fetchSlackActions } = await import("@/lib/inbox/slack.server");
+    const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
     const gmailAvailable = !!process.env.GOOGLE_MAIL_API_KEY;
     const slackAvailable = !!process.env.SLACK_API_KEY;
 
     if (orgIds.length === 0) {
-      const [gmail, slack] = await Promise.all([fetchGmailActions(), fetchSlackActions()]);
+      const [gmail, slack, actionStates] = await Promise.all([
+        fetchGmailActions(),
+        fetchSlackActions(),
+        listMissionActionStates(supabase, userId).catch(() => []),
+      ]);
       return {
         orgs: [],
         workspaces: [],
         inbox: [...gmail, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        actionStates,
       };
     }
 
@@ -124,7 +132,11 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmail, slack] = await Promise.all([fetchGmailActions(), fetchSlackActions()]);
+    const [gmail, slack, actionStates] = await Promise.all([
+      fetchGmailActions(),
+      fetchSlackActions(),
+      listMissionActionStates(supabase, userId).catch(() => []),
+    ]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return JSON.parse(
@@ -133,6 +145,7 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         workspaces: entries,
         inbox: [...gmail, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        actionStates,
       }),
     ) as any;
   });
