@@ -110,6 +110,38 @@ export async function verifyModuleOrganization(params: {
   return v;
 }
 
+export type ModuleWidgetDatum = {
+  id: string;
+  display?: string;
+  status?: string;
+  error?: string;
+  [key: string]: unknown;
+};
+
+export async function fetchModuleWidgets(params: {
+  baseUrl: string;
+  apiKey: string;
+  widgetIds: string[];
+}): Promise<ModuleWidgetDatum[]> {
+  if (params.widgetIds.length === 0) return [];
+  const base = normalizeBase(params.baseUrl);
+  const url = `${base}/api/public/v1/module/widgets?ids=${encodeURIComponent(
+    params.widgetIds.join(","),
+  )}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${params.apiKey}` },
+  });
+  const body = await parseJson(res);
+  if (!res.ok) {
+    throw new ModuleClientError(`Widgets feilet (${res.status})`, res.status, body);
+  }
+  const b = body as { contract_version?: string; widgets?: ModuleWidgetDatum[] };
+  if (b.contract_version && b.contract_version !== CONTRACT_VERSION) {
+    throw new ModuleClientError(`Ustøttet contract_version: ${b.contract_version}`);
+  }
+  return Array.isArray(b.widgets) ? b.widgets : [];
+}
+
 /** Full verify-flyt i henhold til Module Contract v1. */
 export async function verifyModuleConnection(params: {
   baseUrl: string;

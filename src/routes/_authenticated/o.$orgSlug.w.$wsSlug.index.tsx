@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Blocks } from "lucide-react";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { WidgetSlot } from "@/components/platform/WidgetSlot";
@@ -9,6 +11,7 @@ import {
   resolveWidgetHref,
   widgetsForModule,
 } from "@/lib/module-registry";
+import { getWorkspaceWidgetData } from "@/lib/widget-data.functions";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
   component: Dashboard,
@@ -16,8 +19,16 @@ export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
 
 function Dashboard() {
   const { orgSlug, wsSlug } = Route.useParams();
-  const { ws, modules } = useWs();
+  const { org, ws, modules } = useWs();
   const activeModules = modules.filter((m) => m.enabled);
+
+  const fetchWidgetData = useServerFn(getWorkspaceWidgetData);
+  const widgetData = useQuery({
+    queryKey: ["widget-data", org.id, ws.id],
+    queryFn: () => fetchWidgetData({ data: { orgId: org.id, workspaceId: ws.id } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
@@ -54,26 +65,37 @@ function Dashboard() {
               moduleName: m.name,
               moduleSlug: m.slug,
               snapshot,
-            }).map((w) => (
-              <WidgetSlot
-                key={`${m.id}-${w.id}`}
-                moduleName={m.name}
-                title={w.title}
-                hint={w.description}
-                connected={connected}
-                href={
-                  connected && conn
-                    ? resolveWidgetHref({
-                        snapshot,
-                        connectionHomeUrl: home,
-                        widgetDeepLinkKey: w.deep_link,
-                        externalOrgId: conn.external_org_id,
-                        baseUrl: conn.external_base_url,
-                      })
-                    : null
-                }
-              />
-            ));
+            }).map((w) => {
+              const datum =
+                connected && !w.placeholder
+                  ? widgetData.data?.[`${m.slug}:${w.id}`]
+                  : undefined;
+              return (
+                <WidgetSlot
+                  key={`${m.id}-${w.id}`}
+                  moduleName={m.name}
+                  title={w.title}
+                  hint={w.description}
+                  connected={connected}
+                  display={datum?.display}
+                  loading={
+                    connected && !w.placeholder && widgetData.isLoading && !datum
+                  }
+                  error={datum?.error ?? (widgetData.error ? String(widgetData.error) : undefined)}
+                  href={
+                    connected && conn
+                      ? resolveWidgetHref({
+                          snapshot,
+                          connectionHomeUrl: home,
+                          widgetDeepLinkKey: w.deep_link,
+                          externalOrgId: conn.external_org_id,
+                          baseUrl: conn.external_base_url,
+                        })
+                      : null
+                  }
+                />
+              );
+            });
           })}
         </div>
       )}
