@@ -14,6 +14,137 @@ export type Database = {
   }
   public: {
     Tables: {
+      entities: {
+        Row: {
+          created_at: string
+          id: string
+          importance: number
+          last_seen_at: string | null
+          metadata: Json
+          name: string
+          slug: string
+          summary: string | null
+          type: Database["public"]["Enums"]["entity_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          importance?: number
+          last_seen_at?: string | null
+          metadata?: Json
+          name: string
+          slug: string
+          summary?: string | null
+          type: Database["public"]["Enums"]["entity_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          importance?: number
+          last_seen_at?: string | null
+          metadata?: Json
+          name?: string
+          slug?: string
+          summary?: string | null
+          type?: Database["public"]["Enums"]["entity_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      entity_relationships: {
+        Row: {
+          created_at: string
+          from_entity_id: string
+          id: string
+          kind: Database["public"]["Enums"]["entity_relationship_kind"]
+          metadata: Json
+          to_entity_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_entity_id: string
+          id?: string
+          kind?: Database["public"]["Enums"]["entity_relationship_kind"]
+          metadata?: Json
+          to_entity_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          from_entity_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["entity_relationship_kind"]
+          metadata?: Json
+          to_entity_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_relationships_from_entity_id_fkey"
+            columns: ["from_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entity_relationships_to_entity_id_fkey"
+            columns: ["to_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      entity_signals: {
+        Row: {
+          created_at: string
+          entity_id: string
+          external_ref: string
+          id: string
+          occurred_at: string | null
+          signal_type: string
+          snippet: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          external_ref: string
+          id?: string
+          occurred_at?: string | null
+          signal_type: string
+          snippet?: string | null
+          source: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          external_ref?: string
+          id?: string
+          occurred_at?: string | null
+          signal_type?: string
+          snippet?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entity_signals_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memberships: {
         Row: {
           created_at: string
@@ -433,6 +564,14 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "editor" | "viewer"
+      entity_relationship_kind:
+        | "works_on"
+        | "customer_of"
+        | "member_of"
+        | "owns"
+        | "blocked_by"
+        | "related_to"
+      entity_type: "person" | "company" | "project" | "goal" | "commitment"
       module_connection_status:
         | "pending"
         | "connected"
@@ -576,6 +715,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "editor", "viewer"],
+      entity_relationship_kind: [
+        "works_on",
+        "customer_of",
+        "member_of",
+        "owns",
+        "blocked_by",
+        "related_to",
+      ],
+      entity_type: ["person", "company", "project", "goal", "commitment"],
       module_connection_status: [
         "pending",
         "connected",

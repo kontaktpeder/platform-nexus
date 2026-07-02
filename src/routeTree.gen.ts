@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
+import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
@@ -50,6 +51,11 @@ const AuthenticatedModulesRoute = AuthenticatedModulesRouteImport.update({
 const AuthenticatedMissionRoute = AuthenticatedMissionRouteImport.update({
   id: '/mission',
   path: '/mission',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AuthenticatedAppRoute
+  '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AuthenticatedAppRoute
+  '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
   '/_authenticated/mission': typeof AuthenticatedMissionRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/knowledge'
     | '/mission'
     | '/modules'
     | '/settings'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/knowledge'
     | '/mission'
     | '/modules'
     | '/settings'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/app'
+    | '/_authenticated/knowledge'
     | '/_authenticated/mission'
     | '/_authenticated/modules'
     | '/_authenticated/settings'
@@ -230,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/mission'
       fullPath: '/mission'
       preLoaderRoute: typeof AuthenticatedMissionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/knowledge': {
+      id: '/_authenticated/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof AuthenticatedKnowledgeRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/app': {
@@ -307,6 +326,7 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
   AuthenticatedMissionRoute: typeof AuthenticatedMissionRoute
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -317,6 +337,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
   AuthenticatedMissionRoute: AuthenticatedMissionRoute,
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
