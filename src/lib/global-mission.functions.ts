@@ -132,7 +132,11 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmail, slack] = await Promise.all([fetchGmailActions(), fetchSlackActions()]);
+    const [gmail, slack, actionStates] = await Promise.all([
+      fetchGmailActions(),
+      fetchSlackActions(),
+      listMissionActionStates(supabase, userId).catch(() => []),
+    ]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return JSON.parse(
@@ -141,6 +145,7 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         workspaces: entries,
         inbox: [...gmail, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        actionStates,
       }),
     ) as any;
   });
