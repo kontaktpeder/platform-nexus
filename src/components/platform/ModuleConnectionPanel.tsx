@@ -59,6 +59,8 @@ export function ModuleConnectionPanel({
   canEdit,
   orgSlug,
   wsSlug,
+  moduleDefaultUrl,
+  moduleKeyPrefix,
 }: Props) {
   const qc = useQueryClient();
   const [externalOrgId, setExternalOrgId] = useState(connection?.external_org_id ?? "");
