@@ -9,6 +9,7 @@ import * as Icons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ModuleConnectionPanel } from "@/components/platform/ModuleConnectionPanel";
 import { isConnectableModule } from "@/lib/module-connections";
+import { parseModuleConfig } from "@/lib/module-registry";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/modules")({
   component: ModulesPage,
@@ -68,7 +69,7 @@ function ModulesPage() {
                 />
               </div>
 
-              {m.enabled && isConnectableModule(m.slug, m.status) && (
+              {m.enabled && isConnectableModule(m.status) && (
                 <ModuleConnectionPanel
                   orgId={org.id}
                   workspaceId={ws.id}
@@ -80,6 +81,8 @@ function ModulesPage() {
                   canEdit={canEdit}
                   orgSlug={orgSlug}
                   wsSlug={wsSlug}
+                  moduleDefaultUrl={m.default_url}
+                  moduleKeyPrefix={parseModuleConfig(m.config).key_prefix ?? null}
                 />
               )}
             </li>

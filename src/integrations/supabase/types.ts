@@ -87,6 +87,7 @@ export type Database = {
           id: string
           last_verified_at: string | null
           module_id: string
+          module_info_snapshot: Json | null
           module_slug: string | null
           org_id: string
           resolved_org_home_url: string | null
@@ -105,6 +106,7 @@ export type Database = {
           id?: string
           last_verified_at?: string | null
           module_id: string
+          module_info_snapshot?: Json | null
           module_slug?: string | null
           org_id: string
           resolved_org_home_url?: string | null
@@ -123,6 +125,7 @@ export type Database = {
           id?: string
           last_verified_at?: string | null
           module_id?: string
+          module_info_snapshot?: Json | null
           module_slug?: string | null
           org_id?: string
           resolved_org_home_url?: string | null
@@ -157,6 +160,7 @@ export type Database = {
       modules: {
         Row: {
           api_endpoint: string | null
+          config: Json
           created_at: string
           default_url: string | null
           description: string | null
@@ -170,6 +174,7 @@ export type Database = {
         }
         Insert: {
           api_endpoint?: string | null
+          config?: Json
           created_at?: string
           default_url?: string | null
           description?: string | null
@@ -183,6 +188,7 @@ export type Database = {
         }
         Update: {
           api_endpoint?: string | null
+          config?: Json
           created_at?: string
           default_url?: string | null
           description?: string | null

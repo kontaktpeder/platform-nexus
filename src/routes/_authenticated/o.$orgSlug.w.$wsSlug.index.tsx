@@ -4,6 +4,11 @@ import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { WidgetSlot } from "@/components/platform/WidgetSlot";
 import { getModuleConnection } from "@/lib/workspaceContext";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
+import {
+  parseModuleInfoSnapshot,
+  resolveWidgetHref,
+  widgetsForModule,
+} from "@/lib/module-registry";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
   component: Dashboard,
@@ -13,16 +18,6 @@ function Dashboard() {
   const { orgSlug, wsSlug } = Route.useParams();
   const { ws, modules } = useWs();
   const activeModules = modules.filter((m) => m.enabled);
-
-  const widgetsByModule: Record<string, { title: string; hint?: string }[]> = {
-    finance: [{ title: "Ubetalte fakturaer" }, { title: "Månedens omsetning" }],
-    work: [{ title: "Dagens timer" }, { title: "Aktive prosjekter" }],
-    booking: [{ title: "Neste booking" }],
-    content: [{ title: "Siste innlegg" }],
-    explore: [{ title: "Neste popup" }],
-    inventory: [{ title: "Lav på lager" }],
-    crm: [{ title: "Nye leads" }],
-  };
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
@@ -52,15 +47,31 @@ function Dashboard() {
           {activeModules.flatMap((m) => {
             const conn = getModuleConnection(modules, m.slug);
             const connected = conn?.status === "connected";
-            const href = conn ? resolveModuleOpenUrl(conn, m.slug) : null;
-            return (widgetsByModule[m.slug] ?? [{ title: m.name }]).map((w, i) => (
+            const snapshot = parseModuleInfoSnapshot(conn?.module_info_snapshot);
+            const home = conn ? resolveModuleOpenUrl(conn) : null;
+
+            return widgetsForModule({
+              moduleName: m.name,
+              moduleSlug: m.slug,
+              snapshot,
+            }).map((w) => (
               <WidgetSlot
-                key={`${m.id}-${i}`}
+                key={`${m.id}-${w.id}`}
                 moduleName={m.name}
                 title={w.title}
-                hint={w.hint}
+                hint={w.description}
                 connected={connected}
-                href={href}
+                href={
+                  connected && conn
+                    ? resolveWidgetHref({
+                        snapshot,
+                        connectionHomeUrl: home,
+                        widgetDeepLinkKey: w.deep_link,
+                        externalOrgId: conn.external_org_id,
+                        baseUrl: conn.external_base_url,
+                      })
+                    : null
+                }
               />
             ));
           })}

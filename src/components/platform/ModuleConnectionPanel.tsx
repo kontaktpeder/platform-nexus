@@ -28,6 +28,8 @@ type Props = {
   canEdit: boolean;
   orgSlug: string;
   wsSlug: string;
+  moduleDefaultUrl?: string | null;
+  moduleKeyPrefix?: string | null;
 };
 
 const statusLabel: Record<ModuleConnectionStatus, string> = {
@@ -57,6 +59,8 @@ export function ModuleConnectionPanel({
   canEdit,
   orgSlug,
   wsSlug,
+  moduleDefaultUrl,
+  moduleKeyPrefix,
 }: Props) {
   const qc = useQueryClient();
   const [externalOrgId, setExternalOrgId] = useState(connection?.external_org_id ?? "");
@@ -123,7 +127,7 @@ export function ModuleConnectionPanel({
   if (!enabled) return null;
 
   const isConnected = connection?.status === "connected";
-  const openUrl = connection ? resolveModuleOpenUrl(connection, moduleSlug) : null;
+  const openUrl = connection ? resolveModuleOpenUrl(connection) : null;
   const lastVerified = formatTime(connection?.last_verified_at);
   const busy = verify.isPending || retest.isPending || disconnect.isPending;
 
@@ -186,11 +190,7 @@ export function ModuleConnectionPanel({
             id={`url-${moduleId}`}
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder={
-              moduleSlug === "finance"
-                ? "https://financecore.lovable.app"
-                : "https://modul.example.com"
-            }
+            placeholder={moduleDefaultUrl ?? "https://modul.example.com"}
             disabled={!canEdit || busy}
             className="text-xs"
           />
@@ -205,9 +205,7 @@ export function ModuleConnectionPanel({
             autoComplete="off"
             value={verifyApiKey}
             onChange={(e) => setVerifyApiKey(e.target.value)}
-            placeholder={
-              moduleSlug === "finance" ? "fc_live_..." : moduleSlug === "work" ? "wc_live_..." : "…"
-            }
+            placeholder={moduleKeyPrefix ? `${moduleKeyPrefix}...` : "api_live_..."}
             disabled={!canEdit || busy}
             className="font-mono text-xs"
           />
