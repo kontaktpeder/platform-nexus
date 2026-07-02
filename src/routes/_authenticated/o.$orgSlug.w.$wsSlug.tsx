@@ -1,13 +1,28 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
+import { createContext, useContext } from "react";
 import { useWorkspaceContext } from "@/lib/workspaceContext";
+import type { WorkspaceContext } from "@/lib/workspaceContext";
 import { ThemeProvider } from "@/components/platform/ThemeProvider";
 import { TopBar } from "@/components/platform/TopBar";
 import { BottomNav } from "@/components/platform/BottomNav";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug")({
+  ssr: false,
   component: WorkspaceShell,
 });
+
+const Ctx = createContext<WorkspaceContext | null>(null);
+
+export function useWs(): WorkspaceContext {
+  const ctx = useContext(Ctx);
+  const params = useParams({ from: "/_authenticated/o/$orgSlug/w/$wsSlug" });
+  const query = useWorkspaceContext(params.orgSlug, params.wsSlug);
+  if (ctx) return ctx;
+  if (query.data) return query.data;
+  // React Query dedupes — this triggers the same in-flight request the shell started.
+  throw query.error ?? new Promise<void>(() => {});
+}
 
 function WorkspaceShell() {
   const { orgSlug, wsSlug } = Route.useParams();
@@ -32,7 +47,7 @@ function WorkspaceShell() {
   }
 
   return (
-    <WorkspaceContextBridge value={data}>
+    <Ctx.Provider value={data}>
       <ThemeProvider theme={data.theme}>
         <div className="flex min-h-screen flex-col bg-background">
           <TopBar
@@ -46,20 +61,7 @@ function WorkspaceShell() {
           <BottomNav orgSlug={orgSlug} wsSlug={wsSlug} />
         </div>
       </ThemeProvider>
-    </WorkspaceContextBridge>
+    </Ctx.Provider>
   );
 }
 
-// Simple context bridge via React.createContext
-import { createContext, useContext } from "react";
-import type { WorkspaceContext } from "@/lib/workspaceContext";
-
-const Ctx = createContext<WorkspaceContext | null>(null);
-export function useWs() {
-  const v = useContext(Ctx);
-  if (!v) throw new Error("useWs must be used inside workspace shell");
-  return v;
-}
-function WorkspaceContextBridge({ value, children }: { value: WorkspaceContext; children: React.ReactNode }) {
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
-}
