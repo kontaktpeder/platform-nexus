@@ -47,8 +47,11 @@ Uten `MODULE_SECRETS_KEY` faller kryptering tilbake til base64 og logger en adva
 | `Ugyldig eller manglende verify-nøkkel` | 401/403 — sjekk scope og at nøkkelen ikke er utløpt. |
 | `Ingen lagret verify-nøkkel — koble på nytt med nøkkel` | Retest uten tidligere lagret nøkkel — kjør Test og lagre først. |
 
+## Relatert
+
+- Live widget-data: se [LIVE_WIDGETS.md](./LIVE_WIDGETS.md).
+
 ## Ikke i scope
 
 - SSO
-- Live widget-data fra modul-API
 - Automatisk opprettelse av org i modulen
