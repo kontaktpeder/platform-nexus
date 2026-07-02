@@ -86,6 +86,7 @@ function GlobalMission() {
           </div>
         ) : (
           <>
+            <MorningBriefCard brief={brief} />
             <MissionFilterChips value={filter} onChange={setFilter} counts={counts} />
 
             {filter === "gmail" && !gmailHasAny && (
