@@ -70,6 +70,8 @@ function GlobalMission() {
   const inbox = data?.inbox ?? [];
   const actionStates = data?.actionStates ?? [];
 
+  const entityLinks = data?.entityLinks ?? {};
+
   const rawActions = useMemo(
     () => buildGlobalActions({ workspaces, inbox, max: 20 }),
     [workspaces, inbox],
@@ -82,8 +84,19 @@ function GlobalMission() {
     () =>
       filterVisibleActions(rawActions, actionStates)
         .filter((a) => !hiddenKeys.has(a.key))
-        .slice(0, 7),
-    [rawActions, actionStates, hiddenKeys],
+        .slice(0, 7)
+        .map((a) => {
+          const link = entityLinks[a.key];
+          return link
+            ? {
+                ...a,
+                entityId: link.entityId,
+                entityName: link.entityName,
+                entitySlug: link.entitySlug,
+              }
+            : a;
+        }),
+    [rawActions, actionStates, hiddenKeys, entityLinks],
   );
 
   // Deterministic brief always available. AI runs silently in the background
