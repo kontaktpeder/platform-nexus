@@ -72,11 +72,10 @@ export const detectAndStoreCommitments = createServerFn({ method: "POST" })
     );
 
     // Enrich with knowledge entity links (best-effort).
-    const entityLinks = await autoLinkMissionSignals(
-      supabase,
-      userId,
-      inboxDescriptors(inbox),
-    ).catch(() => ({}));
+    const entityLinks: Record<string, { entityId: string; entityName: string; entitySlug: string }> =
+      await autoLinkMissionSignals(supabase, userId, inboxDescriptors(inbox)).catch(
+        () => ({}),
+      );
 
     const todayOslo = todayOsloISO();
 
