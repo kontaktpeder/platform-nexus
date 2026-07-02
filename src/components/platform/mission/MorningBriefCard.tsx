@@ -1,15 +1,13 @@
 import { Mail, MessageSquare, Layers, Sparkles, ArrowRight } from "lucide-react";
-import type { MorningBrief } from "@/lib/mission-actions";
+import type { MorningBrief, GlobalMissionAction } from "@/lib/mission-actions";
 
 const SOURCE_LABEL = { gmail: "Gmail", slack: "Slack", workspace: "Workspaces" } as const;
 
-function summarize(brief: MorningBrief): string {
+function deterministicSummary(brief: MorningBrief): string {
   if (brief.total === 0) return "";
   const parts: string[] = [];
-  if (brief.byTier.urgent > 0)
-    parts.push(`${brief.byTier.urgent} urgent`);
-  if (brief.byTier.important > 0)
-    parts.push(`${brief.byTier.important} important`);
+  if (brief.byTier.urgent > 0) parts.push(`${brief.byTier.urgent} urgent`);
+  if (brief.byTier.important > 0) parts.push(`${brief.byTier.important} important`);
   if (parts.length === 0 && brief.byTier.later > 0)
     parts.push(`${brief.byTier.later} to review later`);
 
@@ -25,7 +23,21 @@ function summarize(brief: MorningBrief): string {
   return lead + tail;
 }
 
-export function MorningBriefCard({ brief }: { brief: MorningBrief }) {
+export type BriefMode = "ai" | "rule";
+
+export function MorningBriefCard({
+  brief,
+  mode,
+  aiSummary,
+  aiReason,
+  recommended,
+}: {
+  brief: MorningBrief;
+  mode: BriefMode;
+  aiSummary?: string | null;
+  aiReason?: string | null;
+  recommended: GlobalMissionAction | null;
+}) {
   if (brief.total === 0) {
     return (
       <section className="surface-card mt-4 flex items-center gap-3 p-4">
@@ -42,19 +54,31 @@ export function MorningBriefCard({ brief }: { brief: MorningBrief }) {
     );
   }
 
-  const rec = brief.recommended;
-  const canOpen = !!rec?.href;
+  const summary = mode === "ai" && aiSummary ? aiSummary : deterministicSummary(brief);
+  const canOpen = !!recommended?.href;
 
   return (
     <section className="surface-card mt-4 p-4">
-      <header className="mb-3 flex items-center gap-2">
-        <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-primary/10 text-primary">
-          <Sparkles className="h-4 w-4" />
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-primary/10 text-primary">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <h2 className="text-sm font-semibold">Morning brief</h2>
         </div>
-        <h2 className="text-sm font-semibold">Morning brief</h2>
+        <span
+          className={
+            "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide " +
+            (mode === "ai"
+              ? "bg-primary/10 text-primary"
+              : "bg-muted text-muted-foreground")
+          }
+        >
+          {mode === "ai" ? "AI brief" : "Rule-based fallback"}
+        </span>
       </header>
 
-      <p className="text-sm text-foreground">{summarize(brief)}</p>
+      <p className="text-sm text-foreground">{summary}</p>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         <BriefBadge icon={<Mail className="h-3 w-3" />} label={`Gmail ${brief.bySource.gmail}`} />
@@ -62,20 +86,25 @@ export function MorningBriefCard({ brief }: { brief: MorningBrief }) {
         <BriefBadge icon={<Layers className="h-3 w-3" />} label={`Workspaces ${brief.bySource.workspace}`} />
       </div>
 
-      {rec ? (
+      {recommended ? (
         <div className="mt-4 rounded-lg border border-border/60 bg-muted/40 p-3">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Start with this
           </div>
-          <div className="mt-1 truncate text-sm font-medium">{rec.title}</div>
-          {rec.description ? (
-            <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{rec.description}</div>
+          <div className="mt-1 truncate text-sm font-medium">{recommended.title}</div>
+          {recommended.description ? (
+            <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {recommended.description}
+            </div>
+          ) : null}
+          {mode === "ai" && aiReason ? (
+            <div className="mt-2 text-xs italic text-muted-foreground">{aiReason}</div>
           ) : null}
           <div className="mt-3">
             {canOpen ? (
               <a
-                href={rec.href!}
-                target={rec.source === "workspace" ? undefined : "_blank"}
+                href={recommended.href!}
+                target={recommended.source === "workspace" ? undefined : "_blank"}
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
               >

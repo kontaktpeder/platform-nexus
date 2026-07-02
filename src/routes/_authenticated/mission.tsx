@@ -17,8 +17,13 @@ import {
   getGlobalMissionData,
   type GlobalMissionData,
 } from "@/lib/global-mission.functions";
-import { buildGlobalActions, buildMorningBrief } from "@/lib/mission-actions";
+import {
+  buildGlobalActions,
+  buildMorningBrief,
+  type GlobalMissionAction,
+} from "@/lib/mission-actions";
 import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
+import { generateMissionBriefing } from "@/lib/mission-briefing.functions";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
@@ -65,6 +70,31 @@ function GlobalMission() {
   const gmailHasAny = inbox.some((i) => i.source === "gmail");
   const slackHasAny = inbox.some((i) => i.source === "slack");
 
+  // AI briefing (opt-in). Server fn is called on demand; if it fails we fall
+  // back to the deterministic Morning Brief. No prompts or briefings are
+  // persisted server-side.
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const runBriefing = useServerFn(generateMissionBriefing);
+  const sanitized = useMemo(() => sanitizeActions(filtered), [filtered]);
+  const aiQuery = useQuery({
+    queryKey: ["mission-briefing", sanitized.map((s) => s.key).join("|")],
+    queryFn: () => runBriefing({ data: { actions: sanitized } }),
+    enabled: aiEnabled && sanitized.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const aiRecommended: GlobalMissionAction | null =
+    aiEnabled && aiQuery.data?.recommendedKey
+      ? filtered.find((a) => a.key === aiQuery.data!.recommendedKey) ?? null
+      : null;
+
+  const useAi = aiEnabled && !!aiQuery.data && !aiQuery.error;
+  const recommended = useAi
+    ? aiRecommended ?? brief.recommended
+    : brief.recommended;
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TopBar title="Mission Control" subtitle="All your workspaces" />
@@ -86,7 +116,27 @@ function GlobalMission() {
           </div>
         ) : (
           <>
-            <MorningBriefCard brief={brief} />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-primary"
+                  checked={aiEnabled}
+                  onChange={(e) => setAiEnabled(e.target.checked)}
+                />
+                Use AI brief
+                {aiEnabled && aiQuery.isFetching ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : null}
+              </label>
+            </div>
+            <MorningBriefCard
+              brief={brief}
+              mode={useAi ? "ai" : "rule"}
+              aiSummary={useAi ? aiQuery.data?.briefing : null}
+              aiReason={useAi ? aiQuery.data?.reason : null}
+              recommended={recommended}
+            />
             <MissionFilterChips value={filter} onChange={setFilter} counts={counts} />
 
             {filter === "gmail" && !gmailHasAny && (
@@ -136,4 +186,22 @@ function EmptyInbox({
       </div>
     </div>
   );
+}
+
+// Reduce action cards to sanitized JSON safe for the AI: no href, no ids
+// beyond the opaque key, no raw email/Slack bodies beyond the short snippet
+// already surfaced in the UI.
+function sanitizeActions(actions: GlobalMissionAction[]) {
+  return actions.slice(0, 15).map((a) => ({
+    key: a.key,
+    title: a.title.slice(0, 200),
+    source: a.source,
+    tier: a.tier,
+    workspaceLabel:
+      a.source === "workspace" && a.wsName
+        ? [a.orgName, a.wsName].filter(Boolean).join(" · ").slice(0, 120)
+        : null,
+    snippet: (a.snippet ?? a.description ?? "").slice(0, 240) || null,
+    hasDeepLink: !!a.href,
+  }));
 }
