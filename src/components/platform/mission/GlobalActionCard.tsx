@@ -35,6 +35,11 @@ const sourceMeta: Record<MissionSource, { label: string; className: string; Icon
     className: "bg-primary-soft text-primary",
     Icon: Layers,
   },
+  commitment: {
+    label: "Løfte",
+    className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    Icon: Check,
+  },
 };
 
 export type GlobalActionCardProps = {
