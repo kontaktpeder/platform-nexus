@@ -3,24 +3,23 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Blocks } from "lucide-react";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
-import { WidgetSlot } from "@/components/platform/WidgetSlot";
-import { getModuleConnection } from "@/lib/workspaceContext";
-import { resolveModuleOpenUrl } from "@/lib/module-connections";
-import {
-  parseModuleInfoSnapshot,
-  resolveWidgetHref,
-  widgetsForModule,
-} from "@/lib/module-registry";
 import { getWorkspaceWidgetData } from "@/lib/widget-data.functions";
+import { buildNextActions } from "@/lib/mission-actions";
+import { MissionHeader } from "@/components/platform/mission/MissionHeader";
+import { WorkspaceContextBar } from "@/components/platform/mission/WorkspaceContextBar";
+import { NextActions } from "@/components/platform/mission/NextActions";
+import { MissionWidgetsGrid } from "@/components/platform/mission/MissionWidgetsGrid";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
-  component: Dashboard,
+  head: () => ({ meta: [{ title: "Mission Control" }] }),
+  component: MissionControl,
 });
 
-function Dashboard() {
+function MissionControl() {
   const { orgSlug, wsSlug } = Route.useParams();
-  const { org, ws, modules } = useWs();
+  const { org, ws, modules, connections } = useWs();
   const activeModules = modules.filter((m) => m.enabled);
+  const connectedCount = connections.filter((c) => c.status === "connected").length;
 
   const fetchWidgetData = useServerFn(getWorkspaceWidgetData);
   const widgetData = useQuery({
@@ -30,15 +29,17 @@ function Dashboard() {
     refetchOnWindowFocus: false,
   });
 
+  const actions = buildNextActions({ widgetData: widgetData.data, modules });
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
-      <section className="mb-6">
-        <h1 className="font-heading text-2xl font-bold">Hei igjen 👋</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Arbeidsflaten <span className="font-medium text-foreground">{ws.name}</span> —{" "}
-          {activeModules.length} aktive modul{activeModules.length === 1 ? "" : "er"}.
-        </p>
-      </section>
+      <MissionHeader orgName={org.name} wsName={ws.name} />
+      <WorkspaceContextBar
+        orgSlug={orgSlug}
+        orgName={org.name}
+        wsName={ws.name}
+        connectedCount={connectedCount}
+      />
 
       {activeModules.length === 0 ? (
         <div className="surface-card p-8 text-center">
@@ -54,50 +55,15 @@ function Dashboard() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {activeModules.flatMap((m) => {
-            const conn = getModuleConnection(modules, m.slug);
-            const connected = conn?.status === "connected";
-            const snapshot = parseModuleInfoSnapshot(conn?.module_info_snapshot);
-            const home = conn ? resolveModuleOpenUrl(conn) : null;
-
-            return widgetsForModule({
-              moduleName: m.name,
-              moduleSlug: m.slug,
-              snapshot,
-            }).map((w) => {
-              const datum =
-                connected && !w.placeholder
-                  ? widgetData.data?.[`${m.slug}:${w.id}`]
-                  : undefined;
-              return (
-                <WidgetSlot
-                  key={`${m.id}-${w.id}`}
-                  moduleName={m.name}
-                  title={w.title}
-                  hint={w.description}
-                  connected={connected}
-                  display={datum?.display}
-                  loading={
-                    connected && !w.placeholder && widgetData.isLoading && !datum
-                  }
-                  error={datum?.error ?? (widgetData.error ? String(widgetData.error) : undefined)}
-                  href={
-                    connected && conn
-                      ? resolveWidgetHref({
-                          snapshot,
-                          connectionHomeUrl: home,
-                          widgetDeepLinkKey: w.deep_link,
-                          externalOrgId: conn.external_org_id,
-                          baseUrl: conn.external_base_url,
-                        })
-                      : null
-                  }
-                />
-              );
-            });
-          })}
-        </div>
+        <>
+          <NextActions actions={actions} />
+          <MissionWidgetsGrid
+            modules={modules}
+            widgetData={widgetData.data}
+            isLoading={widgetData.isLoading}
+            error={widgetData.error}
+          />
+        </>
       )}
     </main>
   );
