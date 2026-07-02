@@ -61,6 +61,7 @@ function GlobalMission() {
   );
 
   const filtered = applyMissionFilter(actions, filter);
+  const brief = useMemo(() => buildMorningBrief(filtered), [filtered]);
   const gmailHasAny = inbox.some((i) => i.source === "gmail");
   const slackHasAny = inbox.some((i) => i.source === "slack");
 
