@@ -65,26 +65,37 @@ function Dashboard() {
               moduleName: m.name,
               moduleSlug: m.slug,
               snapshot,
-            }).map((w) => (
-              <WidgetSlot
-                key={`${m.id}-${w.id}`}
-                moduleName={m.name}
-                title={w.title}
-                hint={w.description}
-                connected={connected}
-                href={
-                  connected && conn
-                    ? resolveWidgetHref({
-                        snapshot,
-                        connectionHomeUrl: home,
-                        widgetDeepLinkKey: w.deep_link,
-                        externalOrgId: conn.external_org_id,
-                        baseUrl: conn.external_base_url,
-                      })
-                    : null
-                }
-              />
-            ));
+            }).map((w) => {
+              const datum =
+                connected && !w.placeholder
+                  ? widgetData.data?.[`${m.slug}:${w.id}`]
+                  : undefined;
+              return (
+                <WidgetSlot
+                  key={`${m.id}-${w.id}`}
+                  moduleName={m.name}
+                  title={w.title}
+                  hint={w.description}
+                  connected={connected}
+                  display={datum?.display}
+                  loading={
+                    connected && !w.placeholder && widgetData.isLoading && !datum
+                  }
+                  error={datum?.error ?? (widgetData.error ? String(widgetData.error) : undefined)}
+                  href={
+                    connected && conn
+                      ? resolveWidgetHref({
+                          snapshot,
+                          connectionHomeUrl: home,
+                          widgetDeepLinkKey: w.deep_link,
+                          externalOrgId: conn.external_org_id,
+                          baseUrl: conn.external_base_url,
+                        })
+                      : null
+                  }
+                />
+              );
+            });
           })}
         </div>
       )}
