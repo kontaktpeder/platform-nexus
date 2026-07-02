@@ -5,7 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { snoozeUntil } from "@/lib/mission-snooze";
-import { getActionSourceFromKey } from "@/lib/mission-action-state.server";
+import { getActionSourceFromKey } from "@/lib/mission-actions";
 
 const actionSchema = z.object({
   actionKey: z.string().min(1),
