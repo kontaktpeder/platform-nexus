@@ -35,12 +35,18 @@ export type MissionActionBarProps = {
 };
 
 export function MissionActionBar({ action, onAction, busy }: MissionActionBarProps) {
+  const [replyOpen, setReplyOpen] = useState(false);
   const openLabel =
     action.source === "gmail"
       ? "Open in Gmail"
       : action.source === "slack"
         ? "Open in Slack"
         : `Open in ${action.moduleName ?? "module"}`;
+
+  const gmailMessageId =
+    action.source === "gmail" && action.key.startsWith("gmail:")
+      ? action.key.slice("gmail:".length)
+      : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 pt-1">
