@@ -3,14 +3,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import type {
+  MissionActionState,
+  MissionActionStatus,
+} from "@/lib/mission-action-state";
 
-export type MissionActionStatus = "dismissed" | "snoozed" | "handled_locally";
-
-export type MissionActionState = {
-  action_key: string;
-  status: MissionActionStatus;
-  snoozed_until: string | null;
-};
+export type { MissionActionState, MissionActionStatus } from "@/lib/mission-action-state";
 
 type DB = SupabaseClient<Database>;
 
@@ -60,22 +58,3 @@ export async function deleteMissionActionState(
     .eq("action_key", input.actionKey);
   if (error) throw error;
 }
-
-export function filterVisibleActions<T extends { key: string }>(
-  actions: T[],
-  states: MissionActionState[],
-  now: Date = new Date(),
-): T[] {
-  const byKey = new Map(states.map((s) => [s.action_key, s]));
-  return actions.filter((a) => {
-    const s = byKey.get(a.key);
-    if (!s) return true;
-    if (s.status === "dismissed" || s.status === "handled_locally") return false;
-    if (s.status === "snoozed") {
-      if (!s.snoozed_until) return false;
-      return new Date(s.snoozed_until).getTime() <= now.getTime();
-    }
-    return true;
-  });
-}
-
