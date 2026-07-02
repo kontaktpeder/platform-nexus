@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      context_summaries: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          id: string
+          key_facts: Json
+          last_scanned_at: string
+          open_questions: Json
+          scope_ref: string | null
+          scope_type: Database["public"]["Enums"]["context_scope_type"]
+          source_counts: Json
+          suggested_next_focus: string | null
+          summary: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          key_facts?: Json
+          last_scanned_at?: string
+          open_questions?: Json
+          scope_ref?: string | null
+          scope_type: Database["public"]["Enums"]["context_scope_type"]
+          source_counts?: Json
+          suggested_next_focus?: string | null
+          summary: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          id?: string
+          key_facts?: Json
+          last_scanned_at?: string
+          open_questions?: Json
+          scope_ref?: string | null
+          scope_type?: Database["public"]["Enums"]["context_scope_type"]
+          source_counts?: Json
+          suggested_next_focus?: string | null
+          summary?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "context_summaries_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entities: {
         Row: {
           created_at: string
@@ -673,6 +729,7 @@ export type Database = {
       app_role: "owner" | "admin" | "editor" | "viewer"
       commitment_confidence: "low" | "medium" | "high"
       commitment_status: "suggested" | "open" | "done" | "dismissed"
+      context_scope_type: "global" | "entity" | "project" | "workspace"
       entity_relationship_kind:
         | "works_on"
         | "customer_of"
@@ -826,6 +883,7 @@ export const Constants = {
       app_role: ["owner", "admin", "editor", "viewer"],
       commitment_confidence: ["low", "medium", "high"],
       commitment_status: ["suggested", "open", "done", "dismissed"],
+      context_scope_type: ["global", "entity", "project", "workspace"],
       entity_relationship_kind: [
         "works_on",
         "customer_of",

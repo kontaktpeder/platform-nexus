@@ -56,6 +56,11 @@ import {
   dismissCommitment,
 } from "@/lib/knowledge-commitments.functions";
 import {
+  runContextScan,
+  listContextSummaries,
+} from "@/lib/context-scan.functions";
+import type { ContextSummary } from "@/lib/context/context.types";
+import {
   COMMITMENT_CONFIDENCE_LABEL,
   type UserCommitment,
 } from "@/lib/knowledge/commitment.types";
@@ -147,6 +152,8 @@ function KnowledgePage() {
             No entities yet. Create one, or seed demo data.
           </div>
         )}
+
+        <ContextSection />
 
         <CommitmentsSection />
 
@@ -1007,6 +1014,132 @@ function CommitmentsSection() {
         ))}
       </ul>
     </section>
+  );
+}
+
+// ─── Context Scan v0 ────────────────────────────────────────────────────────
+
+function ContextSection() {
+  const qc = useQueryClient();
+  const list = useServerFn(listContextSummaries);
+  const scan = useServerFn(runContextScan);
+  const [scanning, setScanning] = useState(false);
+
+  const q = useQuery({
+    queryKey: ["context", "summaries"],
+    queryFn: () => list({ data: {} }) as Promise<ContextSummary[]>,
+  });
+  const summaries = q.data ?? [];
+  const global = summaries.find((s) => s.scope_type === "global") ?? null;
+  const entities = summaries.filter(
+    (s) => s.scope_type === "entity" || s.scope_type === "project",
+  );
+  const lastScan =
+    summaries.length > 0
+      ? summaries
+          .map((s) => s.last_scanned_at)
+          .sort()
+          .slice(-1)[0]
+      : null;
+
+  async function doScan() {
+    setScanning(true);
+    try {
+      const res = (await scan()) as { scanned: number };
+      toast(`Kontekst oppdatert (${res.scanned} kort)`);
+      qc.invalidateQueries({ queryKey: ["context"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Skanning feilet");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-border/60 bg-card p-4">
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">Kontekst</h2>
+          <p className="text-xs text-muted-foreground">
+            Rullende forståelseskort bygget fra signalene dine — ikke fra modul-DB.
+          </p>
+          {lastScan && (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Sist skannet {lastScan.slice(0, 16).replace("T", " ")}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={doScan}
+          disabled={scanning}
+          className="gap-1"
+        >
+          {scanning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="h-3.5 w-3.5" />
+          )}
+          Kjør context scan
+        </Button>
+      </header>
+
+      {q.isLoading && (
+        <div className="grid place-items-center py-6">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!q.isLoading && summaries.length === 0 && (
+        <p className="py-4 text-center text-xs text-muted-foreground">
+          Kjør en scan for å bygge kontekstkort fra det du allerede har koblet.
+        </p>
+      )}
+
+      {summaries.length > 0 && (
+        <div className="space-y-3">
+          {global && <ContextCard title="Global oversikt" s={global} />}
+          {entities.map((s) => (
+            <ContextCard
+              key={s.id}
+              title={s.scope_ref ?? "Enhet"}
+              s={s}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ContextCard({ title, s }: { title: string; s: ContextSummary }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-background p-3">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </div>
+      <p className="text-sm text-foreground/90">{s.summary}</p>
+      {s.key_facts.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+          {s.key_facts.slice(0, 8).map((f, i) => (
+            <li key={i}>· {f}</li>
+          ))}
+        </ul>
+      )}
+      {s.open_questions.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs italic text-muted-foreground/80">
+          {s.open_questions.slice(0, 3).map((qq, i) => (
+            <li key={i}>? {qq}</li>
+          ))}
+        </ul>
+      )}
+      {s.suggested_next_focus && (
+        <div className="mt-2 text-xs text-foreground/80">
+          Neste fokus: {s.suggested_next_focus}
+        </div>
+      )}
+    </div>
   );
 }
 
