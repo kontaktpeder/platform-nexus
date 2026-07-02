@@ -14,6 +14,7 @@ export type WorkspaceModule = {
   api_endpoint: string | null;
   sort_order: number;
   enabled: boolean;
+  config: Record<string, unknown>;
   connection: ModuleConnectionRow | null;
 };
 
