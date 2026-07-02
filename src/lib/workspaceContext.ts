@@ -52,7 +52,7 @@ export async function loadWorkspaceContext(orgSlug: string, wsSlug: string) {
     supabase
       .from("module_connections")
       .select(
-        "id, org_id, workspace_id, module_id, external_org_id, external_base_url, status, connected_by, connected_at, last_verified_at, error_message, external_org_name, resolved_org_home_url, module_slug",
+        "id, org_id, workspace_id, module_id, external_org_id, external_base_url, status, connected_by, connected_at, last_verified_at, error_message, external_org_name, resolved_org_home_url, module_slug, module_info_snapshot",
       )
       .eq("workspace_id", ws.id),
   ]);
@@ -65,6 +65,7 @@ export async function loadWorkspaceContext(orgSlug: string, wsSlug: string) {
   const modulesWithState: WorkspaceModule[] = (modules ?? []).map((m) => ({
     ...m,
     enabled: enabledMap.get(m.id)?.enabled ?? false,
+    config: (m.config ?? {}) as Record<string, unknown>,
     connection: connectionMap.get(m.id) ?? null,
   }));
 
