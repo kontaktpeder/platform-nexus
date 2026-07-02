@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EntityLinkBadge } from "./EntityLinkBadge";
 import {
   Mail,
   MessageSquare,
