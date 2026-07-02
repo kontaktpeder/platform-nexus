@@ -47,8 +47,19 @@ export const executeMissionAction = createServerFn({ method: "POST" })
       const { markGmailMessageRead, archiveGmailMessage } = await import(
         "@/lib/inbox/gmail.server"
       );
+      // Perform Gmail mutation first — throw on failure, no state write.
       if (data.action === "mark_read") await markGmailMessageRead(messageId);
       else await archiveGmailMessage(messageId);
+      // On success also write handled_locally so the card hides immediately,
+      // even if Gmail refetch is slow or the query still matches transiently.
+      const { upsertMissionActionState } = await import(
+        "@/lib/mission-action-state.server"
+      );
+      await upsertMissionActionState(supabase, {
+        userId,
+        actionKey: data.actionKey,
+        status: "handled_locally",
+      });
       return { ok: true as const };
     }
 
