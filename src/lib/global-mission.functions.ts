@@ -23,6 +23,12 @@ export type InboxSourceMeta = {
   count: number;
 };
 
+export type EntityLink = {
+  entityId: string;
+  entityName: string;
+  entitySlug: string;
+};
+
 export type GlobalMissionData = {
   orgs: { id: string; name: string; slug: string }[];
   workspaces: GlobalWorkspaceEntry[];
@@ -30,6 +36,7 @@ export type GlobalMissionData = {
   inboxSources: { gmail: boolean; slack: boolean };
   inboxMeta: { gmail: InboxSourceMeta; slack: InboxSourceMeta };
   actionStates: MissionActionState[];
+  entityLinks: Record<string, EntityLink>;
 };
 
 
