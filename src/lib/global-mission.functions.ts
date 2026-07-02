@@ -65,25 +65,10 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const { autoLinkMissionSignals } = await import(
       "@/lib/knowledge/auto-link.server"
     );
-    type Descriptor = Parameters<typeof autoLinkMissionSignals>[2][number];
+    const { inboxDescriptors, workspaceDescriptors } = await import(
+      "@/lib/mission-signals.server"
+    );
 
-    function inboxDescriptors(inbox: InboxAction[]): Descriptor[] {
-      return inbox.map((i) => ({
-        source: i.source,
-        externalRef: i.key,
-        sender: i.sender ?? null,
-        senderEmail: i.senderEmail ?? null,
-        channelName: i.channelName ?? null,
-        signalType:
-          i.source === "gmail"
-            ? "message.received"
-            : i.key.startsWith("slack:dm:")
-              ? "dm.unread"
-              : "mention.received",
-        occurredAt: i.occurredAt ?? null,
-        snippet: null, // never persist body content
-      }));
-    }
 
     if (orgIds.length === 0) {
       const [gmailRes, slack, actionStates] = await Promise.all([
@@ -193,32 +178,20 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const inbox = [...gmailRes.actions, ...slack];
 
     // Build workspace descriptors so R7/R8 can match by orgSlug/orgName.
-    // We use a stable per-org external_ref (`ws:{orgSlug}`) so we don't
-    // create widget-specific auto-signal rows. Mission.tsx can fall back
-    // to this key when the widget-specific action.key has no direct link.
-    const workspaceDescriptors: Descriptor[] = [];
-    const seenOrgRef = new Set<string>();
-    for (const ws of entries) {
-      const ref = `ws:${ws.orgSlug}`;
-      if (seenOrgRef.has(ref)) continue;
-      seenOrgRef.add(ref);
-      workspaceDescriptors.push({
-        source: "workspace",
-        externalRef: ref,
-        orgSlug: ws.orgSlug,
-        orgName: ws.orgName,
-        wsSlug: ws.wsSlug,
-        wsName: ws.wsName,
-        signalType: "workspace.org",
-        occurredAt: null,
-        snippet: null,
-      });
-    }
+    // Stable per-org external_ref `ws:{orgSlug}` — Mission.tsx falls back to
+    // this key when a widget-specific action.key has no direct link.
+    const wsInputs = entries.map((ws) => ({
+      orgSlug: ws.orgSlug,
+      orgName: ws.orgName,
+      wsSlug: ws.wsSlug,
+      wsName: ws.wsName,
+    }));
 
     const entityLinks = await autoLinkMissionSignals(supabase, userId, [
       ...inboxDescriptors(inbox),
-      ...workspaceDescriptors,
+      ...workspaceDescriptors(wsInputs),
     ]).catch(() => ({}) as Record<string, EntityLink>);
+
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return JSON.parse(
