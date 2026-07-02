@@ -181,12 +181,22 @@ export const retestModuleConnection = createServerFn({ method: "POST" })
       apiKey,
     });
 
+    const snapshot = {
+      module_slug: result.info.module_slug,
+      module_name: result.info.module_name,
+      capabilities: result.info.capabilities ?? [],
+      deep_links: result.info.deep_links ?? { org_home: "/orgs/{org_id}" },
+      widgets: result.info.widgets ?? [],
+      fetched_at: now,
+    };
+
     await supabaseAdmin
       .from("module_connections")
       .update({
         status: "connected",
         external_org_name: result.orgName,
         resolved_org_home_url: result.orgHome,
+        module_info_snapshot: snapshot as unknown as import("@/integrations/supabase/types").Json,
         last_verified_at: now,
         error_message: null,
       })
