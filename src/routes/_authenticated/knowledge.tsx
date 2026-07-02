@@ -603,3 +603,201 @@ function EntityDrawer({
     </Sheet>
   );
 }
+
+// ─── Knowledge suggestions (v2) ─────────────────────────────────────────────
+
+function SuggestionsSection() {
+  const qc = useQueryClient();
+  const list = useServerFn(listEntitySuggestions);
+  const scan = useServerFn(suggestKnowledgeEntities);
+  const [scanning, setScanning] = useState(false);
+
+  const q = useQuery({
+    queryKey: ["knowledge", "suggestions", "pending"],
+    queryFn: () =>
+      list({ data: { status: "pending" } }) as Promise<EntitySuggestion[]>,
+  });
+
+  async function runScan() {
+    setScanning(true);
+    try {
+      const rows = (await scan()) as EntitySuggestion[];
+      qc.setQueryData(["knowledge", "suggestions", "pending"], rows);
+      toast(rows.length > 0 ? `${rows.length} nye forslag` : "Ingen nye forslag");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Skanning feilet");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  const suggestions = q.data ?? [];
+
+  return (
+    <section className="mb-6">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Forslag
+        </h2>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={runScan}
+          disabled={scanning}
+          className="h-7 gap-1 text-xs"
+        >
+          {scanning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="h-3.5 w-3.5" />
+          )}
+          Skann etter forslag
+        </Button>
+      </div>
+
+      {q.isLoading ? (
+        <div className="rounded-2xl border border-border/60 bg-card p-6 text-center text-xs text-muted-foreground">
+          Laster…
+        </div>
+      ) : suggestions.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-card p-6 text-center text-sm text-muted-foreground">
+          Ingen nye forslag. Koble signaler manuelt eller vent til flere gjentatte avsendere.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {suggestions.map((s) => (
+            <SuggestionCard key={s.id} suggestion={s} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SuggestionCard({ suggestion }: { suggestion: EntitySuggestion }) {
+  const qc = useQueryClient();
+  const accept = useServerFn(acceptEntitySuggestion);
+  const ignore = useServerFn(ignoreEntitySuggestion);
+  const snooze = useServerFn(snoozeEntitySuggestion);
+  const [busy, setBusy] = useState<"accept" | "ignore" | "snooze" | null>(null);
+
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ["knowledge", "suggestions"] });
+    qc.invalidateQueries({ queryKey: ["knowledge", "entities"] });
+    qc.invalidateQueries({ queryKey: ["global-mission"] });
+  }
+
+  async function doAccept() {
+    setBusy("accept");
+    try {
+      const res = (await accept({ data: { suggestionId: suggestion.id } })) as {
+        entity: Entity;
+        linkedCount: number;
+      };
+      toast(
+        `Opprettet ${res.entity.name}${res.linkedCount ? ` — koblet ${res.linkedCount} signaler` : ""}`,
+      );
+      invalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doIgnore() {
+    setBusy("ignore");
+    try {
+      await ignore({ data: { suggestionId: suggestion.id } });
+      toast("Ignorert");
+      invalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doSnooze() {
+    setBusy("snooze");
+    try {
+      await snooze({ data: { suggestionId: suggestion.id, preset: "week" } });
+      toast("Utsatt i 1 uke");
+      invalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const kind = suggestion.metadata?.cluster_kind;
+  const kindLabel = kind ? CLUSTER_KIND_LABEL[kind] : "Signal";
+  const confBadge =
+    suggestion.confidence === "high"
+      ? "bg-emerald-500/15 text-emerald-600"
+      : suggestion.confidence === "medium"
+        ? "bg-amber-500/15 text-amber-600"
+        : "bg-muted text-muted-foreground";
+
+  return (
+    <li className="rounded-2xl border border-border/60 bg-card p-3 sm:p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium">{suggestion.proposed_name}</span>
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+              {ENTITY_TYPE_LABEL[suggestion.proposed_type]}
+            </span>
+            <span className={`rounded-md px-1.5 py-0.5 text-[10px] uppercase tracking-wider ${confBadge}`}>
+              {suggestion.confidence}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{suggestion.reason}</p>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {suggestion.example_count} signaler · {kindLabel}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" onClick={doAccept} disabled={!!busy} className="h-8 gap-1">
+          {busy === "accept" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          Opprett
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={doSnooze}
+          disabled={!!busy}
+          className="h-8 gap-1"
+        >
+          {busy === "snooze" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Clock className="h-3.5 w-3.5" />
+          )}
+          Ikke nå
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={doIgnore}
+          disabled={!!busy}
+          className="h-8 gap-1 text-muted-foreground"
+        >
+          {busy === "ignore" ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <X className="h-3.5 w-3.5" />
+          )}
+          Ignorer
+        </Button>
+      </div>
+    </li>
+  );
+}
+
