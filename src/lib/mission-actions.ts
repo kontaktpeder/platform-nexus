@@ -174,6 +174,10 @@ export type GlobalMissionAction = {
   snippet?: string;
   occurredAt?: string | null;
   threadId?: string | null;
+  // Optional Knowledge enrichment (Knowledge v0):
+  entityId?: string;
+  entityName?: string;
+  entitySlug?: string;
 };
 
 function tierFromPriority(p: number): MissionTier {
