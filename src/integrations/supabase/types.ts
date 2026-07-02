@@ -148,6 +148,54 @@ export type Database = {
           },
         ]
       }
+      entity_suggestions: {
+        Row: {
+          confidence: string
+          created_at: string
+          example_count: number
+          id: string
+          metadata: Json
+          proposed_name: string
+          proposed_type: Database["public"]["Enums"]["entity_type"]
+          reason: string
+          snoozed_until: string | null
+          status: string
+          suggestion_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence: string
+          created_at?: string
+          example_count?: number
+          id?: string
+          metadata?: Json
+          proposed_name: string
+          proposed_type: Database["public"]["Enums"]["entity_type"]
+          reason: string
+          snoozed_until?: string | null
+          status?: string
+          suggestion_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          example_count?: number
+          id?: string
+          metadata?: Json
+          proposed_name?: string
+          proposed_type?: Database["public"]["Enums"]["entity_type"]
+          reason?: string
+          snoozed_until?: string | null
+          status?: string
+          suggestion_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       memberships: {
         Row: {
           created_at: string
