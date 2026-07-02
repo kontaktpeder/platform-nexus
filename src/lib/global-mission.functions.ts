@@ -183,10 +183,11 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmailRes, slack, actionStates] = await Promise.all([
+    const [gmailRes, slack, actionStates, entityLinks] = await Promise.all([
       fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
+      loadEntityLinks().catch(() => ({}) as Record<string, EntityLink>),
     ]);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -205,6 +206,7 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
           slack: { connected: slackAvailable, error: null, count: slack.length },
         },
         actionStates,
+        entityLinks,
       }),
     ) as any;
   });
