@@ -105,7 +105,7 @@ export const detectAndStoreCommitments = createServerFn({ method: "POST" })
         .eq("user_id", userId)
         .in("status", ["suggested", "open"])
         .order("due_date", { ascending: true, nullsFirst: false });
-      return normalize({
+      return normalize({ 
         detected: 0,
         suggested: [],
         open: [],
@@ -176,7 +176,7 @@ export const detectAndStoreCommitments = createServerFn({ method: "POST" })
       .in("status", ["suggested", "open"])
       .order("due_date", { ascending: true, nullsFirst: false });
 
-    return normalize({
+    return normalize({ 
       detected: inserted.length,
       suggested,
       open,
