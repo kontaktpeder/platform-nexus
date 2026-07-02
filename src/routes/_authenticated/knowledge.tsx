@@ -137,7 +137,10 @@ function KnowledgePage() {
           </div>
         )}
 
+        <CommitmentsSection />
+
         <SuggestionsSection />
+
 
 
 
