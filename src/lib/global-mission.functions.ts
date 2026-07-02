@@ -20,9 +20,14 @@ export type GlobalMissionData = {
   workspaces: GlobalWorkspaceEntry[];
 };
 
+// TSS serialization validation trips on `unknown` fields inside
+// ModuleConnectionRow.module_info_snapshot / WorkspaceModule.config.
+// Payload is real JSON — we send it through JSON.parse(JSON.stringify(...))
+// and cast to keep the strict client-facing types.
 export const getGlobalMissionData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<GlobalMissionData> => {
+  .handler(async ({ context }) => {
+
     const { supabase, userId } = context;
 
     const { data: memberships } = await supabase
