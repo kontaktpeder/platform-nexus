@@ -152,7 +152,7 @@ export function buildNextActions(input: {
 // ─── Global (cross-workspace) ────────────────────────────────────────────────
 
 export type MissionTier = "urgent" | "important" | "later";
-export type MissionSource = "workspace" | "gmail" | "slack";
+export type MissionSource = "workspace" | "gmail" | "slack" | "commitment";
 
 export type GlobalMissionAction = {
   key: string;
@@ -181,6 +181,9 @@ export type GlobalMissionAction = {
   entityName?: string;
   entitySlug?: string;
   entityLinkSource?: "manual" | "auto" | null;
+  // Commitment-only:
+  commitmentId?: string;
+  commitmentDueDate?: string | null;
 };
 
 function tierFromPriority(p: number): MissionTier {
@@ -194,6 +197,7 @@ const TIER_ORDER: Record<MissionTier, number> = { urgent: 0, important: 1, later
 export function getActionSourceFromKey(key: string): MissionSource {
   if (key.startsWith("gmail:")) return "gmail";
   if (key.startsWith("slack:")) return "slack";
+  if (key.startsWith("commitment:")) return "commitment";
   return "workspace";
 }
 
