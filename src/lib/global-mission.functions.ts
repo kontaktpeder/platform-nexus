@@ -39,7 +39,21 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       .select("org_id")
       .eq("user_id", userId);
     const orgIds = (memberships ?? []).map((m) => m.org_id);
-    if (orgIds.length === 0) return { orgs: [], workspaces: [] };
+    const { fetchGmailActions } = await import("@/lib/inbox/gmail.server");
+    const { fetchSlackActions } = await import("@/lib/inbox/slack.server");
+    const gmailAvailable = !!process.env.GOOGLE_MAIL_API_KEY;
+    const slackAvailable = !!process.env.SLACK_API_KEY;
+
+    if (orgIds.length === 0) {
+      const [gmail, slack] = await Promise.all([fetchGmailActions(), fetchSlackActions()]);
+      return {
+        orgs: [],
+        workspaces: [],
+        inbox: [...gmail, ...slack],
+        inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+      };
+    }
+
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { fetchWorkspaceWidgetData } = await import("@/lib/widget-data.server");
@@ -110,7 +124,17 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
+    const [gmail, slack] = await Promise.all([fetchGmailActions(), fetchSlackActions()]);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return JSON.parse(JSON.stringify({ orgs, workspaces: entries })) as any;
+    return JSON.parse(
+      JSON.stringify({
+        orgs,
+        workspaces: entries,
+        inbox: [...gmail, ...slack],
+        inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+      }),
+    ) as any;
   });
+
 
