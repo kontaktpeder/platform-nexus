@@ -118,6 +118,7 @@ export async function fetchSlackActions(opts?: { max?: number }): Promise<InboxA
           href: `${teamHome}/messages/${channel.id}`,
           priority: 1,
           tier: "urgent",
+          channelName: null,
         });
       }
     } catch {
@@ -149,7 +150,8 @@ export async function fetchSlackActions(opts?: { max?: number }): Promise<InboxA
       }
       for (const it of Array.from(uniq.values()).slice(0, 5)) {
         const channelId = it.channel?.id ?? "";
-        const channelName = it.channel?.name ? `#${it.channel.name}` : "Slack";
+        const rawChannel = it.channel?.name ?? null;
+        const channelName = rawChannel ? `#${rawChannel}` : "Slack";
         const senderName = it.user ? await displayName(it.user) : "Someone";
         actions.push({
           key: `slack:mention:${channelId}:${it.ts}`,
@@ -160,6 +162,7 @@ export async function fetchSlackActions(opts?: { max?: number }): Promise<InboxA
           href: channelId ? `${teamHome}/archives/${channelId}/p${it.ts.replace(".", "")}` : teamHome,
           priority: 2,
           tier: "urgent",
+          channelName: rawChannel,
         });
       }
     } catch {

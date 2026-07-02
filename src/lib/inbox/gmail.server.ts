@@ -41,6 +41,18 @@ function parseSender(from: string): string {
   return from.trim();
 }
 
+export function parseEmailFrom(from: string | null | undefined): {
+  name: string;
+  email: string | null;
+} {
+  if (!from) return { name: "", email: null };
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<\s*([^>]+)\s*>\s*$/);
+  if (m) return { name: m[1].trim(), email: m[2].trim().toLowerCase() };
+  const bare = from.match(/([^\s"<>]+@[^\s"<>]+)/);
+  if (bare) return { name: from.replace(bare[1], "").trim(), email: bare[1].toLowerCase() };
+  return { name: from.trim(), email: null };
+}
+
 function classify(labels: string[]): { priority: number; tier: InboxAction["tier"] } {
   const isImportant = labels.includes("IMPORTANT");
   const isStarred = labels.includes("STARRED");
@@ -104,11 +116,13 @@ export async function fetchGmailActionsWithMeta(opts?: {
         ? new Date(Number(meta.internalDate)).toISOString()
         : null;
       const threadId = meta.threadId ?? null;
+      const parsed = parseEmailFrom(from);
       actions.push({
         key: `gmail:${meta.id}`,
         source: "gmail",
         title: subject.slice(0, 120),
-        sender: parseSender(from).slice(0, 80),
+        sender: (parsed.name || parseSender(from)).slice(0, 80),
+        senderEmail: parsed.email,
         snippet: (meta.snippet ?? "").slice(0, 160),
         href: threadId
           ? `https://mail.google.com/mail/u/0/#inbox/${threadId}`

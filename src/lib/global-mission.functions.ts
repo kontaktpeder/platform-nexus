@@ -27,6 +27,7 @@ export type EntityLink = {
   entityId: string;
   entityName: string;
   entitySlug: string;
+  linkSource?: "manual" | "auto";
 };
 
 export type GlobalMissionData = {
