@@ -69,7 +69,7 @@ function ModulesPage() {
                 />
               </div>
 
-              {m.enabled && isConnectableModule(m.slug, m.status) && (
+              {m.enabled && isConnectableModule(m.status) && (
                 <ModuleConnectionPanel
                   orgId={org.id}
                   workspaceId={ws.id}
@@ -81,6 +81,8 @@ function ModulesPage() {
                   canEdit={canEdit}
                   orgSlug={orgSlug}
                   wsSlug={wsSlug}
+                  moduleDefaultUrl={m.default_url}
+                  moduleKeyPrefix={parseModuleConfig(m.config).key_prefix ?? null}
                 />
               )}
             </li>
