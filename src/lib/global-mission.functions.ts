@@ -40,7 +40,24 @@ export type GlobalMissionData = {
   inboxMeta: { gmail: InboxSourceMeta; slack: InboxSourceMeta };
   actionStates: MissionActionState[];
   entityLinks: Record<string, EntityLink>;
+  openCommitments: UserCommitment[];
 };
+
+async function loadOpenCommitments(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+): Promise<UserCommitment[]> {
+  const today = todayOsloISO();
+  const { data } = await supabase
+    .from("user_commitments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "open")
+    .or(`due_date.is.null,due_date.lte.${today}`)
+    .order("due_date", { ascending: true, nullsFirst: false });
+  return (data ?? []) as UserCommitment[];
+}
 
 
 // TSS serialization validation trips on `unknown` fields inside
