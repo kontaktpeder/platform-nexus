@@ -45,6 +45,8 @@ export type EntityRelationship = {
   created_at: string;
 };
 
+export type EntitySignalLinkSource = "manual" | "auto";
+
 export type EntitySignal = {
   id: string;
   user_id: string;
@@ -55,6 +57,7 @@ export type EntitySignal = {
   occurred_at: string | null;
   snippet: string | null;
   created_at: string;
+  link_source: EntitySignalLinkSource;
 };
 
 export type EntityGraph = {
