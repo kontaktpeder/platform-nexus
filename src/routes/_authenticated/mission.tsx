@@ -187,3 +187,21 @@ function EmptyInbox({
     </div>
   );
 }
+
+// Reduce action cards to sanitized JSON safe for the AI: no href, no ids
+// beyond the opaque key, no raw email/Slack bodies beyond the short snippet
+// already surfaced in the UI.
+function sanitizeActions(actions: GlobalMissionAction[]) {
+  return actions.slice(0, 15).map((a) => ({
+    key: a.key,
+    title: a.title.slice(0, 200),
+    source: a.source,
+    tier: a.tier,
+    workspaceLabel:
+      a.source === "workspace" && a.wsName
+        ? [a.orgName, a.wsName].filter(Boolean).join(" · ").slice(0, 120)
+        : null,
+    snippet: (a.snippet ?? a.description ?? "").slice(0, 240) || null,
+    hasDeepLink: !!a.href,
+  }));
+}
