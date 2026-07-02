@@ -108,8 +108,13 @@ export function FeaturedActionCard({ action, busy, onAction }: FeaturedActionCar
         </header>
 
         {action.entityName && (
-          <div className="mt-3 text-sm font-medium text-primary">
-            {action.entityName}
+          <div className="mt-3">
+            <EntityLinkBadge
+              entityName={action.entityName}
+              entitySlug={action.entitySlug}
+              linkSource={action.entityLinkSource}
+              className="text-sm font-medium text-primary hover:text-primary"
+            />
           </div>
         )}
         <h2
