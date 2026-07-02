@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Link2, X, Sparkles } from "lucide-react";
+import { Loader2, Plus, Trash2, X, Sparkles, Wand2, Check, Clock } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,15 @@ import {
   unlinkSignal,
   seedKnowledgeDemo,
 } from "@/lib/knowledge.functions";
+import {
+  suggestKnowledgeEntities,
+  listEntitySuggestions,
+  acceptEntitySuggestion,
+  ignoreEntitySuggestion,
+  snoozeEntitySuggestion,
+  type EntitySuggestion,
+} from "@/lib/knowledge-suggestions.functions";
+import { CLUSTER_KIND_LABEL } from "@/lib/knowledge/suggestion-clusters";
 import type {
   Entity,
   EntityRelationship,
@@ -53,6 +62,7 @@ import {
   RELATIONSHIP_KINDS,
   RELATIONSHIP_LABEL,
 } from "@/lib/knowledge/types";
+
 
 export const Route = createFileRoute("/_authenticated/knowledge")({
   head: () => ({ meta: [{ title: "Knowledge — Platform Core" }] }),
