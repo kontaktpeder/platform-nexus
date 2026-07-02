@@ -30,7 +30,7 @@ import {
   executeMissionAction,
   undoMissionAction,
 } from "@/lib/mission-actions.functions";
-import { filterVisibleActions } from "@/lib/mission-action-state.server";
+import { filterVisibleActions } from "@/lib/mission-action-state";
 import type { SnoozePreset } from "@/lib/mission-snooze";
 
 export const Route = createFileRoute("/_authenticated/mission")({
