@@ -156,16 +156,10 @@ function GlobalMission() {
 
   function onStart() {
     if (!featured) return;
-    if (featured.source === "gmail") {
-      // Click the featured card's primary button (Svar) via a custom event.
-      window.dispatchEvent(new CustomEvent("mission:start-featured"));
-      return;
-    }
-    if (featured.href) {
-      window.open(featured.href, featured.source === "workspace" ? "_self" : "_blank");
-      void handleAction(featured, "open_only");
-    }
+    const el = document.getElementById("featured-action");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
 
   const loading = query.isLoading;
   const hasError = !!query.error;
