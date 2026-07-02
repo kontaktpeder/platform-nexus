@@ -17,6 +17,7 @@ export type ModuleConnectionRow = {
   external_org_name?: string | null;
   resolved_org_home_url?: string | null;
   module_slug?: string | null;
+  module_info_snapshot?: unknown;
 };
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -32,36 +33,16 @@ export const connectionInputSchema = z.object({
     .url("Base URL må være en gyldig URL (inkl. https://)"),
 });
 
-export const CONNECTABLE_MODULE_SLUGS = new Set(["finance", "work"]);
-
-export function isConnectableModule(slug: string, status: string): boolean {
-  return CONNECTABLE_MODULE_SLUGS.has(slug) && status !== "coming_soon";
-}
+export { isConnectableModule } from "./module-registry";
 
 export function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
-/** @deprecated Bruk resolveModuleOpenUrl — beholdes som fallback for gamle koblinger. */
-export function moduleAppUrl(baseUrl: string, externalOrgId: string, slug: string): string {
-  const base = normalizeBaseUrl(baseUrl);
-  if (slug === "finance" || slug === "work") {
-    return `${base}/orgs/${externalOrgId}`;
-  }
-  return base;
-}
-
-export function resolveModuleOpenUrl(
-  connection: ModuleConnectionRow,
-  fallbackSlug?: string,
-): string | null {
+export function resolveModuleOpenUrl(connection: ModuleConnectionRow): string | null {
   if (connection.status !== "connected") return null;
   if (connection.resolved_org_home_url) return connection.resolved_org_home_url;
-  return moduleAppUrl(
-    connection.external_base_url,
-    connection.external_org_id,
-    connection.module_slug ?? fallbackSlug ?? "finance",
-  );
+  return `${normalizeBaseUrl(connection.external_base_url)}/orgs/${connection.external_org_id}`;
 }
 
 export function validateConnectionInput(input: {
