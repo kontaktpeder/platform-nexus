@@ -68,7 +68,6 @@ export const createOrganization = createServerFn({ method: "POST" })
         name: wsName,
         slug: "operations",
         workspace_type: "drift",
-        created_by: userId,
       })
       .select("id, name, slug")
       .single();
