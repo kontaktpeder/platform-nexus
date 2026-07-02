@@ -116,7 +116,27 @@ function GlobalMission() {
           </div>
         ) : (
           <>
-            <MorningBriefCard brief={brief} />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 accent-primary"
+                  checked={aiEnabled}
+                  onChange={(e) => setAiEnabled(e.target.checked)}
+                />
+                Use AI brief
+                {aiEnabled && aiQuery.isFetching ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : null}
+              </label>
+            </div>
+            <MorningBriefCard
+              brief={brief}
+              mode={useAi ? "ai" : "rule"}
+              aiSummary={useAi ? aiQuery.data?.briefing : null}
+              aiReason={useAi ? aiQuery.data?.reason : null}
+              recommended={recommended}
+            />
             <MissionFilterChips value={filter} onChange={setFilter} counts={counts} />
 
             {filter === "gmail" && !gmailHasAny && (
