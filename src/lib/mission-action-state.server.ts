@@ -3,7 +3,6 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import type { GlobalMissionAction } from "@/lib/mission-actions";
 
 export type MissionActionStatus = "dismissed" | "snoozed" | "handled_locally";
 
