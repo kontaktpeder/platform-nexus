@@ -46,6 +46,36 @@ export type Database = {
           },
         ]
       }
+      mission_action_states: {
+        Row: {
+          action_key: string
+          created_at: string
+          id: string
+          snoozed_until: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action_key: string
+          created_at?: string
+          id?: string
+          snoozed_until?: string | null
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action_key?: string
+          created_at?: string
+          id?: string
+          snoozed_until?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       module_connection_secrets: {
         Row: {
           api_key_ciphertext: string
