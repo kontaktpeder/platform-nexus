@@ -85,6 +85,7 @@ Platform lagrer `app_base_url` i `module_connections.external_base_url`.
 | `GET` | `/module/info` | Nei | — | Metadata, deep links, widgets, capabilities |
 | `GET` | `/module/organization` | Ja | `platform:read` | Org knyttet til API-nøkkel |
 | `GET` | `/module/organization/:org_id` | Ja | `platform:verify` | Bekreft at org-id finnes og matcher nøkkel |
+| `GET` | `/module/widgets?ids=…` | Ja | `platform:read` | Live widget-verdier (bakoverkompatibelt tillegg, se [LIVE_WIDGETS.md](./LIVE_WIDGETS.md)) |
 
 ---
 
