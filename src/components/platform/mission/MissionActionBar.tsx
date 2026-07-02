@@ -77,6 +77,16 @@ export function MissionActionBar({ action, onAction, busy }: MissionActionBarPro
 
       {action.source === "gmail" && (
         <>
+          {gmailMessageId && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setReplyOpen(true)}
+            >
+              <Reply className="mr-1 h-3.5 w-3.5" /> Draft reply
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
