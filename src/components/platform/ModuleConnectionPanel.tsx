@@ -190,11 +190,7 @@ export function ModuleConnectionPanel({
             id={`url-${moduleId}`}
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder={
-              moduleSlug === "finance"
-                ? "https://financecore.lovable.app"
-                : "https://modul.example.com"
-            }
+            placeholder={moduleDefaultUrl ?? "https://modul.example.com"}
             disabled={!canEdit || busy}
             className="text-xs"
           />
@@ -209,9 +205,7 @@ export function ModuleConnectionPanel({
             autoComplete="off"
             value={verifyApiKey}
             onChange={(e) => setVerifyApiKey(e.target.value)}
-            placeholder={
-              moduleSlug === "finance" ? "fc_live_..." : moduleSlug === "work" ? "wc_live_..." : "…"
-            }
+            placeholder={moduleKeyPrefix ? `${moduleKeyPrefix}...` : "api_live_..."}
             disabled={!canEdit || busy}
             className="font-mono text-xs"
           />
