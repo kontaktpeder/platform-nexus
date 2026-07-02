@@ -48,6 +48,17 @@ import {
   snoozeEntitySuggestion,
   type EntitySuggestion,
 } from "@/lib/knowledge-suggestions.functions";
+import {
+  scanCommitments,
+  listCommitments,
+  approveCommitment,
+  markCommitmentDone,
+  dismissCommitment,
+} from "@/lib/knowledge-commitments.functions";
+import {
+  COMMITMENT_CONFIDENCE_LABEL,
+  type UserCommitment,
+} from "@/lib/knowledge/commitment.types";
 import { CLUSTER_KIND_LABEL } from "@/lib/knowledge/suggestion-clusters";
 import type {
   Entity,
