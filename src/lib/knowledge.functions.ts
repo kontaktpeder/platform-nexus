@@ -47,7 +47,7 @@ export const listEntities = createServerFn({ method: "POST" })
     if (data.type) q = q.eq("type", data.type);
     const { data: rows, error } = await q;
     if (error) throw error;
-    return normalize<Entity[]>(rows ?? []);
+    return normalize(rows ?? []);
   });
 
 export const getEntity = createServerFn({ method: "POST" })
@@ -61,7 +61,7 @@ export const getEntity = createServerFn({ method: "POST" })
     else if (data.slug) q = q.eq("slug", data.slug);
     const { data: row, error } = await q.maybeSingle();
     if (error) throw error;
-    return normalize<Entity | null>(row);
+    return normalize(row);
   });
 
 export const createEntity = createServerFn({ method: "POST" })
@@ -100,7 +100,7 @@ export const createEntity = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw error;
-    return normalize<Entity>(row);
+    return normalize(row);
   });
 
 export const updateEntity = createServerFn({ method: "POST" })
@@ -134,7 +134,7 @@ export const updateEntity = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw error;
-    return normalize<Entity>(row);
+    return normalize(row);
   });
 
 export const deleteEntity = createServerFn({ method: "POST" })
@@ -164,7 +164,7 @@ export const listRelationships = createServerFn({ method: "POST" })
     }
     const { data: rows, error } = await q;
     if (error) throw error;
-    return normalize<EntityRelationship[]>(rows ?? []);
+    return normalize(rows ?? []);
   });
 
 export const createRelationship = createServerFn({ method: "POST" })
@@ -195,7 +195,7 @@ export const createRelationship = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw error;
-    return normalize<EntityRelationship>(row);
+    return normalize(row);
   });
 
 export const deleteRelationship = createServerFn({ method: "POST" })
@@ -249,7 +249,7 @@ export const linkSignalToEntity = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw error;
-    return normalize<EntitySignal>(row);
+    return normalize(row);
   });
 
 export const unlinkSignal = createServerFn({ method: "POST" })
@@ -280,7 +280,7 @@ export const listSignalsForEntity = createServerFn({ method: "POST" })
       .order("occurred_at", { ascending: false, nullsFirst: false })
       .limit(limit);
     if (error) throw error;
-    return normalize<EntitySignal[]>(rows ?? []);
+    return normalize(rows ?? []);
   });
 
 // ─── Graph (BFS depth ≤ 2, ≤ 50 nodes) ──────────────────────────────────────
@@ -303,7 +303,7 @@ export const getEntityGraph = createServerFn({ method: "POST" })
         .eq("id", data.rootEntityId)
         .maybeSingle();
       root = (rootRow ?? null) as Entity | null;
-      if (!root) return normalize<EntityGraph>({ root: null, entities: [], relationships: [], signals: [] });
+      if (!root) return normalize({ root: null, entities: [], relationships: [], signals: [] });
       seedIds = [root.id];
     } else {
       const { data: rows } = await supabase
@@ -352,7 +352,7 @@ export const getEntityGraph = createServerFn({ method: "POST" })
         .limit(200),
     ]);
 
-    return normalize<EntityGraph>({
+    return normalize({
       root,
       entities: (entities ?? []) as Entity[],
       relationships: allRels,
