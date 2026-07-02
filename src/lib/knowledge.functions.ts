@@ -29,8 +29,11 @@ function assertString(v: unknown, field: string, max = 200): string {
   return v.trim().slice(0, max);
 }
 
-function normalize<T>(v: unknown): T {
-  return JSON.parse(JSON.stringify(v ?? null)) as T;
+// TSS serialization validator rejects `unknown` / `Record<string, unknown>`
+// fields (metadata jsonb). Payload is real JSON — round-trip and cast to any.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalize(v: unknown): any {
+  return JSON.parse(JSON.stringify(v ?? null));
 }
 
 // ─── Entities ───────────────────────────────────────────────────────────────
