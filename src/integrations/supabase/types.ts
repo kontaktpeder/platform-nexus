@@ -521,6 +521,62 @@ export type Database = {
           },
         ]
       }
+      user_commitments: {
+        Row: {
+          confidence: Database["public"]["Enums"]["commitment_confidence"]
+          created_at: string
+          due_date: string | null
+          entity_id: string | null
+          id: string
+          metadata: Json
+          reason: string | null
+          source: string
+          source_ref: string
+          status: Database["public"]["Enums"]["commitment_status"]
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: Database["public"]["Enums"]["commitment_confidence"]
+          created_at?: string
+          due_date?: string | null
+          entity_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          source: string
+          source_ref: string
+          status?: Database["public"]["Enums"]["commitment_status"]
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: Database["public"]["Enums"]["commitment_confidence"]
+          created_at?: string
+          due_date?: string | null
+          entity_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          source?: string
+          source_ref?: string
+          status?: Database["public"]["Enums"]["commitment_status"]
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_commitments_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_modules: {
         Row: {
           config: Json
@@ -615,6 +671,8 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "editor" | "viewer"
+      commitment_confidence: "low" | "medium" | "high"
+      commitment_status: "suggested" | "open" | "done" | "dismissed"
       entity_relationship_kind:
         | "works_on"
         | "customer_of"
@@ -766,6 +824,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "editor", "viewer"],
+      commitment_confidence: ["low", "medium", "high"],
+      commitment_status: ["suggested", "open", "done", "dismissed"],
       entity_relationship_kind: [
         "works_on",
         "customer_of",
