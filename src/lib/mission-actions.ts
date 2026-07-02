@@ -148,3 +148,65 @@ export function buildNextActions(input: {
   const info = actions.filter((a) => a.kind === "info");
   return [...primary, ...info].slice(0, 3);
 }
+
+// ─── Global (cross-workspace) ────────────────────────────────────────────────
+
+export type MissionTier = "urgent" | "important" | "later";
+
+export type GlobalMissionAction = MissionAction & {
+  orgSlug: string;
+  orgName: string;
+  wsSlug: string;
+  wsName: string;
+  tier: MissionTier;
+};
+
+function tierFromPriority(p: number): MissionTier {
+  if (p <= 2) return "urgent";
+  if (p <= 5) return "important";
+  return "later";
+}
+
+export function buildGlobalActions(
+  workspaces: Array<{
+    orgSlug: string;
+    orgName: string;
+    wsSlug: string;
+    wsName: string;
+    widgetData: WidgetDataMap;
+    modules: WorkspaceModule[];
+  }>,
+  max = 7,
+): GlobalMissionAction[] {
+  const all: GlobalMissionAction[] = [];
+
+  for (const ws of workspaces) {
+    const actions = buildNextActions({ widgetData: ws.widgetData, modules: ws.modules });
+    for (const a of actions) {
+      all.push({
+        ...a,
+        key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
+        orgSlug: ws.orgSlug,
+        orgName: ws.orgName,
+        wsSlug: ws.wsSlug,
+        wsName: ws.wsName,
+        tier: tierFromPriority(a.priority),
+      });
+    }
+  }
+
+  const tierOrder: Record<MissionTier, number> = { urgent: 0, important: 1, later: 2 };
+  all.sort((a, b) => {
+    const t = tierOrder[a.tier] - tierOrder[b.tier];
+    if (t !== 0) return t;
+    const p = a.priority - b.priority;
+    if (p !== 0) return p;
+    return a.orgName.localeCompare(b.orgName);
+  });
+
+  const actionKind = all.filter((a) => a.kind === "action").slice(0, max);
+  if (actionKind.length >= max) return actionKind;
+  const info = all.filter((a) => a.kind === "info");
+  return [...actionKind, ...info].slice(0, max);
+}
+
