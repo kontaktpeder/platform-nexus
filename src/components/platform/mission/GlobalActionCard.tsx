@@ -1,4 +1,4 @@
-import { Mail, MessageSquare, Layers } from "lucide-react";
+import { Mail, MessageSquare, Layers, Check } from "lucide-react";
 import type { GlobalMissionAction, MissionTier, MissionSource } from "@/lib/mission-actions";
 import { Card } from "@/components/ui/card";
 import {
