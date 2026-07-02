@@ -289,11 +289,17 @@ export type MorningBrief = {
 const SOURCE_TIEBREAK: Record<MissionSource, number> = {
   gmail: 0,
   slack: 1,
-  workspace: 2,
+  commitment: 2,
+  workspace: 3,
 };
 
 export function buildMorningBrief(actions: GlobalMissionAction[]): MorningBrief {
-  const bySource: Record<MissionSource, number> = { gmail: 0, slack: 0, workspace: 0 };
+  const bySource: Record<MissionSource, number> = {
+    gmail: 0,
+    slack: 0,
+    workspace: 0,
+    commitment: 0,
+  };
   const byTier: Record<MissionTier, number> = { urgent: 0, important: 0, later: 0 };
 
   for (const a of actions) {
