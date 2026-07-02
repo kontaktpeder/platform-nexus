@@ -106,5 +106,7 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    return { orgs, workspaces: entries };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return JSON.parse(JSON.stringify({ orgs, workspaces: entries })) as any;
   });
+
