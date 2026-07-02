@@ -139,7 +139,8 @@ export const suggestKnowledgeEntities = createServerFn({ method: "POST" })
       .order("confidence", { ascending: false })
       .order("example_count", { ascending: false });
 
-    return normalize(pending ?? []) as EntitySuggestion[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return normalize(pending ?? []) as any;
   });
 
 export const listEntitySuggestions = createServerFn({ method: "POST" })
@@ -151,7 +152,8 @@ export const listEntitySuggestions = createServerFn({ method: "POST" })
     if (data.status) q = q.eq("status", data.status);
     q = q.order("confidence", { ascending: false }).order("example_count", { ascending: false });
     const { data: rows } = await q;
-    return normalize(rows ?? []) as EntitySuggestion[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return normalize(rows ?? []) as any;
   });
 
 export const acceptEntitySuggestion = createServerFn({ method: "POST" })
@@ -216,7 +218,8 @@ export const acceptEntitySuggestion = createServerFn({ method: "POST" })
       .eq("id", row.id)
       .eq("user_id", userId);
 
-    return normalize({ entity, linkedCount }) as {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return normalize({ entity, linkedCount }) as any as {
       entity: Entity;
       linkedCount: number;
     };
