@@ -19,8 +19,16 @@ export const Route = createFileRoute("/_authenticated/o/$orgSlug/w/$wsSlug/")({
 
 function Dashboard() {
   const { orgSlug, wsSlug } = Route.useParams();
-  const { ws, modules } = useWs();
+  const { org, ws, modules } = useWs();
   const activeModules = modules.filter((m) => m.enabled);
+
+  const fetchWidgetData = useServerFn(getWorkspaceWidgetData);
+  const widgetData = useQuery({
+    queryKey: ["widget-data", org.id, ws.id],
+    queryFn: () => fetchWidgetData({ data: { orgId: org.id, workspaceId: ws.id } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
