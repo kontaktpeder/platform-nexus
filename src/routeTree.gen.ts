@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
+import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
@@ -33,6 +36,21 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedModulesRoute = AuthenticatedModulesRouteImport.update({
+  id: '/modules',
+  path: '/modules',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMissionRoute = AuthenticatedMissionRouteImport.update({
+  id: '/mission',
+  path: '/mission',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   id: '/app',
@@ -80,6 +98,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AuthenticatedAppRoute
+  '/mission': typeof AuthenticatedMissionRoute
+  '/modules': typeof AuthenticatedModulesRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
   '/o/$orgSlug/w/$wsSlug': typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
@@ -91,6 +112,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app': typeof AuthenticatedAppRoute
+  '/mission': typeof AuthenticatedMissionRoute
+  '/modules': typeof AuthenticatedModulesRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug': typeof AuthenticatedOOrgSlugIndexRoute
   '/o/$orgSlug/w/$wsSlug/modules': typeof AuthenticatedOOrgSlugWWsSlugModulesRoute
@@ -103,6 +127,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/mission': typeof AuthenticatedMissionRoute
+  '/_authenticated/modules': typeof AuthenticatedModulesRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/_authenticated/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
   '/_authenticated/o/$orgSlug/w/$wsSlug': typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
@@ -116,6 +143,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/mission'
+    | '/modules'
+    | '/settings'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/'
     | '/o/$orgSlug/w/$wsSlug'
@@ -127,6 +157,9 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/mission'
+    | '/modules'
+    | '/settings'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug'
     | '/o/$orgSlug/w/$wsSlug/modules'
@@ -138,6 +171,9 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/app'
+    | '/_authenticated/mission'
+    | '/_authenticated/modules'
+    | '/_authenticated/settings'
     | '/_authenticated/o/$orgSlug/settings'
     | '/_authenticated/o/$orgSlug/'
     | '/_authenticated/o/$orgSlug/w/$wsSlug'
@@ -174,6 +210,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/modules': {
+      id: '/_authenticated/modules'
+      path: '/modules'
+      fullPath: '/modules'
+      preLoaderRoute: typeof AuthenticatedModulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/mission': {
+      id: '/_authenticated/mission'
+      path: '/mission'
+      fullPath: '/mission'
+      preLoaderRoute: typeof AuthenticatedMissionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/app': {
       id: '/_authenticated/app'
@@ -250,6 +307,9 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedMissionRoute: typeof AuthenticatedMissionRoute
+  AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedOOrgSlugSettingsRoute: typeof AuthenticatedOOrgSlugSettingsRoute
   AuthenticatedOOrgSlugIndexRoute: typeof AuthenticatedOOrgSlugIndexRoute
   AuthenticatedOOrgSlugWWsSlugRoute: typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
@@ -257,6 +317,9 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedMissionRoute: AuthenticatedMissionRoute,
+  AuthenticatedModulesRoute: AuthenticatedModulesRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedOOrgSlugSettingsRoute: AuthenticatedOOrgSlugSettingsRoute,
   AuthenticatedOOrgSlugIndexRoute: AuthenticatedOOrgSlugIndexRoute,
   AuthenticatedOOrgSlugWWsSlugRoute:
