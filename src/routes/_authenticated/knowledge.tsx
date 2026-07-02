@@ -48,6 +48,17 @@ import {
   snoozeEntitySuggestion,
   type EntitySuggestion,
 } from "@/lib/knowledge-suggestions.functions";
+import {
+  scanCommitments,
+  listCommitments,
+  approveCommitment,
+  markCommitmentDone,
+  dismissCommitment,
+} from "@/lib/knowledge-commitments.functions";
+import {
+  COMMITMENT_CONFIDENCE_LABEL,
+  type UserCommitment,
+} from "@/lib/knowledge/commitment.types";
 import { CLUSTER_KIND_LABEL } from "@/lib/knowledge/suggestion-clusters";
 import type {
   Entity,
@@ -137,7 +148,10 @@ function KnowledgePage() {
           </div>
         )}
 
+        <CommitmentsSection />
+
         <SuggestionsSection />
+
 
 
 
@@ -800,4 +814,200 @@ function SuggestionCard({ suggestion }: { suggestion: EntitySuggestion }) {
     </li>
   );
 }
+
+// ─── Commitments (Knowledge v3) ──────────────────────────────────────────────
+
+function CommitmentsSection() {
+  const qc = useQueryClient();
+  const fetchList = useServerFn(listCommitments);
+  const runScan = useServerFn(scanCommitments);
+  const runApprove = useServerFn(approveCommitment);
+  const runDone = useServerFn(markCommitmentDone);
+  const runDismiss = useServerFn(dismissCommitment);
+
+  const [tab, setTab] = useState<"suggested" | "open" | "done">("suggested");
+  const [scanning, setScanning] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const q = useQuery({
+    queryKey: ["knowledge", "commitments", tab],
+    queryFn: () =>
+      fetchList({ data: { status: [tab] } }) as Promise<UserCommitment[]>,
+  });
+  const items = q.data ?? [];
+
+  async function doScan() {
+    setScanning(true);
+    try {
+      const res = (await runScan()) as { detected: number };
+      toast(`Skannet — ${res.detected} nye forpliktelser`);
+      qc.invalidateQueries({ queryKey: ["knowledge", "commitments"] });
+      qc.invalidateQueries({ queryKey: ["global-mission"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Skanning feilet");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function withBusy(id: string, fn: () => Promise<unknown>, label: string) {
+    setBusyId(id);
+    try {
+      await fn();
+      toast(label);
+      qc.invalidateQueries({ queryKey: ["knowledge", "commitments"] });
+      qc.invalidateQueries({ queryKey: ["global-mission"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-border/60 bg-card p-4">
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">Forpliktelser</h2>
+          <p className="text-xs text-muted-foreground">
+            Løfter fra Gmail og Slack. Godta for å få dem i Mission når de forfaller.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={doScan}
+          disabled={scanning}
+          className="gap-1"
+        >
+          {scanning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Wand2 className="h-3.5 w-3.5" />
+          )}
+          Skan
+        </Button>
+      </header>
+
+      <div className="mb-3 flex gap-1">
+        {(["suggested", "open", "done"] as const).map((t) => (
+          <Button
+            key={t}
+            size="sm"
+            variant={tab === t ? "default" : "ghost"}
+            onClick={() => setTab(t)}
+            className="h-7 px-3 text-xs"
+          >
+            {t === "suggested" ? "Foreslått" : t === "open" ? "Åpen" : "Ferdig"}
+          </Button>
+        ))}
+      </div>
+
+      {q.isLoading && (
+        <div className="grid place-items-center py-6">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {!q.isLoading && items.length === 0 && (
+        <p className="py-4 text-center text-xs text-muted-foreground">
+          Ingen forpliktelser her ennå.
+        </p>
+      )}
+
+      <ul className="space-y-2">
+        {items.map((c) => (
+          <li
+            key={c.id}
+            className="rounded-xl border border-border/60 bg-background p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium">{c.title}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                  <span>{c.source}</span>
+                  {c.due_date && <span>· Forfaller {c.due_date}</span>}
+                  <span>· {COMMITMENT_CONFIDENCE_LABEL[c.confidence]}</span>
+                </div>
+                {c.reason && (
+                  <p className="mt-1 text-xs text-muted-foreground">{c.reason}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-1">
+              {tab === "suggested" && (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={busyId === c.id}
+                    onClick={() =>
+                      withBusy(
+                        c.id,
+                        () => runApprove({ data: { id: c.id } }),
+                        "Godtatt",
+                      )
+                    }
+                    className="h-7 px-3 text-xs"
+                  >
+                    Godta
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyId === c.id}
+                    onClick={() =>
+                      withBusy(
+                        c.id,
+                        () => runDismiss({ data: { id: c.id } }),
+                        "Avvist",
+                      )
+                    }
+                    className="h-7 px-3 text-xs"
+                  >
+                    Avvis
+                  </Button>
+                </>
+              )}
+              {tab === "open" && (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={busyId === c.id}
+                    onClick={() =>
+                      withBusy(
+                        c.id,
+                        () => runDone({ data: { id: c.id } }),
+                        "Merket som ferdig",
+                      )
+                    }
+                    className="h-7 gap-1 px-3 text-xs"
+                  >
+                    <Check className="h-3.5 w-3.5" /> Ferdig
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyId === c.id}
+                    onClick={() =>
+                      withBusy(
+                        c.id,
+                        () => runDismiss({ data: { id: c.id } }),
+                        "Avvist",
+                      )
+                    }
+                    className="h-7 px-3 text-xs"
+                  >
+                    Skjul
+                  </Button>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 

@@ -1,4 +1,4 @@
-import { Mail, MessageSquare, Layers } from "lucide-react";
+import { Mail, MessageSquare, Layers, Check } from "lucide-react";
 import type { GlobalMissionAction, MissionTier, MissionSource } from "@/lib/mission-actions";
 import { Card } from "@/components/ui/card";
 import {
@@ -34,6 +34,11 @@ const sourceMeta: Record<MissionSource, { label: string; className: string; Icon
     label: "Workspace",
     className: "bg-primary-soft text-primary",
     Icon: Layers,
+  },
+  commitment: {
+    label: "Løfte",
+    className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    Icon: Check,
   },
 };
 

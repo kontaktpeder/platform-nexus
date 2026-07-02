@@ -33,7 +33,30 @@ export const executeMissionAction = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const source = getActionSourceFromKey(data.actionKey);
 
+    // Commitment: mutate user_commitments status directly.
+    if (source === "commitment") {
+      const id = data.actionKey.slice("commitment:".length);
+      const newStatus =
+        data.action === "handled_locally"
+          ? "done"
+          : data.action === "dismiss"
+            ? "dismissed"
+            : data.action === "snooze"
+              ? null // fall through to state upsert below
+              : null;
+      if (newStatus) {
+        await supabase
+          .from("user_commitments")
+          .update({ status: newStatus } as never)
+          .eq("user_id", userId)
+          .eq("id", id);
+        return { ok: true as const };
+      }
+      // For snooze fall through to normal mission_action_state path below.
+    }
+
     // Gmail-only mutations
+
     if (data.action === "mark_read" || data.action === "archive") {
       if (source !== "gmail") {
         throw new Response("mark_read/archive only supported for Gmail", {

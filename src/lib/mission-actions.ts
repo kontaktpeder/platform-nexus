@@ -152,7 +152,7 @@ export function buildNextActions(input: {
 // ─── Global (cross-workspace) ────────────────────────────────────────────────
 
 export type MissionTier = "urgent" | "important" | "later";
-export type MissionSource = "workspace" | "gmail" | "slack";
+export type MissionSource = "workspace" | "gmail" | "slack" | "commitment";
 
 export type GlobalMissionAction = {
   key: string;
@@ -181,6 +181,9 @@ export type GlobalMissionAction = {
   entityName?: string;
   entitySlug?: string;
   entityLinkSource?: "manual" | "auto" | null;
+  // Commitment-only:
+  commitmentId?: string;
+  commitmentDueDate?: string | null;
 };
 
 function tierFromPriority(p: number): MissionTier {
@@ -194,6 +197,7 @@ const TIER_ORDER: Record<MissionTier, number> = { urgent: 0, important: 1, later
 export function getActionSourceFromKey(key: string): MissionSource {
   if (key.startsWith("gmail:")) return "gmail";
   if (key.startsWith("slack:")) return "slack";
+  if (key.startsWith("commitment:")) return "commitment";
   return "workspace";
 }
 
@@ -273,6 +277,70 @@ export function buildGlobalActions(input: {
   return all.slice(0, max);
 }
 
+// ─── Commitments (Knowledge v3) ─────────────────────────────────────────────
+
+export type CommitmentActionInput = {
+  id: string;
+  title: string;
+  due_date: string | null;
+  entity_id: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export function buildCommitmentActions(
+  commitments: CommitmentActionInput[],
+  entityMap?: Record<
+    string,
+    { name: string; slug: string; linkSource?: "manual" | "auto" }
+  >,
+  todayOslo: string = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()),
+): GlobalMissionAction[] {
+  const out: GlobalMissionAction[] = [];
+  for (const c of commitments) {
+    let priority = 4;
+    let tier: MissionTier = "later";
+    let description = "Åpen forpliktelse";
+    if (c.due_date) {
+      if (c.due_date < todayOslo) {
+        priority = 1;
+        tier = "urgent";
+        description = "Forfalt";
+      } else if (c.due_date === todayOslo) {
+        priority = 2;
+        tier = "important";
+        description = "Forfaller i dag";
+      } else {
+        // Future — caller should exclude, but be defensive.
+        continue;
+      }
+    }
+    const linked = c.entity_id ? entityMap?.[c.entity_id] : undefined;
+    if (linked) description = `${description} · ${linked.name}`;
+    out.push({
+      key: `commitment:${c.id}`,
+      source: "commitment",
+      title: c.title,
+      description,
+      href: null,
+      priority,
+      tier,
+      commitmentId: c.id,
+      commitmentDueDate: c.due_date,
+      entityId: linked ? c.entity_id ?? undefined : undefined,
+      entityName: linked?.name,
+      entitySlug: linked?.slug,
+      entityLinkSource: linked?.linkSource ?? "manual",
+    });
+  }
+  return out;
+}
+
+
 // ─── Morning Brief ───────────────────────────────────────────────────────────
 
 export type MorningBrief = {
@@ -285,11 +353,17 @@ export type MorningBrief = {
 const SOURCE_TIEBREAK: Record<MissionSource, number> = {
   gmail: 0,
   slack: 1,
-  workspace: 2,
+  commitment: 2,
+  workspace: 3,
 };
 
 export function buildMorningBrief(actions: GlobalMissionAction[]): MorningBrief {
-  const bySource: Record<MissionSource, number> = { gmail: 0, slack: 0, workspace: 0 };
+  const bySource: Record<MissionSource, number> = {
+    gmail: 0,
+    slack: 0,
+    workspace: 0,
+    commitment: 0,
+  };
   const byTier: Record<MissionTier, number> = { urgent: 0, important: 0, later: 0 };
 
   for (const a of actions) {

@@ -5,6 +5,8 @@ import type { WorkspaceModule } from "@/lib/workspaceContext";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
 import type { InboxAction } from "@/lib/inbox/types";
 import type { MissionActionState } from "@/lib/mission-action-state";
+import type { UserCommitment } from "@/lib/knowledge/commitment.types";
+import { todayOsloISO } from "@/lib/knowledge/commitment.types";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
@@ -38,7 +40,24 @@ export type GlobalMissionData = {
   inboxMeta: { gmail: InboxSourceMeta; slack: InboxSourceMeta };
   actionStates: MissionActionState[];
   entityLinks: Record<string, EntityLink>;
+  openCommitments: UserCommitment[];
 };
+
+async function loadOpenCommitments(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+): Promise<UserCommitment[]> {
+  const today = todayOsloISO();
+  const { data } = await supabase
+    .from("user_commitments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "open")
+    .or(`due_date.is.null,due_date.lte.${today}`)
+    .order("due_date", { ascending: true, nullsFirst: false });
+  return (data ?? []) as UserCommitment[];
+}
 
 
 // TSS serialization validation trips on `unknown` fields inside
@@ -71,10 +90,11 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
 
 
     if (orgIds.length === 0) {
-      const [gmailRes, slack, actionStates] = await Promise.all([
+      const [gmailRes, slack, actionStates, openCommitments] = await Promise.all([
         fetchGmailActionsWithMeta(),
         fetchSlackActions(),
         listMissionActionStates(supabase, userId).catch(() => []),
+        loadOpenCommitments(supabase, userId).catch(() => []),
       ]);
       const inbox = [...gmailRes.actions, ...slack];
       const entityLinks = await autoLinkMissionSignals(
@@ -97,7 +117,9 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         },
         actionStates,
         entityLinks,
-      };
+        openCommitments,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
     }
 
 
@@ -170,16 +192,15 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmailRes, slack, actionStates] = await Promise.all([
+    const [gmailRes, slack, actionStates, openCommitments] = await Promise.all([
       fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
+      loadOpenCommitments(supabase, userId).catch(() => []),
     ]);
     const inbox = [...gmailRes.actions, ...slack];
 
     // Build workspace descriptors so R7/R8 can match by orgSlug/orgName.
-    // Stable per-org external_ref `ws:{orgSlug}` — Mission.tsx falls back to
-    // this key when a widget-specific action.key has no direct link.
     const wsInputs = entries.map((ws) => ({
       orgSlug: ws.orgSlug,
       orgName: ws.orgName,
@@ -210,8 +231,10 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         },
         actionStates,
         entityLinks,
+        openCommitments,
       }),
     ) as any;
   });
+
 
 
