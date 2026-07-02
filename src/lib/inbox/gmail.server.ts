@@ -51,28 +51,40 @@ function classify(labels: string[]): { priority: number; tier: InboxAction["tier
   return { priority: 8, tier: "later" };
 }
 
-export async function fetchGmailActions(opts?: { max?: number }): Promise<InboxAction[]> {
+export type FetchGmailResult = {
+  actions: InboxAction[];
+  error: string | null;
+};
+
+export async function fetchGmailActions(opts?: {
+  max?: number;
+}): Promise<InboxAction[]> {
+  const result = await fetchGmailActionsWithMeta(opts);
+  return result.actions;
+}
+
+export async function fetchGmailActionsWithMeta(opts?: {
+  max?: number;
+}): Promise<FetchGmailResult> {
   const apiKey = process.env.GOOGLE_MAIL_API_KEY;
   const lovableKey = process.env.LOVABLE_API_KEY;
-  if (!apiKey || !lovableKey) return [];
+  if (!apiKey || !lovableKey) return { actions: [], error: null };
 
-  const max = opts?.max ?? 5;
+  const max = opts?.max ?? 15;
 
   try {
-    // One combined query: unread OR starred/important within 7 days
-    const q = encodeURIComponent(
-      "(is:unread label:inbox) OR (is:starred newer_than:7d) OR (is:important newer_than:7d)",
-    );
+    // Mission inbox only: unread messages in inbox.
+    const q = encodeURIComponent("is:unread label:inbox");
     const list = await gmailFetch<ListResponse>(
-      `/users/me/messages?maxResults=15&q=${q}`,
+      `/users/me/messages?maxResults=25&q=${q}`,
       apiKey,
       lovableKey,
     );
     const ids = (list.messages ?? []).map((m) => m.id);
-    if (ids.length === 0) return [];
+    if (ids.length === 0) return { actions: [], error: null };
 
     const metas = await Promise.all(
-      ids.slice(0, 15).map((id) =>
+      ids.slice(0, 25).map((id) =>
         gmailFetch<MessageMeta>(
           `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
           apiKey,
@@ -88,22 +100,32 @@ export async function fetchGmailActions(opts?: { max?: number }): Promise<InboxA
       const { priority, tier } = classify(labels);
       const subject = headerValue(meta.payload?.headers, "Subject") || "(no subject)";
       const from = headerValue(meta.payload?.headers, "From") || "Unknown sender";
+      const occurredAt = meta.internalDate
+        ? new Date(Number(meta.internalDate)).toISOString()
+        : null;
+      const threadId = meta.threadId ?? null;
       actions.push({
         key: `gmail:${meta.id}`,
         source: "gmail",
         title: subject.slice(0, 120),
         sender: parseSender(from).slice(0, 80),
         snippet: (meta.snippet ?? "").slice(0, 160),
-        href: `https://mail.google.com/mail/u/0/#inbox/${meta.id}`,
+        href: threadId
+          ? `https://mail.google.com/mail/u/0/#inbox/${threadId}`
+          : `https://mail.google.com/mail/u/0/#inbox/${meta.id}`,
         priority,
         tier,
+        occurredAt,
+        threadId,
       });
     }
 
     actions.sort((a, b) => a.priority - b.priority);
-    return actions.slice(0, max);
-  } catch {
-    return [];
+    return { actions: actions.slice(0, max), error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "gmail fetch failed";
+    console.error("[gmail] fetchGmailActions failed:", msg);
+    return { actions: [], error: msg };
   }
 }
 
