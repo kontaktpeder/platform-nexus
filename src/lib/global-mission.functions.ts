@@ -4,7 +4,7 @@ import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
 import type { InboxAction } from "@/lib/inbox/types";
-import type { MissionActionState } from "@/lib/mission-action-state.server";
+import type { MissionActionState } from "@/lib/mission-action-state";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
