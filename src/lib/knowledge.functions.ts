@@ -384,7 +384,7 @@ export const seedKnowledgeDemo = createServerFn({ method: "POST" })
       const slug = await slugifyEntityName(supabase, userId, name);
       const { data, error } = await supabase
         .from("entities")
-        .insert({ user_id: userId, type, name, slug, importance, summary, metadata })
+        .insert({ user_id: userId, type, name, slug, importance, summary, metadata: metadata as never })
         .select("*")
         .single();
       if (error) throw error;
