@@ -28,6 +28,8 @@ type Props = {
   canEdit: boolean;
   orgSlug: string;
   wsSlug: string;
+  moduleDefaultUrl?: string | null;
+  moduleKeyPrefix?: string | null;
 };
 
 const statusLabel: Record<ModuleConnectionStatus, string> = {
