@@ -147,6 +147,20 @@ export function MissionActionBar({ action, onAction, busy }: MissionActionBarPro
       </Button>
 
       {busy && <MoreHorizontal className="h-4 w-4 animate-pulse text-muted-foreground" />}
+
+      {gmailMessageId && (
+        <GmailReplyDrawer
+          open={replyOpen}
+          onOpenChange={setReplyOpen}
+          messageId={gmailMessageId}
+          fallbackSubject={action.title}
+          fallbackSender={action.sender}
+          fallbackSnippet={action.description}
+          onSaved={({ markHandled }) => {
+            if (markHandled) void onAction("handled_locally");
+          }}
+        />
+      )}
     </div>
   );
 }
