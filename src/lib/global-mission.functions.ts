@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
+import type { InboxAction } from "@/lib/inbox/types";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
@@ -18,7 +19,10 @@ export type GlobalWorkspaceEntry = {
 export type GlobalMissionData = {
   orgs: { id: string; name: string; slug: string }[];
   workspaces: GlobalWorkspaceEntry[];
+  inbox: InboxAction[];
+  inboxSources: { gmail: boolean; slack: boolean };
 };
+
 
 // TSS serialization validation trips on `unknown` fields inside
 // ModuleConnectionRow.module_info_snapshot / WorkspaceModule.config.
