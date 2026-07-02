@@ -117,6 +117,16 @@ export function MissionActionBar({ action, onAction, busy }: MissionActionBarPro
         </Button>
       )}
 
+      {action.source === "commitment" && (
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => void onAction("handled_locally")}
+        >
+          <Check className="mr-1 h-3.5 w-3.5" /> Ferdig
+        </Button>
+      )}
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline" disabled={busy}>
