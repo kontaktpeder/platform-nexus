@@ -147,8 +147,8 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmail, slack, actionStates] = await Promise.all([
-      fetchGmailActions(),
+    const [gmailRes, slack, actionStates] = await Promise.all([
+      fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
     ]);
@@ -158,8 +158,16 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       JSON.stringify({
         orgs,
         workspaces: entries,
-        inbox: [...gmail, ...slack],
+        inbox: [...gmailRes.actions, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        inboxMeta: {
+          gmail: {
+            connected: gmailAvailable,
+            error: gmailRes.error,
+            count: gmailRes.actions.length,
+          },
+          slack: { connected: slackAvailable, error: null, count: slack.length },
+        },
         actionStates,
       }),
     ) as any;
