@@ -127,7 +127,7 @@ export function ModuleConnectionPanel({
   if (!enabled) return null;
 
   const isConnected = connection?.status === "connected";
-  const openUrl = connection ? resolveModuleOpenUrl(connection, moduleSlug) : null;
+  const openUrl = connection ? resolveModuleOpenUrl(connection) : null;
   const lastVerified = formatTime(connection?.last_verified_at);
   const busy = verify.isPending || retest.isPending || disconnect.isPending;
 
