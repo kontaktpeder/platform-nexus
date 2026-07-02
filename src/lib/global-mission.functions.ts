@@ -65,25 +65,10 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const { autoLinkMissionSignals } = await import(
       "@/lib/knowledge/auto-link.server"
     );
-    type Descriptor = Parameters<typeof autoLinkMissionSignals>[2][number];
+    const { inboxDescriptors, workspaceDescriptors } = await import(
+      "@/lib/mission-signals.server"
+    );
 
-    function inboxDescriptors(inbox: InboxAction[]): Descriptor[] {
-      return inbox.map((i) => ({
-        source: i.source,
-        externalRef: i.key,
-        sender: i.sender ?? null,
-        senderEmail: i.senderEmail ?? null,
-        channelName: i.channelName ?? null,
-        signalType:
-          i.source === "gmail"
-            ? "message.received"
-            : i.key.startsWith("slack:dm:")
-              ? "dm.unread"
-              : "mention.received",
-        occurredAt: i.occurredAt ?? null,
-        snippet: null, // never persist body content
-      }));
-    }
 
     if (orgIds.length === 0) {
       const [gmailRes, slack, actionStates] = await Promise.all([
