@@ -17,7 +17,8 @@ import {
   getGlobalMissionData,
   type GlobalMissionData,
 } from "@/lib/global-mission.functions";
-import { buildGlobalActions } from "@/lib/mission-actions";
+import { buildGlobalActions, buildMorningBrief } from "@/lib/mission-actions";
+import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
