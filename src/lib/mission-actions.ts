@@ -277,6 +277,70 @@ export function buildGlobalActions(input: {
   return all.slice(0, max);
 }
 
+// ─── Commitments (Knowledge v3) ─────────────────────────────────────────────
+
+export type CommitmentActionInput = {
+  id: string;
+  title: string;
+  due_date: string | null;
+  entity_id: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export function buildCommitmentActions(
+  commitments: CommitmentActionInput[],
+  entityMap?: Record<
+    string,
+    { name: string; slug: string; linkSource?: "manual" | "auto" }
+  >,
+  todayOslo: string = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()),
+): GlobalMissionAction[] {
+  const out: GlobalMissionAction[] = [];
+  for (const c of commitments) {
+    let priority = 4;
+    let tier: MissionTier = "later";
+    let description = "Åpen forpliktelse";
+    if (c.due_date) {
+      if (c.due_date < todayOslo) {
+        priority = 1;
+        tier = "urgent";
+        description = "Forfalt";
+      } else if (c.due_date === todayOslo) {
+        priority = 2;
+        tier = "important";
+        description = "Forfaller i dag";
+      } else {
+        // Future — caller should exclude, but be defensive.
+        continue;
+      }
+    }
+    const linked = c.entity_id ? entityMap?.[c.entity_id] : undefined;
+    if (linked) description = `${description} · ${linked.name}`;
+    out.push({
+      key: `commitment:${c.id}`,
+      source: "commitment",
+      title: c.title,
+      description,
+      href: null,
+      priority,
+      tier,
+      commitmentId: c.id,
+      commitmentDueDate: c.due_date,
+      entityId: linked ? c.entity_id ?? undefined : undefined,
+      entityName: linked?.name,
+      entitySlug: linked?.slug,
+      entityLinkSource: linked?.linkSource ?? "manual",
+    });
+  }
+  return out;
+}
+
+
 // ─── Morning Brief ───────────────────────────────────────────────────────────
 
 export type MorningBrief = {
