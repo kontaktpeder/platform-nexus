@@ -1,5 +1,7 @@
 import type { GlobalMissionAction, MissionTier } from "@/lib/mission-actions";
 import { GlobalActionCard } from "./GlobalActionCard";
+import type { MissionActionType } from "./MissionActionBar";
+import type { SnoozePreset } from "@/lib/mission-snooze";
 
 const TIERS: { key: MissionTier; label: string }[] = [
   { key: "urgent", label: "Urgent" },
@@ -7,7 +9,17 @@ const TIERS: { key: MissionTier; label: string }[] = [
   { key: "later", label: "Later" },
 ];
 
-export function GlobalActionList({ actions }: { actions: GlobalMissionAction[] }) {
+export type GlobalActionListProps = {
+  actions: GlobalMissionAction[];
+  onAction: (
+    action: GlobalMissionAction,
+    type: MissionActionType,
+    snoozePreset?: SnoozePreset,
+  ) => Promise<void> | void;
+  busyKey?: string | null;
+};
+
+export function GlobalActionList({ actions, onAction, busyKey }: GlobalActionListProps) {
   if (actions.length === 0) {
     return (
       <div className="surface-card p-6 text-center text-sm text-muted-foreground">
@@ -28,7 +40,12 @@ export function GlobalActionList({ actions }: { actions: GlobalMissionAction[] }
             </h2>
             <div className="grid gap-2">
               {rows.map((a) => (
-                <GlobalActionCard key={a.key} action={a} />
+                <GlobalActionCard
+                  key={a.key}
+                  action={a}
+                  onAction={onAction}
+                  busy={busyKey === a.key}
+                />
               ))}
             </div>
           </section>
