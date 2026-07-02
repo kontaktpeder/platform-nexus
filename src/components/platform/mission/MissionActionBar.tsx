@@ -1,4 +1,13 @@
-import { ArrowUpRight, Archive, Check, MoreHorizontal, X, Clock } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowUpRight,
+  Archive,
+  Check,
+  MoreHorizontal,
+  X,
+  Clock,
+  Reply,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { GlobalMissionAction } from "@/lib/mission-actions";
 import type { SnoozePreset } from "@/lib/mission-snooze";
+import { GmailReplyDrawer } from "./GmailReplyDrawer";
 
 export type MissionActionType =
   | "mark_read"
