@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { Loader2, Mail, MessageSquare } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
@@ -13,6 +14,7 @@ import {
   type MissionFilter,
 } from "@/components/platform/mission/MissionFilterChips";
 import { GlobalActionList } from "@/components/platform/mission/GlobalActionList";
+import type { MissionActionType } from "@/components/platform/mission/MissionActionBar";
 import {
   getGlobalMissionData,
   type GlobalMissionData,
@@ -24,6 +26,12 @@ import {
 } from "@/lib/mission-actions";
 import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
 import { generateMissionBriefing } from "@/lib/mission-briefing.functions";
+import {
+  executeMissionAction,
+  undoMissionAction,
+} from "@/lib/mission-actions.functions";
+import { filterVisibleActions } from "@/lib/mission-action-state.server";
+import type { SnoozePreset } from "@/lib/mission-snooze";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
