@@ -172,6 +172,8 @@ export type GlobalMissionAction = {
   // Inbox-only:
   sender?: string;
   snippet?: string;
+  occurredAt?: string | null;
+  threadId?: string | null;
 };
 
 function tierFromPriority(p: number): MissionTier {
