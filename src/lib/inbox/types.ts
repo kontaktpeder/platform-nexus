@@ -13,4 +13,7 @@ export type InboxAction = {
   tier: MissionTier;
   occurredAt?: string | null;
   threadId?: string | null;
+  // Knowledge v1 match hints:
+  senderEmail?: string | null;
+  channelName?: string | null;
 };
