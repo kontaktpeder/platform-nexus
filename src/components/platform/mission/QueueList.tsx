@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EntityLinkBadge } from "./EntityLinkBadge";
 import {
   Mail,
   MessageSquare,
@@ -132,8 +133,21 @@ function QueueRow({
           </span>
           <span className={`h-1.5 w-1.5 flex-none rounded-full ${dot}`} aria-hidden />
         </div>
-        {meta && (
-          <div className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</div>
+        {(meta || action.entityName) && (
+          <div className="mt-0.5 flex items-center gap-2 truncate text-xs text-muted-foreground">
+            {meta && <span className="truncate">{meta}</span>}
+            {action.entityName && (
+              <>
+                {meta && <span aria-hidden>·</span>}
+                <EntityLinkBadge
+                  entityName={action.entityName}
+                  entitySlug={action.entitySlug}
+                  linkSource={action.entityLinkSource}
+                  compact
+                />
+              </>
+            )}
+          </div>
         )}
       </div>
 

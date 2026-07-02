@@ -86,13 +86,19 @@ function GlobalMission() {
         .filter((a) => !hiddenKeys.has(a.key))
         .slice(0, 7)
         .map((a) => {
-          const link = entityLinks[a.key];
+          // Knowledge v1: direct hit first, else workspace fallback by orgSlug.
+          const link =
+            entityLinks[a.key] ??
+            (a.source === "workspace" && a.orgSlug
+              ? entityLinks[`ws:${a.orgSlug}`]
+              : undefined);
           return link
             ? {
                 ...a,
                 entityId: link.entityId,
                 entityName: link.entityName,
                 entitySlug: link.entitySlug,
+                entityLinkSource: link.linkSource ?? "manual",
               }
             : a;
         }),
