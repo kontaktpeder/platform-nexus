@@ -90,10 +90,11 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
 
 
     if (orgIds.length === 0) {
-      const [gmailRes, slack, actionStates] = await Promise.all([
+      const [gmailRes, slack, actionStates, openCommitments] = await Promise.all([
         fetchGmailActionsWithMeta(),
         fetchSlackActions(),
         listMissionActionStates(supabase, userId).catch(() => []),
+        loadOpenCommitments(supabase, userId).catch(() => []),
       ]);
       const inbox = [...gmailRes.actions, ...slack];
       const entityLinks = await autoLinkMissionSignals(
@@ -116,7 +117,9 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
         },
         actionStates,
         entityLinks,
-      };
+        openCommitments,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
     }
 
 
