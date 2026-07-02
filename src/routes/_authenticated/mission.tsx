@@ -1,20 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Mail, MessageSquare } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { GlobalMissionHeader } from "@/components/platform/mission/GlobalMissionHeader";
-import { GlobalContextBar } from "@/components/platform/mission/GlobalContextBar";
-import {
-  MissionFilterChips,
-  applyMissionFilter,
-  type MissionFilter,
-} from "@/components/platform/mission/MissionFilterChips";
-import { GlobalActionList } from "@/components/platform/mission/GlobalActionList";
-import type { MissionActionType } from "@/components/platform/mission/MissionActionBar";
+import { FeaturedActionCard } from "@/components/platform/mission/FeaturedActionCard";
+import { QueueList } from "@/components/platform/mission/QueueList";
 import {
   getGlobalMissionData,
   type GlobalMissionData,
@@ -24,21 +18,45 @@ import {
   buildMorningBrief,
   type GlobalMissionAction,
 } from "@/lib/mission-actions";
-import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
 import { generateMissionBriefing } from "@/lib/mission-briefing.functions";
 import {
   executeMissionAction,
   undoMissionAction,
 } from "@/lib/mission-actions.functions";
 import { filterVisibleActions } from "@/lib/mission-action-state";
+import type { MissionActionType } from "@/components/platform/mission/MissionActionBar";
 import type { SnoozePreset } from "@/lib/mission-snooze";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
   component: GlobalMission,
 });
 
+function firstNameFrom(user: ReturnType<typeof useAuth>["user"]): string | null {
+  if (!user) return null;
+  const md = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const cand =
+    (md.first_name as string) ||
+    (md.given_name as string) ||
+    (md.name as string) ||
+    (md.full_name as string) ||
+    "";
+  const trimmed = cand.trim();
+  if (trimmed) return trimmed.split(/\s+/)[0];
+  if (user.email) {
+    const local = user.email.split("@")[0];
+    const parts = local.split(/[._-]/).filter(Boolean);
+    const p = (parts[0] ?? local).toLowerCase();
+    return p.charAt(0).toUpperCase() + p.slice(1);
+  }
+  return null;
+}
+
 function GlobalMission() {
+  const { user } = useAuth();
+  const firstName = firstNameFrom(user);
+
   const fetchGlobal = useServerFn(getGlobalMissionData);
   const query = useQuery({
     queryKey: ["global-mission"],
@@ -46,45 +64,46 @@ function GlobalMission() {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  const [filter, setFilter] = useState<MissionFilter>("all");
 
   const data = query.data;
-  const orgs = data?.orgs ?? [];
   const workspaces = data?.workspaces ?? [];
   const inbox = data?.inbox ?? [];
-  const inboxSources = data?.inboxSources ?? { gmail: false, slack: false };
-  const connectedCount = workspaces.reduce(
-    (n, w) => n + w.modules.filter((m) => m.connection?.status === "connected").length,
-    0,
-  );
+  const actionStates = data?.actionStates ?? [];
 
   const rawActions = useMemo(
     () => buildGlobalActions({ workspaces, inbox, max: 20 }),
     [workspaces, inbox],
   );
 
-  const actionStates = data?.actionStates ?? [];
   const visible = useMemo(
     () => filterVisibleActions(rawActions, actionStates).slice(0, 7),
     [rawActions, actionStates],
   );
 
-  const counts = useMemo(
-    () => ({
-      all: visible.length,
-      gmail: visible.filter((a) => a.source === "gmail").length,
-      slack: visible.filter((a) => a.source === "slack").length,
-      workspace: visible.filter((a) => a.source === "workspace").length,
-    }),
-    [visible],
+  // Deterministic brief always available. AI runs silently in the background
+  // and, if it returns a valid recommended key, replaces the featured action.
+  const brief = useMemo(() => buildMorningBrief(visible), [visible]);
+  const sanitized = useMemo(() => sanitizeActions(visible), [visible]);
+  const runBriefing = useServerFn(generateMissionBriefing);
+  const aiQuery = useQuery({
+    queryKey: ["mission-briefing", sanitized.map((s) => s.key).join("|")],
+    queryFn: () => runBriefing({ data: { actions: sanitized } }),
+    enabled: sanitized.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const aiRecommended = aiQuery.data?.recommendedKey
+    ? visible.find((a) => a.key === aiQuery.data!.recommendedKey) ?? null
+    : null;
+  const featured: GlobalMissionAction | null = aiRecommended ?? brief.recommended;
+  const queue = useMemo(
+    () => visible.filter((a) => a.key !== featured?.key),
+    [visible, featured],
   );
 
-  const filtered = applyMissionFilter(visible, filter);
-  const brief = useMemo(() => buildMorningBrief(filtered), [filtered]);
-  const gmailHasAny = visible.some((i) => i.source === "gmail");
-  const slackHasAny = visible.some((i) => i.source === "slack");
-
-  // Mutations for triage
+  // Triage mutations
   const queryClient = useQueryClient();
   const runExecute = useServerFn(executeMissionAction);
   const runUndo = useServerFn(undoMissionAction);
@@ -104,132 +123,95 @@ function GlobalMission() {
       await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
       const label =
         type === "mark_read"
-          ? "Marked as read"
+          ? "Merket som lest"
           : type === "archive"
-            ? "Archived"
+            ? "Arkivert"
             : type === "handled_locally"
-              ? "Marked handled"
+              ? "Ferdig"
               : type === "snooze"
-                ? "Snoozed"
-                : "Dismissed";
+                ? "Utsatt"
+                : "Skjult";
       toast(label, {
         duration: 7000,
         action: {
-          label: "Undo",
+          label: "Angre",
           onClick: async () => {
             try {
               await runUndo({ data: { actionKey: action.key } });
               await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
-              toast("Restored to Mission list");
+              toast("Gjenopprettet");
             } catch {
-              toast.error("Could not undo");
+              toast.error("Kunne ikke angre");
             }
           },
         },
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Action failed";
+      const msg = err instanceof Error ? err.message : "Handlingen feilet";
       toast.error(msg);
     } finally {
       setBusyKey((k) => (k === action.key ? null : k));
     }
   };
 
+  function onStart() {
+    if (!featured) return;
+    if (featured.source === "gmail") {
+      // Click the featured card's primary button (Svar) via a custom event.
+      window.dispatchEvent(new CustomEvent("mission:start-featured"));
+      return;
+    }
+    if (featured.href) {
+      window.open(featured.href, featured.source === "workspace" ? "_self" : "_blank");
+      void handleAction(featured, "open_only");
+    }
+  }
 
-  // AI briefing (opt-in). Server fn is called on demand; if it fails we fall
-  // back to the deterministic Morning Brief. No prompts or briefings are
-  // persisted server-side.
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const runBriefing = useServerFn(generateMissionBriefing);
-  const sanitized = useMemo(() => sanitizeActions(filtered), [filtered]);
-  const aiQuery = useQuery({
-    queryKey: ["mission-briefing", sanitized.map((s) => s.key).join("|")],
-    queryFn: () => runBriefing({ data: { actions: sanitized } }),
-    enabled: aiEnabled && sanitized.length > 0,
-    staleTime: 5 * 60_000,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const aiRecommended: GlobalMissionAction | null =
-    aiEnabled && aiQuery.data?.recommendedKey
-      ? filtered.find((a) => a.key === aiQuery.data!.recommendedKey) ?? null
-      : null;
-
-  const useAi = aiEnabled && !!aiQuery.data && !aiQuery.error;
-  const recommended = useAi
-    ? aiRecommended ?? brief.recommended
-    : brief.recommended;
+  const loading = query.isLoading;
+  const hasError = !!query.error;
+  const empty = !loading && !hasError && visible.length === 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar title="Mission Control" subtitle="All your workspaces" />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
-        <GlobalMissionHeader workspaceCount={workspaces.length} />
-        <GlobalContextBar
-          orgCount={orgs.length}
-          workspaceCount={workspaces.length}
-          connectedCount={connectedCount}
+      <TopBar title="Mission" />
+      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
+        <GlobalMissionHeader
+          firstName={firstName}
+          count={visible.length}
+          canStart={!!featured}
+          onStart={onStart}
         />
 
-        {query.isLoading ? (
-          <div className="grid place-items-center py-12">
+        {loading && (
+          <div className="grid place-items-center py-16">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : query.error ? (
-          <div className="surface-card p-6 text-sm text-muted-foreground">
-            Could not load mission data.
+        )}
+
+        {hasError && (
+          <div className="rounded-2xl border border-border/60 bg-card p-6 text-sm text-muted-foreground">
+            Kunne ikke laste mission-data.
           </div>
-        ) : (
-          <>
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-primary"
-                  checked={aiEnabled}
-                  onChange={(e) => setAiEnabled(e.target.checked)}
-                />
-                Use AI brief
-                {aiEnabled && aiQuery.isFetching ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : null}
-              </label>
-            </div>
-            <MorningBriefCard
-              brief={brief}
-              mode={useAi ? "ai" : "rule"}
-              aiSummary={useAi ? aiQuery.data?.briefing : null}
-              aiReason={useAi ? aiQuery.data?.reason : null}
-              recommended={recommended}
-            />
-            <MissionFilterChips value={filter} onChange={setFilter} counts={counts} />
+        )}
 
-            {filter === "gmail" && !gmailHasAny && (
-              <EmptyInbox
-                icon={<Mail className="h-5 w-5" />}
-                title="No urgent Gmail items."
-                hint={inboxSources.gmail ? "Inbox is clear right now." : "Gmail is not connected."}
-              />
-            )}
-            {filter === "slack" && !slackHasAny && (
-              <EmptyInbox
-                icon={<MessageSquare className="h-5 w-5" />}
-                title="No urgent Slack items."
-                hint={inboxSources.slack ? "No unread mentions or DMs." : "Slack is not connected."}
-              />
-            )}
+        {empty && <EmptyState />}
 
-            {!(filter === "gmail" && !gmailHasAny) &&
-              !(filter === "slack" && !slackHasAny) && (
-                <GlobalActionList
-                  actions={filtered}
-                  onAction={handleAction}
-                  busyKey={busyKey}
-                />
+        {!loading && !hasError && featured && (
+          <FeaturedActionCard
+            action={featured}
+            busy={busyKey === featured.key}
+            onAction={handleAction}
+          />
+        )}
 
-              )}
-          </>
+        {!loading && !hasError && queue.length > 0 && (
+          <QueueList actions={queue} busyKey={busyKey} onAction={handleAction} />
+        )}
+
+        {!loading && !hasError && visible.length > 0 && (
+          <p className="mt-10 text-center text-xs text-muted-foreground">
+            Du er oppdatert. Nye ting dukker opp her.
+          </p>
         )}
       </main>
       <PlatformBottomNav />
@@ -237,31 +219,20 @@ function GlobalMission() {
   );
 }
 
-function EmptyInbox({
-  icon,
-  title,
-  hint,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  hint: string;
-}) {
+function EmptyState() {
   return (
-    <div className="surface-card flex items-center gap-3 p-6 text-sm">
-      <div className="grid h-9 w-9 flex-none place-items-center rounded-full bg-muted text-muted-foreground">
-        {icon}
+    <section className="mt-6 rounded-2xl border border-border/60 bg-card p-10 text-center">
+      <div className="mx-auto max-w-sm">
+        <h2 className="font-heading text-lg font-semibold">Ingenting krever deg nå.</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Jeg holder øye med Gmail, Slack og arbeidsflatene dine.
+          Nye ting dukker opp her.
+        </p>
       </div>
-      <div>
-        <div className="font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{hint}</div>
-      </div>
-    </div>
+    </section>
   );
 }
 
-// Reduce action cards to sanitized JSON safe for the AI: no href, no ids
-// beyond the opaque key, no raw email/Slack bodies beyond the short snippet
-// already surfaced in the UI.
 function sanitizeActions(actions: GlobalMissionAction[]) {
   return actions.slice(0, 15).map((a) => ({
     key: a.key,
@@ -276,3 +247,6 @@ function sanitizeActions(actions: GlobalMissionAction[]) {
     hasDeepLink: !!a.href,
   }));
 }
+
+// Silence unused-warning: useMutation kept imported for possible future use.
+void useMutation;
