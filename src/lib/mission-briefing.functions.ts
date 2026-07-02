@@ -79,7 +79,9 @@ export const generateMissionBriefing = createServerFn({ method: "POST" })
       };
     } catch (err) {
       if (NoObjectGeneratedError.isInstance(err)) {
-        throw new Error("AI briefing returned malformed output");
+        // Degrade gracefully — caller falls back to deterministic Morning Brief.
+        console.warn("[mission-briefing] AI returned malformed output, falling back", err);
+        return { briefing: "", recommendedKey: null, reason: null };
       }
       throw err;
     }
