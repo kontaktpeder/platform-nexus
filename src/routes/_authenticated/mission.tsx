@@ -24,6 +24,13 @@ import {
   executeMissionAction,
   undoMissionAction,
 } from "@/lib/mission-actions.functions";
+import {
+  getLatestGlobalSummary,
+  getContextForEntity,
+  runContextScan,
+} from "@/lib/context-scan.functions";
+import type { ContextSummary } from "@/lib/context/context.types";
+import { ContextPanel } from "@/components/platform/mission/ContextPanel";
 import { filterVisibleActions } from "@/lib/mission-action-state";
 import type { MissionActionType } from "@/components/platform/mission/MissionActionBar";
 import type { SnoozePreset } from "@/lib/mission-snooze";
@@ -128,10 +135,50 @@ function GlobalMission() {
   // and, if it returns a valid recommended key, replaces the featured action.
   const brief = useMemo(() => buildMorningBrief(visible), [visible]);
   const sanitized = useMemo(() => sanitizeActions(visible), [visible]);
+
+  // ── Context Scan v0: latest global + latest entity summary (read-only). ──
+  const fetchGlobalCtx = useServerFn(getLatestGlobalSummary);
+  const fetchEntityCtx = useServerFn(getContextForEntity);
+  const runScan = useServerFn(runContextScan);
+  const globalCtxQ = useQuery({
+    queryKey: ["context", "global"],
+    queryFn: () => fetchGlobalCtx() as Promise<ContextSummary | null>,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  // Pre-derive the tentative featured entityId for context prefetch.
+  const briefEntityId = brief.recommended?.entityId ?? null;
+  const entityCtxQ = useQuery({
+    queryKey: ["context", "entity", briefEntityId],
+    queryFn: () =>
+      fetchEntityCtx({ data: { entityId: briefEntityId! } }) as Promise<ContextSummary | null>,
+    enabled: !!briefEntityId,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const briefingContext = useMemo(() => {
+    const g = globalCtxQ.data;
+    const e = entityCtxQ.data;
+    if (!g && !e) return undefined;
+    return {
+      globalSummary: g?.summary ?? null,
+      entitySummary: e?.summary ?? null,
+      keyFacts: [...(e?.key_facts ?? []), ...(g?.key_facts ?? [])].slice(0, 8),
+    };
+  }, [globalCtxQ.data, entityCtxQ.data]);
+
   const runBriefing = useServerFn(generateMissionBriefing);
   const aiQuery = useQuery({
-    queryKey: ["mission-briefing", sanitized.map((s) => s.key).join("|")],
-    queryFn: () => runBriefing({ data: { actions: sanitized } }),
+    queryKey: [
+      "mission-briefing",
+      sanitized.map((s) => s.key).join("|"),
+      briefingContext?.globalSummary ?? "",
+      briefingContext?.entitySummary ?? "",
+    ],
+    queryFn: () =>
+      runBriefing({ data: { actions: sanitized, context: briefingContext } }),
     enabled: sanitized.length > 0,
     staleTime: 5 * 60_000,
     retry: false,
@@ -146,6 +193,22 @@ function GlobalMission() {
     () => visible.filter((a) => a.key !== featured?.key),
     [visible, featured],
   );
+
+  // If featured (post-AI) differs from brief.recommended, refetch its entity context.
+  const featuredEntityId = featured?.entityId ?? null;
+  const featuredEntityCtxQ = useQuery({
+    queryKey: ["context", "entity", featuredEntityId],
+    queryFn: () =>
+      fetchEntityCtx({ data: { entityId: featuredEntityId! } }) as Promise<ContextSummary | null>,
+    enabled: !!featuredEntityId && featuredEntityId !== briefEntityId,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const activeEntityCtx =
+    featuredEntityId && featuredEntityId !== briefEntityId
+      ? featuredEntityCtxQ.data ?? null
+      : entityCtxQ.data ?? null;
+
 
   // Triage mutations
   const queryClient = useQueryClient();
@@ -222,6 +285,19 @@ function GlobalMission() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  const [scanning, setScanning] = useState(false);
+  async function onRefreshContext() {
+    setScanning(true);
+    try {
+      await runScan();
+      toast("Kontekst oppdatert");
+      void queryClient.invalidateQueries({ queryKey: ["context"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke oppdatere kontekst");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   const loading = query.isLoading;
   const hasError = !!query.error;
@@ -237,6 +313,16 @@ function GlobalMission() {
           canStart={!!featured}
           onStart={onStart}
         />
+
+        {(globalCtxQ.data || activeEntityCtx) && (
+          <ContextPanel
+            global={globalCtxQ.data ?? null}
+            entity={activeEntityCtx}
+            onRefresh={onRefreshContext}
+            refreshing={scanning}
+          />
+        )}
+
 
         {loading && (
           <div className="grid place-items-center py-16">

@@ -10,15 +10,22 @@ import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 const SanitizedAction = z.object({
   key: z.string(),
   title: z.string(),
-  source: z.enum(["gmail", "slack", "workspace"]),
+  source: z.enum(["gmail", "slack", "workspace", "commitment"]),
   tier: z.enum(["urgent", "important", "later"]),
   workspaceLabel: z.string().nullable(),
   snippet: z.string().nullable(),
   hasDeepLink: z.boolean(),
 });
 
+const ContextInput = z.object({
+  globalSummary: z.string().nullable(),
+  entitySummary: z.string().nullable(),
+  keyFacts: z.array(z.string()),
+});
+
 const Input = z.object({
   actions: z.array(SanitizedAction).max(15),
+  context: ContextInput.optional(),
 });
 
 const BriefingSchema = z.object({
@@ -49,8 +56,9 @@ export const generateMissionBriefing = createServerFn({ method: "POST" })
 
     const system = [
       "You are Mission Control, a concise morning briefing assistant.",
-      "You receive a small JSON list of the user's pending action cards (from Gmail, Slack, and their workspaces).",
+      "You receive a small JSON list of the user's pending action cards (from Gmail, Slack, workspaces, and commitments), and optionally a `context` object with prior understanding.",
       "Write a calm, direct morning briefing in 2–4 sentences. No greetings, no emojis, no hype.",
+      "If context is provided, weave it into the briefing in at most 1 sentence. Context enriches, does not replace action cards, and must never contradict them.",
       "Then pick exactly one action card as the top recommended first thing to do.",
       "Prefer urgent > important > later. Prefer actions with hasDeepLink=true when tied.",
       "Return the exact `key` string of the recommended card in recommendedKey.",
@@ -58,11 +66,14 @@ export const generateMissionBriefing = createServerFn({ method: "POST" })
       "Never invent tasks, links, or details not present in the input.",
     ].join(" ");
 
+    const payload: Record<string, unknown> = { actions: data.actions };
+    if (data.context) payload.context = data.context;
+
     try {
       const { output } = await generateText({
         model,
         system,
-        prompt: JSON.stringify({ actions: data.actions }),
+        prompt: JSON.stringify(payload),
         output: Output.object({ schema: BriefingSchema }),
       });
 
