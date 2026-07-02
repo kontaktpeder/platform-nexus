@@ -243,6 +243,7 @@ export const linkSignalToEntity = createServerFn({ method: "POST" })
           external_ref: externalRef,
           occurred_at: data.occurredAt ?? null,
           snippet,
+          link_source: "manual",
         },
         { onConflict: "user_id,external_ref" },
       )
