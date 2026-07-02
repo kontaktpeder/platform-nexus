@@ -152,13 +152,26 @@ export function buildNextActions(input: {
 // ─── Global (cross-workspace) ────────────────────────────────────────────────
 
 export type MissionTier = "urgent" | "important" | "later";
+export type MissionSource = "workspace" | "gmail" | "slack";
 
-export type GlobalMissionAction = MissionAction & {
-  orgSlug: string;
-  orgName: string;
-  wsSlug: string;
-  wsName: string;
+export type GlobalMissionAction = {
+  key: string;
+  source: MissionSource;
+  title: string;
+  description: string;
+  href: string | null;
+  priority: number;
   tier: MissionTier;
+  // Workspace-only:
+  moduleSlug?: string;
+  moduleName?: string;
+  orgSlug?: string;
+  orgName?: string;
+  wsSlug?: string;
+  wsName?: string;
+  // Inbox-only:
+  sender?: string;
+  snippet?: string;
 };
 
 function tierFromPriority(p: number): MissionTier {
@@ -167,7 +180,9 @@ function tierFromPriority(p: number): MissionTier {
   return "later";
 }
 
-export function buildGlobalActions(
+const TIER_ORDER: Record<MissionTier, number> = { urgent: 0, important: 1, later: 2 };
+
+export function buildGlobalActions(input: {
   workspaces: Array<{
     orgSlug: string;
     orgName: string;
@@ -175,38 +190,64 @@ export function buildGlobalActions(
     wsName: string;
     widgetData: WidgetDataMap;
     modules: WorkspaceModule[];
-  }>,
-  max = 7,
-): GlobalMissionAction[] {
+  }>;
+  inbox?: Array<{
+    key: string;
+    source: "gmail" | "slack";
+    title: string;
+    sender: string;
+    snippet: string;
+    href: string | null;
+    priority: number;
+    tier: MissionTier;
+  }>;
+  max?: number;
+}): GlobalMissionAction[] {
+  const max = input.max ?? 7;
   const all: GlobalMissionAction[] = [];
 
-  for (const ws of workspaces) {
+  for (const ws of input.workspaces) {
     const actions = buildNextActions({ widgetData: ws.widgetData, modules: ws.modules });
     for (const a of actions) {
       all.push({
-        ...a,
         key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
+        source: "workspace",
+        title: a.title,
+        description: a.description,
+        href: a.href,
+        priority: a.priority,
+        tier: tierFromPriority(a.priority),
+        moduleSlug: a.moduleSlug,
+        moduleName: a.moduleName,
         orgSlug: ws.orgSlug,
         orgName: ws.orgName,
         wsSlug: ws.wsSlug,
         wsName: ws.wsName,
-        tier: tierFromPriority(a.priority),
       });
     }
   }
 
-  const tierOrder: Record<MissionTier, number> = { urgent: 0, important: 1, later: 2 };
+  for (const i of input.inbox ?? []) {
+    all.push({
+      key: i.key,
+      source: i.source,
+      title: i.title,
+      description: i.snippet,
+      href: i.href,
+      priority: i.priority,
+      tier: i.tier,
+      sender: i.sender,
+      snippet: i.snippet,
+    });
+  }
+
   all.sort((a, b) => {
-    const t = tierOrder[a.tier] - tierOrder[b.tier];
+    const t = TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
     if (t !== 0) return t;
-    const p = a.priority - b.priority;
-    if (p !== 0) return p;
-    return a.orgName.localeCompare(b.orgName);
+    return a.priority - b.priority;
   });
 
-  const actionKind = all.filter((a) => a.kind === "action").slice(0, max);
-  if (actionKind.length >= max) return actionKind;
-  const info = all.filter((a) => a.kind === "info");
-  return [...actionKind, ...info].slice(0, max);
+  return all.slice(0, max);
 }
+
 
