@@ -20,6 +20,7 @@ Rules:
 - `snippet` capped at 160 chars.
 - `external_ref` is an opaque pointer (`gmail:XXX`, `slack:dm:C123`, `orgSlug:wsSlug:finance:unpaid_invoices`).
 - Manual linking in v0. Auto-extraction is v1+.
+- **Commitment** is stored in the dedicated `user_commitments` table (Knowledge v3), not as a row in `entities`. See `docs/KNOWLEDGE.v3.md`.
 
 ### 3. Reasoning (future)
 Given Knowledge, derive conclusions: "Nordahl har ventet 3 dager på svar", "Gold of Sicily-prosjektet er blokkert av manglende faktura". This layer is **not** in this package.
