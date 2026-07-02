@@ -15,6 +15,7 @@ import {
 } from "@/lib/global-mission.functions";
 import {
   buildGlobalActions,
+  buildCommitmentActions,
   buildMorningBrief,
   type GlobalMissionAction,
 } from "@/lib/mission-actions";
