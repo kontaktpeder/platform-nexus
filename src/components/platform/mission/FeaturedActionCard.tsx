@@ -98,7 +98,7 @@ export function FeaturedActionCard({ action, busy, onAction }: FeaturedActionCar
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{relativeTime()}</span>
+            <span>{formatOccurredAt(action.occurredAt)}</span>
             <RowMenu
               action={action}
               busy={busy}
