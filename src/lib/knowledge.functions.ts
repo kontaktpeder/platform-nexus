@@ -95,7 +95,7 @@ export const createEntity = createServerFn({ method: "POST" })
         slug,
         importance,
         summary,
-        metadata,
+        metadata: metadata as never,
       })
       .select("*")
       .single();
@@ -128,7 +128,7 @@ export const updateEntity = createServerFn({ method: "POST" })
 
     const { data: row, error } = await supabase
       .from("entities")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.id)
       .eq("user_id", userId)
       .select("*")
