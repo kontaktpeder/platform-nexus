@@ -219,10 +219,7 @@ export const acceptEntitySuggestion = createServerFn({ method: "POST" })
       .eq("user_id", userId);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return normalize({ entity, linkedCount }) as any as {
-      entity: Entity;
-      linkedCount: number;
-    };
+    return normalize({ entity, linkedCount }) as any;
   });
 
 export const ignoreEntitySuggestion = createServerFn({ method: "POST" })
