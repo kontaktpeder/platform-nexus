@@ -185,19 +185,45 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmailRes, slack, actionStates, entityLinks] = await Promise.all([
+    const [gmailRes, slack, actionStates] = await Promise.all([
       fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
-      loadEntityLinks().catch(() => ({}) as Record<string, EntityLink>),
     ]);
+    const inbox = [...gmailRes.actions, ...slack];
+
+    // Build workspace descriptors so R7/R8 can match by orgSlug/orgName.
+    const workspaceDescriptors: Descriptor[] = [];
+    for (const ws of entries) {
+      for (const m of ws.modules) {
+        if (!m.enabled || !m.connection) continue;
+        // One coarse descriptor per (workspace, module). Widget-level rules
+        // in mission-actions.ts share the same org context.
+        workspaceDescriptors.push({
+          source: "workspace",
+          externalRef: `${ws.orgSlug}:${ws.wsSlug}:${m.slug}`,
+          orgSlug: ws.orgSlug,
+          orgName: ws.orgName,
+          wsSlug: ws.wsSlug,
+          wsName: ws.wsName,
+          signalType: "workspace.module",
+          occurredAt: null,
+          snippet: null,
+        });
+      }
+    }
+
+    const entityLinks = await autoLinkMissionSignals(supabase, userId, [
+      ...inboxDescriptors(inbox),
+      ...workspaceDescriptors,
+    ]).catch(() => ({}) as Record<string, EntityLink>);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return JSON.parse(
       JSON.stringify({
         orgs,
         workspaces: entries,
-        inbox: [...gmailRes.actions, ...slack],
+        inbox,
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
         inboxMeta: {
           gmail: {
