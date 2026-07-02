@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Building2, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { slugify } from "@/lib/slug";
+import { createOrganization } from "@/lib/organization.functions";
 import { TopBar } from "@/components/platform/TopBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
