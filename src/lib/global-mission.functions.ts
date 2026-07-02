@@ -193,24 +193,26 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const inbox = [...gmailRes.actions, ...slack];
 
     // Build workspace descriptors so R7/R8 can match by orgSlug/orgName.
+    // We use a stable per-org external_ref (`ws:{orgSlug}`) so we don't
+    // create widget-specific auto-signal rows. Mission.tsx can fall back
+    // to this key when the widget-specific action.key has no direct link.
     const workspaceDescriptors: Descriptor[] = [];
+    const seenOrgRef = new Set<string>();
     for (const ws of entries) {
-      for (const m of ws.modules) {
-        if (!m.enabled || !m.connection) continue;
-        // One coarse descriptor per (workspace, module). Widget-level rules
-        // in mission-actions.ts share the same org context.
-        workspaceDescriptors.push({
-          source: "workspace",
-          externalRef: `${ws.orgSlug}:${ws.wsSlug}:${m.slug}`,
-          orgSlug: ws.orgSlug,
-          orgName: ws.orgName,
-          wsSlug: ws.wsSlug,
-          wsName: ws.wsName,
-          signalType: "workspace.module",
-          occurredAt: null,
-          snippet: null,
-        });
-      }
+      const ref = `ws:${ws.orgSlug}`;
+      if (seenOrgRef.has(ref)) continue;
+      seenOrgRef.add(ref);
+      workspaceDescriptors.push({
+        source: "workspace",
+        externalRef: ref,
+        orgSlug: ws.orgSlug,
+        orgName: ws.orgName,
+        wsSlug: ws.wsSlug,
+        wsName: ws.wsName,
+        signalType: "workspace.org",
+        occurredAt: null,
+        snippet: null,
+      });
     }
 
     const entityLinks = await autoLinkMissionSignals(supabase, userId, [
