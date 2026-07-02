@@ -208,6 +208,8 @@ export function buildGlobalActions(input: {
     href: string | null;
     priority: number;
     tier: MissionTier;
+    occurredAt?: string | null;
+    threadId?: string | null;
   }>;
   max?: number;
 }): GlobalMissionAction[] {
