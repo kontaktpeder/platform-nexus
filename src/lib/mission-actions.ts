@@ -182,6 +182,12 @@ function tierFromPriority(p: number): MissionTier {
 
 const TIER_ORDER: Record<MissionTier, number> = { urgent: 0, important: 1, later: 2 };
 
+export function getActionSourceFromKey(key: string): MissionSource {
+  if (key.startsWith("gmail:")) return "gmail";
+  if (key.startsWith("slack:")) return "slack";
+  return "workspace";
+}
+
 export function buildGlobalActions(input: {
   workspaces: Array<{
     orgSlug: string;
