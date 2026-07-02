@@ -34,6 +34,7 @@ const sourceIcon: Record<MissionSource, { Icon: typeof Mail; className: string }
   gmail: { Icon: Mail, className: "text-red-500" },
   slack: { Icon: MessageSquare, className: "text-violet-500" },
   workspace: { Icon: Layers, className: "text-primary" },
+  commitment: { Icon: Check, className: "text-emerald-500" },
 };
 
 const tierDot: Record<MissionTier, string> = {

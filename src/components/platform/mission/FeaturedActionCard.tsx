@@ -29,6 +29,7 @@ const sourceMeta: Record<
   gmail: { label: "Gmail", Icon: Mail, iconClass: "text-red-500" },
   slack: { label: "Slack", Icon: MessageSquare, iconClass: "text-violet-500" },
   workspace: { label: "Workspaces", Icon: Layers, iconClass: "text-primary" },
+  commitment: { label: "Løfte", Icon: Check, iconClass: "text-emerald-500" },
 };
 
 const tierMeta: Record<MissionTier, { label: string; dot: string }> = {
