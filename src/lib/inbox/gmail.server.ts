@@ -163,3 +163,119 @@ export async function markGmailMessageRead(messageId: string): Promise<void> {
 export async function archiveGmailMessage(messageId: string): Promise<void> {
   await gmailModify(messageId, { removeLabelIds: ["INBOX", "UNREAD"] });
 }
+
+// ─── Reply-draft support ────────────────────────────────────────────────────
+
+export type GmailReplyContext = {
+  messageId: string;
+  threadId: string;
+  subject: string;
+  senderName: string;
+  senderEmail: string;
+  snippet: string;
+  rfcMessageId: string; // header Message-Id, e.g. <abc@mail>
+  references: string;
+};
+
+function parseEmail(from: string): { name: string; email: string } {
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  if (m) return { name: m[1].trim(), email: m[2].trim() };
+  return { name: from.trim(), email: from.trim() };
+}
+
+export async function getGmailReplyContext(
+  messageId: string,
+): Promise<GmailReplyContext> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const meta = await gmailFetch<MessageMeta>(
+    `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To`,
+    apiKey,
+    lovableKey,
+  );
+  const headers = meta.payload?.headers;
+  const subject = headerValue(headers, "Subject") || "(no subject)";
+  const from = headerValue(headers, "From") || "";
+  const rfcMessageId = headerValue(headers, "Message-Id");
+  const prevRefs = headerValue(headers, "References");
+  const inReplyTo = headerValue(headers, "In-Reply-To");
+  const sender = parseEmail(from);
+  const references = [prevRefs, inReplyTo, rfcMessageId]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  return {
+    messageId,
+    threadId: meta.threadId,
+    subject,
+    senderName: sender.name.slice(0, 120),
+    senderEmail: sender.email.slice(0, 200),
+    snippet: (meta.snippet ?? "").slice(0, 500),
+    rfcMessageId,
+    references,
+  };
+}
+
+function base64UrlEncode(input: string): string {
+  const b64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(input, "utf-8").toString("base64")
+      : btoa(unescape(encodeURIComponent(input)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function buildReplyRaw(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  inReplyTo: string;
+  references: string;
+}): string {
+  const subject = opts.subject.startsWith("Re:")
+    ? opts.subject
+    : `Re: ${opts.subject}`;
+  const lines = [
+    `To: ${opts.to}`,
+    `Subject: ${subject}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
+    'Content-Type: text/plain; charset="UTF-8"',
+    "MIME-Version: 1.0",
+    "",
+    opts.body,
+  ];
+  return base64UrlEncode(lines.join("\r\n"));
+}
+
+export type SavedGmailDraft = {
+  draftId: string;
+  messageId: string;
+  threadId: string;
+  openUrl: string;
+};
+
+export async function createGmailReplyDraft(opts: {
+  context: GmailReplyContext;
+  body: string;
+}): Promise<SavedGmailDraft> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const raw = buildReplyRaw({
+    to: opts.context.senderEmail,
+    subject: opts.context.subject,
+    body: opts.body,
+    inReplyTo: opts.context.rfcMessageId,
+    references: opts.context.references,
+  });
+  const draft = await gmailPost<{
+    id: string;
+    message: { id: string; threadId: string };
+  }>(`/users/me/drafts`, apiKey, lovableKey, {
+    message: { raw, threadId: opts.context.threadId },
+  });
+  return {
+    draftId: draft.id,
+    messageId: draft.message.id,
+    threadId: draft.message.threadId,
+    openUrl: `https://mail.google.com/mail/u/0/#drafts/${draft.message.id}`,
+  };
+}
+

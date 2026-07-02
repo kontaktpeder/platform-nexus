@@ -1,4 +1,13 @@
-import { ArrowUpRight, Archive, Check, MoreHorizontal, X, Clock } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowUpRight,
+  Archive,
+  Check,
+  MoreHorizontal,
+  X,
+  Clock,
+  Reply,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { GlobalMissionAction } from "@/lib/mission-actions";
 import type { SnoozePreset } from "@/lib/mission-snooze";
+import { GmailReplyDrawer } from "./GmailReplyDrawer";
 
 export type MissionActionType =
   | "mark_read"
@@ -25,12 +35,18 @@ export type MissionActionBarProps = {
 };
 
 export function MissionActionBar({ action, onAction, busy }: MissionActionBarProps) {
+  const [replyOpen, setReplyOpen] = useState(false);
   const openLabel =
     action.source === "gmail"
       ? "Open in Gmail"
       : action.source === "slack"
         ? "Open in Slack"
         : `Open in ${action.moduleName ?? "module"}`;
+
+  const gmailMessageId =
+    action.source === "gmail" && action.key.startsWith("gmail:")
+      ? action.key.slice("gmail:".length)
+      : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -61,6 +77,16 @@ export function MissionActionBar({ action, onAction, busy }: MissionActionBarPro
 
       {action.source === "gmail" && (
         <>
+          {gmailMessageId && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setReplyOpen(true)}
+            >
+              <Reply className="mr-1 h-3.5 w-3.5" /> Draft reply
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -121,6 +147,20 @@ export function MissionActionBar({ action, onAction, busy }: MissionActionBarPro
       </Button>
 
       {busy && <MoreHorizontal className="h-4 w-4 animate-pulse text-muted-foreground" />}
+
+      {gmailMessageId && (
+        <GmailReplyDrawer
+          open={replyOpen}
+          onOpenChange={setReplyOpen}
+          messageId={gmailMessageId}
+          fallbackSubject={action.title}
+          fallbackSender={action.sender}
+          fallbackSnippet={action.description}
+          onSaved={({ markHandled }) => {
+            if (markHandled) void onAction("handled_locally");
+          }}
+        />
+      )}
     </div>
   );
 }
