@@ -248,6 +248,8 @@ export function buildGlobalActions(input: {
       tier: i.tier,
       sender: i.sender,
       snippet: i.snippet,
+      occurredAt: i.occurredAt ?? null,
+      threadId: i.threadId ?? null,
     });
   }
 
