@@ -43,13 +43,7 @@ function estimatedMinutes(a: GlobalMissionAction): number {
   return 4;
 }
 
-function relativeTime(): string {
-  return new Intl.DateTimeFormat("nb-NO", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Oslo",
-  }).format(new Date());
-}
+import { formatOccurredAt } from "@/lib/format-occurred-at";
 
 export type FeaturedActionCardProps = {
   action: GlobalMissionAction;
@@ -104,7 +98,7 @@ export function FeaturedActionCard({ action, busy, onAction }: FeaturedActionCar
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{relativeTime()}</span>
+            <span>{formatOccurredAt(action.occurredAt)}</span>
             <RowMenu
               action={action}
               busy={busy}

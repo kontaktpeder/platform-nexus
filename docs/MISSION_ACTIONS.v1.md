@@ -28,6 +28,9 @@ action based on the user's own metadata.
 
 ### Gmail (server-side only)
 
+Mission fetch query is **unread inbox only**: `is:unread label:inbox`.
+Starred/important reads never resurface here.
+
 Real mutations against Gmail:
 
 - **Mark read** → `POST /users/me/messages/:id/modify` with `removeLabelIds: ["UNREAD"]`
@@ -35,6 +38,11 @@ Real mutations against Gmail:
 
 Executed in `src/lib/inbox/gmail.server.ts` via the same connector gateway
 used for reads. Tokens never reach the browser.
+
+On success, `executeMissionAction` **also** writes `handled_locally` to
+`mission_action_states` so the card hides immediately even if the next
+Gmail refetch is slow. Undo removes only the Mission metadata row —
+Gmail-side read/archive is permanent (undo cannot un-read or un-archive).
 
 ### Slack (v1 = local only)
 

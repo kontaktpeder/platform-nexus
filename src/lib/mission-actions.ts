@@ -172,6 +172,8 @@ export type GlobalMissionAction = {
   // Inbox-only:
   sender?: string;
   snippet?: string;
+  occurredAt?: string | null;
+  threadId?: string | null;
 };
 
 function tierFromPriority(p: number): MissionTier {
@@ -206,6 +208,8 @@ export function buildGlobalActions(input: {
     href: string | null;
     priority: number;
     tier: MissionTier;
+    occurredAt?: string | null;
+    threadId?: string | null;
   }>;
   max?: number;
 }): GlobalMissionAction[] {
@@ -244,6 +248,8 @@ export function buildGlobalActions(input: {
       tier: i.tier,
       sender: i.sender,
       snippet: i.snippet,
+      occurredAt: i.occurredAt ?? null,
+      threadId: i.threadId ?? null,
     });
   }
 

@@ -17,11 +17,18 @@ export type GlobalWorkspaceEntry = {
   modules: WorkspaceModule[];
 };
 
+export type InboxSourceMeta = {
+  connected: boolean;
+  error: string | null;
+  count: number;
+};
+
 export type GlobalMissionData = {
   orgs: { id: string; name: string; slug: string }[];
   workspaces: GlobalWorkspaceEntry[];
   inbox: InboxAction[];
   inboxSources: { gmail: boolean; slack: boolean };
+  inboxMeta: { gmail: InboxSourceMeta; slack: InboxSourceMeta };
   actionStates: MissionActionState[];
 };
 
@@ -41,23 +48,31 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       .select("org_id")
       .eq("user_id", userId);
     const orgIds = (memberships ?? []).map((m) => m.org_id);
-    const { fetchGmailActions } = await import("@/lib/inbox/gmail.server");
+    const { fetchGmailActionsWithMeta } = await import("@/lib/inbox/gmail.server");
     const { fetchSlackActions } = await import("@/lib/inbox/slack.server");
     const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
     const gmailAvailable = !!process.env.GOOGLE_MAIL_API_KEY;
     const slackAvailable = !!process.env.SLACK_API_KEY;
 
     if (orgIds.length === 0) {
-      const [gmail, slack, actionStates] = await Promise.all([
-        fetchGmailActions(),
+      const [gmailRes, slack, actionStates] = await Promise.all([
+        fetchGmailActionsWithMeta(),
         fetchSlackActions(),
         listMissionActionStates(supabase, userId).catch(() => []),
       ]);
       return {
         orgs: [],
         workspaces: [],
-        inbox: [...gmail, ...slack],
+        inbox: [...gmailRes.actions, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        inboxMeta: {
+          gmail: {
+            connected: gmailAvailable,
+            error: gmailRes.error,
+            count: gmailRes.actions.length,
+          },
+          slack: { connected: slackAvailable, error: null, count: slack.length },
+        },
         actionStates,
       };
     }
@@ -132,8 +147,8 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       }),
     );
 
-    const [gmail, slack, actionStates] = await Promise.all([
-      fetchGmailActions(),
+    const [gmailRes, slack, actionStates] = await Promise.all([
+      fetchGmailActionsWithMeta(),
       fetchSlackActions(),
       listMissionActionStates(supabase, userId).catch(() => []),
     ]);
@@ -143,8 +158,16 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
       JSON.stringify({
         orgs,
         workspaces: entries,
-        inbox: [...gmail, ...slack],
+        inbox: [...gmailRes.actions, ...slack],
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
+        inboxMeta: {
+          gmail: {
+            connected: gmailAvailable,
+            error: gmailRes.error,
+            count: gmailRes.actions.length,
+          },
+          slack: { connected: slackAvailable, error: null, count: slack.length },
+        },
         actionStates,
       }),
     ) as any;

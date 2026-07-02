@@ -11,4 +11,6 @@ export type InboxAction = {
   href: string | null;
   priority: number;
   tier: MissionTier;
+  occurredAt?: string | null;
+  threadId?: string | null;
 };

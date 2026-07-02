@@ -11,8 +11,13 @@ import {
   ArrowUpRight,
   ChevronDown,
   ChevronUp,
+  Reply,
 } from "lucide-react";
-import type { GlobalMissionAction, MissionSource, MissionTier } from "@/lib/mission-actions";
+import type {
+  GlobalMissionAction,
+  MissionSource,
+  MissionTier,
+} from "@/lib/mission-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { MissionActionType } from "./MissionActionBar";
 import type { SnoozePreset } from "@/lib/mission-snooze";
+import { GmailReplyDrawer } from "./GmailReplyDrawer";
+import { parseGmailMessageIdFromKey } from "./useGmailMessageId";
 
 const sourceIcon: Record<MissionSource, { Icon: typeof Mail; className: string }> = {
   gmail: { Icon: Mail, className: "text-red-500" },
@@ -106,25 +113,19 @@ function QueueRow({
       ? [action.orgName, action.wsName].filter(Boolean).join(" · ")
       : action.sender || "";
 
+  const gmailMessageId =
+    action.source === "gmail" ? parseGmailMessageIdFromKey(action.key) : null;
+  const [replyOpen, setReplyOpen] = useState(false);
+
+  // Row body: NEVER auto-navigates externally. Click is a no-op (info only).
+  // Explicit actions live in the shortcut bar / menu.
   return (
     <li className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/40 sm:px-5">
       <div className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-muted/60">
         <src.Icon className={`h-4 w-4 ${src.className}`} />
       </div>
 
-      <button
-        type="button"
-        className="min-w-0 flex-1 text-left"
-        onClick={() => {
-          if (action.href) {
-            window.open(
-              action.href,
-              action.source === "workspace" ? "_self" : "_blank",
-            );
-            void onAction(action, "open_only");
-          }
-        }}
-      >
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-sm font-medium text-foreground">
             {action.title}
@@ -134,10 +135,88 @@ function QueueRow({
         {meta && (
           <div className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</div>
         )}
-      </button>
+      </div>
 
-      <RowMenu action={action} busy={busy} onAction={(t, p) => onAction(action, t, p)} />
+      <div className="flex flex-none items-center gap-0.5">
+        {action.source === "gmail" && gmailMessageId && (
+          <>
+            <IconButton
+              aria-label="Svar"
+              title="Svar"
+              disabled={busy}
+              onClick={() => setReplyOpen(true)}
+            >
+              <Reply className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              aria-label="Merk lest"
+              title="Merk lest"
+              disabled={busy}
+              onClick={() => void onAction(action, "mark_read")}
+            >
+              <Check className="h-4 w-4" />
+            </IconButton>
+            <IconButton
+              aria-label="Arkiver"
+              title="Arkiver"
+              disabled={busy}
+              onClick={() => void onAction(action, "archive")}
+            >
+              <Archive className="h-4 w-4" />
+            </IconButton>
+          </>
+        )}
+        {action.source === "slack" && (
+          <IconButton
+            aria-label="Ferdig"
+            title="Ferdig"
+            disabled={busy}
+            onClick={() => void onAction(action, "handled_locally")}
+          >
+            <Check className="h-4 w-4" />
+          </IconButton>
+        )}
+        <RowMenu
+          action={action}
+          busy={busy}
+          onAction={(t, p) => onAction(action, t, p)}
+          onReply={gmailMessageId ? () => setReplyOpen(true) : undefined}
+        />
+      </div>
+
+      {gmailMessageId && (
+        <GmailReplyDrawer
+          open={replyOpen}
+          onOpenChange={setReplyOpen}
+          messageId={gmailMessageId}
+          fallbackSubject={action.title}
+          fallbackSender={action.sender}
+          fallbackSnippet={action.snippet ?? action.description}
+          onSaved={({ markHandled }) => {
+            if (markHandled) void onAction(action, "handled_locally");
+          }}
+        />
+      )}
     </li>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  disabled,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+      {...rest}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -145,11 +224,19 @@ function RowMenu({
   action,
   busy,
   onAction,
+  onReply,
 }: {
   action: GlobalMissionAction;
   busy?: boolean;
   onAction: (type: MissionActionType, preset?: SnoozePreset) => void;
+  onReply?: () => void;
 }) {
+  const openLabel =
+    action.source === "gmail"
+      ? "Åpne i Gmail"
+      : action.source === "slack"
+        ? "Åpne i Slack"
+        : "Åpne";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -157,23 +244,16 @@ function RowMenu({
           type="button"
           disabled={busy}
           aria-label="Mer"
+          title="Mer"
           className="grid h-8 w-8 flex-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {action.href && (
-          <DropdownMenuItem
-            onSelect={() => {
-              window.open(
-                action.href!,
-                action.source === "workspace" ? "_self" : "_blank",
-              );
-              onAction("open_only");
-            }}
-          >
-            <ArrowUpRight className="mr-2 h-4 w-4" /> Åpne
+        {onReply && (
+          <DropdownMenuItem onSelect={() => onReply()}>
+            <Reply className="mr-2 h-4 w-4" /> Svar
           </DropdownMenuItem>
         )}
         {action.source === "gmail" && (
@@ -200,6 +280,19 @@ function RowMenu({
         <DropdownMenuItem onSelect={() => onAction("dismiss")}>
           <X className="mr-2 h-4 w-4" /> Skjul
         </DropdownMenuItem>
+        {action.href && (
+          <DropdownMenuItem
+            onSelect={() => {
+              window.open(
+                action.href!,
+                action.source === "workspace" ? "_self" : "_blank",
+              );
+              onAction("open_only");
+            }}
+          >
+            <ArrowUpRight className="mr-2 h-4 w-4" /> {openLabel}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
