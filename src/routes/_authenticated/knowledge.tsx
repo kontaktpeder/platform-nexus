@@ -137,6 +137,10 @@ function KnowledgePage() {
           </div>
         )}
 
+        <SuggestionsSection />
+
+
+
         <div className="space-y-6">
           {ENTITY_TYPES.map((t) =>
             (grouped[t] ?? []).length > 0 ? (
