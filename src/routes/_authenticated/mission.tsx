@@ -73,10 +73,28 @@ function GlobalMission() {
 
   const entityLinks = data?.entityLinks ?? {};
 
-  const rawActions = useMemo(
-    () => buildGlobalActions({ workspaces, inbox, max: 20 }),
-    [workspaces, inbox],
-  );
+  const openCommitments = data?.openCommitments ?? [];
+
+  const rawActions = useMemo(() => {
+    // Build entity map keyed by entity_id for commitment enrichment.
+    const entityMap: Record<
+      string,
+      { name: string; slug: string; linkSource?: "manual" | "auto" }
+    > = {};
+    for (const link of Object.values(entityLinks)) {
+      if (link?.entityId) {
+        entityMap[link.entityId] = {
+          name: link.entityName,
+          slug: link.entitySlug,
+          linkSource: link.linkSource ?? "manual",
+        };
+      }
+    }
+    return [
+      ...buildGlobalActions({ workspaces, inbox, max: 20 }),
+      ...buildCommitmentActions(openCommitments, entityMap),
+    ];
+  }, [workspaces, inbox, openCommitments, entityLinks]);
 
   // Optimistic: hide keys the user just acted on until refetch confirms.
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
