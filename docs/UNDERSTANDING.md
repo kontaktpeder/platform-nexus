@@ -22,8 +22,11 @@ Rules:
 - Manual linking in v0. Auto-extraction is v1+.
 - **Commitment** is stored in the dedicated `user_commitments` table (Knowledge v3), not as a row in `entities`. See `docs/KNOWLEDGE.v3.md`.
 
+### 2.5. Context Scan (v0)
+Rolling **understanding cards** derived from signals — not from module sources. Stored in `context_summaries`; user-triggered, AI-synthesized with a deterministic fallback. Feeds one contextual sentence into the Mission briefing and a collapsible `ContextPanel` above the featured action. See `docs/CONTEXT_SCAN.v0.md`.
+
 ### 3. Reasoning (future)
-Given Knowledge, derive conclusions: "Nordahl har ventet 3 dager på svar", "Gold of Sicily-prosjektet er blokkert av manglende faktura". This layer is **not** in this package.
+Given Knowledge + Context, derive conclusions: "Nordahl har ventet 3 dager på svar", "Gold of Sicily-prosjektet er blokkert av manglende faktura". This layer is **not** in this package.
 
 ### 4. Mission
 The user surface. Today Mission shows raw sources ("1 Gmail unread"). Once Knowledge has a link, Mission can say "Nordahl trenger deg" instead. Full entity-first Mission redesign is v1 after Reasoning lands.
