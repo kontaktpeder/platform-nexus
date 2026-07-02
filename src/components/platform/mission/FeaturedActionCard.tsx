@@ -107,7 +107,14 @@ export function FeaturedActionCard({ action, busy, onAction }: FeaturedActionCar
           </div>
         </header>
 
-        <h2 className="mt-3 font-heading text-xl font-semibold leading-snug sm:text-2xl">
+        {action.entityName && (
+          <div className="mt-3 text-sm font-medium text-primary">
+            {action.entityName}
+          </div>
+        )}
+        <h2
+          className={`${action.entityName ? "mt-1" : "mt-3"} font-heading text-xl font-semibold leading-snug sm:text-2xl`}
+        >
           {action.title}
         </h2>
         {(action.snippet ?? action.description) && (
