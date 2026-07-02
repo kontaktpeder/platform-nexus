@@ -250,4 +250,48 @@ export function buildGlobalActions(input: {
   return all.slice(0, max);
 }
 
+// ─── Morning Brief ───────────────────────────────────────────────────────────
+
+export type MorningBrief = {
+  total: number;
+  bySource: Record<MissionSource, number>;
+  byTier: Record<MissionTier, number>;
+  recommended: GlobalMissionAction | null;
+};
+
+const SOURCE_TIEBREAK: Record<MissionSource, number> = {
+  gmail: 0,
+  slack: 1,
+  workspace: 2,
+};
+
+export function buildMorningBrief(actions: GlobalMissionAction[]): MorningBrief {
+  const bySource: Record<MissionSource, number> = { gmail: 0, slack: 0, workspace: 0 };
+  const byTier: Record<MissionTier, number> = { urgent: 0, important: 0, later: 0 };
+
+  for (const a of actions) {
+    bySource[a.source] += 1;
+    byTier[a.tier] += 1;
+  }
+
+  const ranked = [...actions].sort((a, b) => {
+    const t = TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
+    if (t !== 0) return t;
+    const linkA = a.href ? 0 : 1;
+    const linkB = b.href ? 0 : 1;
+    if (linkA !== linkB) return linkA - linkB;
+    const p = a.priority - b.priority;
+    if (p !== 0) return p;
+    return SOURCE_TIEBREAK[a.source] - SOURCE_TIEBREAK[b.source];
+  });
+
+  return {
+    total: actions.length,
+    bySource,
+    byTier,
+    recommended: ranked[0] ?? null,
+  };
+}
+
+
 

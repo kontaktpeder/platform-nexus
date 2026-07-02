@@ -17,7 +17,8 @@ import {
   getGlobalMissionData,
   type GlobalMissionData,
 } from "@/lib/global-mission.functions";
-import { buildGlobalActions } from "@/lib/mission-actions";
+import { buildGlobalActions, buildMorningBrief } from "@/lib/mission-actions";
+import { MorningBriefCard } from "@/components/platform/mission/MorningBriefCard";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
@@ -60,6 +61,7 @@ function GlobalMission() {
   );
 
   const filtered = applyMissionFilter(actions, filter);
+  const brief = useMemo(() => buildMorningBrief(filtered), [filtered]);
   const gmailHasAny = inbox.some((i) => i.source === "gmail");
   const slackHasAny = inbox.some((i) => i.source === "slack");
 
@@ -84,6 +86,7 @@ function GlobalMission() {
           </div>
         ) : (
           <>
+            <MorningBriefCard brief={brief} />
             <MissionFilterChips value={filter} onChange={setFilter} counts={counts} />
 
             {filter === "gmail" && !gmailHasAny && (
