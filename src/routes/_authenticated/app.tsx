@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Building2, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createOrganization } from "@/lib/organization.functions";
+import { setLastWorkspace } from "@/lib/last-workspace";
 import { TopBar } from "@/components/platform/TopBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ function OrgPicker() {
       setOpen(false);
       setName("");
       toast.success("Organisasjon opprettet");
+      setLastWorkspace(res.org.slug, res.workspace.slug);
       navigate({
         to: "/o/$orgSlug/w/$wsSlug",
         params: { orgSlug: res.org.slug, wsSlug: res.workspace.slug },

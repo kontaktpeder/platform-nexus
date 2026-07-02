@@ -5,7 +5,7 @@ export function BottomNav({ orgSlug, wsSlug }: { orgSlug: string; wsSlug: string
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const base = `/o/${orgSlug}/w/${wsSlug}`;
   const items = [
-    { to: `${base}` as const, label: "Hjem", icon: Home, exact: true },
+    { to: `${base}` as const, label: "Mission", icon: Home, exact: true },
     { to: `${base}/modules` as const, label: "Moduler", icon: Blocks, exact: false },
     { to: `${base}/settings` as const, label: "Innstillinger", icon: Settings, exact: false },
   ];

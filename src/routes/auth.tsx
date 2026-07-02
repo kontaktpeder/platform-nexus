@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getLastWorkspace } from "@/lib/last-workspace";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Logg inn — Platform Core" }] }),
@@ -23,9 +24,22 @@ function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const redirectAfterAuth = useCallback(() => {
+    const last = getLastWorkspace();
+    if (last) {
+      navigate({
+        to: "/o/$orgSlug/w/$wsSlug",
+        params: { orgSlug: last.orgSlug, wsSlug: last.wsSlug },
+        replace: true,
+      });
+    } else {
+      navigate({ to: "/app", replace: true });
+    }
+  }, [navigate]);
+
   useEffect(() => {
-    if (!authLoading && user) navigate({ to: "/app", replace: true });
-  }, [authLoading, user, navigate]);
+    if (!authLoading && user) redirectAfterAuth();
+  }, [authLoading, user, redirectAfterAuth]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +77,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/app" });
+    redirectAfterAuth();
   }
 
   return (
