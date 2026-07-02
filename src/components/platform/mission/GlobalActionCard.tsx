@@ -1,8 +1,11 @@
-import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Mail, MessageSquare, Layers } from "lucide-react";
+import { Mail, MessageSquare, Layers } from "lucide-react";
 import type { GlobalMissionAction, MissionTier, MissionSource } from "@/lib/mission-actions";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  MissionActionBar,
+  type MissionActionType,
+} from "./MissionActionBar";
+import type { SnoozePreset } from "@/lib/mission-snooze";
 
 const tierStyle: Record<MissionTier, string> = {
   urgent: "bg-destructive/10 text-destructive",
@@ -34,14 +37,18 @@ const sourceMeta: Record<MissionSource, { label: string; className: string; Icon
   },
 };
 
-export function GlobalActionCard({ action }: { action: GlobalMissionAction }) {
+export type GlobalActionCardProps = {
+  action: GlobalMissionAction;
+  onAction: (
+    action: GlobalMissionAction,
+    type: MissionActionType,
+    snoozePreset?: SnoozePreset,
+  ) => Promise<void> | void;
+  busy?: boolean;
+};
+
+export function GlobalActionCard({ action, onAction, busy }: GlobalActionCardProps) {
   const src = sourceMeta[action.source];
-  const openLabel =
-    action.source === "gmail"
-      ? "Open in Gmail"
-      : action.source === "slack"
-        ? "Open in Slack"
-        : `Open in ${action.moduleName ?? "module"}`;
 
   return (
     <Card className="flex flex-col gap-3 p-4">
@@ -75,25 +82,11 @@ export function GlobalActionCard({ action }: { action: GlobalMissionAction }) {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        {action.href && (
-          <Button asChild size="sm">
-            <a href={action.href} target="_blank" rel="noreferrer" className="gap-1">
-              {openLabel} <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
-          </Button>
-        )}
-        {action.source === "workspace" && action.orgSlug && action.wsSlug && (
-          <Button asChild size="sm" variant="ghost">
-            <Link
-              to="/o/$orgSlug/w/$wsSlug"
-              params={{ orgSlug: action.orgSlug, wsSlug: action.wsSlug }}
-            >
-              Workspace Mission
-            </Link>
-          </Button>
-        )}
-      </div>
+      <MissionActionBar
+        action={action}
+        busy={busy}
+        onAction={(type, preset) => onAction(action, type, preset)}
+      />
     </Card>
   );
 }
