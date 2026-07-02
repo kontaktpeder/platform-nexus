@@ -107,6 +107,7 @@ export type Database = {
           entity_id: string
           external_ref: string
           id: string
+          link_source: string
           occurred_at: string | null
           signal_type: string
           snippet: string | null
@@ -118,6 +119,7 @@ export type Database = {
           entity_id: string
           external_ref: string
           id?: string
+          link_source?: string
           occurred_at?: string | null
           signal_type: string
           snippet?: string | null
@@ -129,6 +131,7 @@ export type Database = {
           entity_id?: string
           external_ref?: string
           id?: string
+          link_source?: string
           occurred_at?: string | null
           signal_type?: string
           snippet?: string | null
