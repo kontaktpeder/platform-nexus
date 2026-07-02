@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect } from "react";
+import { setLastWorkspace } from "@/lib/last-workspace";
 import { useWorkspaceContext } from "@/lib/workspaceContext";
 import type { WorkspaceContext } from "@/lib/workspaceContext";
 import { ThemeProvider } from "@/components/platform/ThemeProvider";
@@ -27,6 +28,10 @@ export function useWs(): WorkspaceContext {
 function WorkspaceShell() {
   const { orgSlug, wsSlug } = Route.useParams();
   const { data, isLoading, error } = useWorkspaceContext(orgSlug, wsSlug);
+
+  useEffect(() => {
+    setLastWorkspace(orgSlug, wsSlug);
+  }, [orgSlug, wsSlug]);
 
   if (isLoading) {
     return (
