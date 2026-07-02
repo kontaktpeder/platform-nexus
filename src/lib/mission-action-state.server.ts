@@ -79,11 +79,3 @@ export function filterVisibleActions<T extends { key: string }>(
   });
 }
 
-// Convenience for tests / other server paths.
-export function getActionSourceFromKey(
-  key: string,
-): GlobalMissionAction["source"] {
-  if (key.startsWith("gmail:")) return "gmail";
-  if (key.startsWith("slack:")) return "slack";
-  return "workspace";
-}
