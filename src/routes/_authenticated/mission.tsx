@@ -75,9 +75,15 @@ function GlobalMission() {
     [workspaces, inbox],
   );
 
+  // Optimistic: hide keys the user just acted on until refetch confirms.
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+
   const visible = useMemo(
-    () => filterVisibleActions(rawActions, actionStates).slice(0, 7),
-    [rawActions, actionStates],
+    () =>
+      filterVisibleActions(rawActions, actionStates)
+        .filter((a) => !hiddenKeys.has(a.key))
+        .slice(0, 7),
+    [rawActions, actionStates, hiddenKeys],
   );
 
   // Deterministic brief always available. AI runs silently in the background
@@ -115,12 +121,19 @@ function GlobalMission() {
     snoozePreset?: SnoozePreset,
   ) => {
     if (type === "open_only") return;
+    // Optimistically hide the card immediately.
+    setHiddenKeys((prev) => {
+      const next = new Set(prev);
+      next.add(action.key);
+      return next;
+    });
     setBusyKey(action.key);
     try {
       await runExecute({
         data: { actionKey: action.key, action: type, snoozePreset },
       });
-      await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
+      // Refetch in background — do NOT await before UI update.
+      void queryClient.invalidateQueries({ queryKey: ["global-mission"] });
       const label =
         type === "mark_read"
           ? "Merket som lest"
@@ -138,7 +151,12 @@ function GlobalMission() {
           onClick: async () => {
             try {
               await runUndo({ data: { actionKey: action.key } });
-              await queryClient.invalidateQueries({ queryKey: ["global-mission"] });
+              setHiddenKeys((prev) => {
+                const next = new Set(prev);
+                next.delete(action.key);
+                return next;
+              });
+              void queryClient.invalidateQueries({ queryKey: ["global-mission"] });
               toast("Gjenopprettet");
             } catch {
               toast.error("Kunne ikke angre");
@@ -147,6 +165,12 @@ function GlobalMission() {
         },
       });
     } catch (err) {
+      // Roll back optimistic hide on error.
+      setHiddenKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(action.key);
+        return next;
+      });
       const msg = err instanceof Error ? err.message : "Handlingen feilet";
       toast.error(msg);
     } finally {
