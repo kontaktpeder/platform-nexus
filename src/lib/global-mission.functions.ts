@@ -62,44 +62,45 @@ export const getGlobalMissionData = createServerFn({ method: "POST" })
     const gmailAvailable = !!process.env.GOOGLE_MAIL_API_KEY;
     const slackAvailable = !!process.env.SLACK_API_KEY;
 
-    async function loadEntityLinks(): Promise<Record<string, EntityLink>> {
-      const { data: sigs } = await supabase
-        .from("entity_signals")
-        .select("external_ref, entity_id")
-        .eq("user_id", userId);
-      const signals = sigs ?? [];
-      if (signals.length === 0) return {};
-      const ids = Array.from(new Set(signals.map((s) => s.entity_id as string)));
-      const { data: ents } = await supabase
-        .from("entities")
-        .select("id, name, slug")
-        .eq("user_id", userId)
-        .in("id", ids);
-      const byId = new Map((ents ?? []).map((e) => [e.id as string, e]));
-      const map: Record<string, EntityLink> = {};
-      for (const s of signals) {
-        const e = byId.get(s.entity_id as string);
-        if (!e) continue;
-        map[s.external_ref as string] = {
-          entityId: e.id as string,
-          entityName: e.name as string,
-          entitySlug: e.slug as string,
-        };
-      }
-      return map;
+    const { autoLinkMissionSignals } = await import(
+      "@/lib/knowledge/auto-link.server"
+    );
+    type Descriptor = Parameters<typeof autoLinkMissionSignals>[2][number];
+
+    function inboxDescriptors(inbox: InboxAction[]): Descriptor[] {
+      return inbox.map((i) => ({
+        source: i.source,
+        externalRef: i.key,
+        sender: i.sender ?? null,
+        senderEmail: i.senderEmail ?? null,
+        channelName: i.channelName ?? null,
+        signalType:
+          i.source === "gmail"
+            ? "message.received"
+            : i.key.startsWith("slack:dm:")
+              ? "dm.unread"
+              : "mention.received",
+        occurredAt: i.occurredAt ?? null,
+        snippet: null, // never persist body content
+      }));
     }
 
     if (orgIds.length === 0) {
-      const [gmailRes, slack, actionStates, entityLinks] = await Promise.all([
+      const [gmailRes, slack, actionStates] = await Promise.all([
         fetchGmailActionsWithMeta(),
         fetchSlackActions(),
         listMissionActionStates(supabase, userId).catch(() => []),
-        loadEntityLinks().catch(() => ({}) as Record<string, EntityLink>),
       ]);
+      const inbox = [...gmailRes.actions, ...slack];
+      const entityLinks = await autoLinkMissionSignals(
+        supabase,
+        userId,
+        inboxDescriptors(inbox),
+      ).catch(() => ({}) as Record<string, EntityLink>);
       return {
         orgs: [],
         workspaces: [],
-        inbox: [...gmailRes.actions, ...slack],
+        inbox,
         inboxSources: { gmail: gmailAvailable, slack: slackAvailable },
         inboxMeta: {
           gmail: {
