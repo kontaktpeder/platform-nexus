@@ -59,24 +59,23 @@ export const generateMissionBriefing = createServerFn({ method: "POST" })
     ].join(" ");
 
     try {
-      const { experimental_output } = await generateText({
+      const { output } = await generateText({
         model,
         system,
         prompt: JSON.stringify({ actions: data.actions }),
-        experimental_output: Output.object({ schema: BriefingSchema }),
+        output: Output.object({ schema: BriefingSchema }),
       });
 
-      // Guard: recommendedKey must reference a real card
       const validKeys = new Set(data.actions.map((a) => a.key));
       const recommendedKey =
-        experimental_output.recommendedKey && validKeys.has(experimental_output.recommendedKey)
-          ? experimental_output.recommendedKey
+        output.recommendedKey && validKeys.has(output.recommendedKey)
+          ? output.recommendedKey
           : null;
 
       return {
-        briefing: experimental_output.briefing.trim(),
+        briefing: output.briefing.trim(),
         recommendedKey,
-        reason: experimental_output.reason?.trim() ?? null,
+        reason: output.reason?.trim() ?? null,
       };
     } catch (err) {
       if (NoObjectGeneratedError.isInstance(err)) {
