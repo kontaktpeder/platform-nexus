@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Building2, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { slugify } from "@/lib/slug";
+import { createOrganization } from "@/lib/organization.functions";
 import { TopBar } from "@/components/platform/TopBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +18,9 @@ export const Route = createFileRoute("/_authenticated/app")({
 });
 
 function OrgPicker() {
-  const { user } = Route.useRouteContext();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const createOrgFn = useServerFn(createOrganization);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
 
@@ -35,21 +37,16 @@ function OrgPicker() {
   });
 
   const createOrg = useMutation({
-    mutationFn: async (n: string) => {
-      const slug = slugify(n) || `org-${Date.now()}`;
-      const { data, error } = await supabase
-        .from("organizations")
-        .insert({ name: n, slug, created_by: user.id })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
+    mutationFn: (n: string) => createOrgFn({ data: { name: n } }),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["orgs"] });
       setOpen(false);
       setName("");
       toast.success("Organisasjon opprettet");
+      navigate({
+        to: "/o/$orgSlug/w/$wsSlug",
+        params: { orgSlug: res.org.slug, wsSlug: res.workspace.slug },
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
