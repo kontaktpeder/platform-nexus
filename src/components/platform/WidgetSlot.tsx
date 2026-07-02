@@ -1,4 +1,4 @@
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 
 export function WidgetSlot({
   moduleName,
@@ -6,12 +6,18 @@ export function WidgetSlot({
   hint,
   connected,
   href,
+  display,
+  loading,
+  error,
 }: {
   moduleName: string;
   title: string;
   hint?: string;
   connected?: boolean;
   href?: string | null;
+  display?: string;
+  loading?: boolean;
+  error?: string;
 }) {
   return (
     <div className="surface-card flex flex-col gap-2 p-4">
@@ -41,12 +47,25 @@ export function WidgetSlot({
         )}
       </div>
       <div className="font-heading text-lg font-semibold">{title}</div>
-      <div className="text-sm text-muted-foreground">
-        {hint ??
-          (connected
-            ? "Modulen er koblet. Data kommer når integrasjonen er ferdig."
-            : "Koble modulen under Moduler for å peke på eksisterende org.")}
-      </div>
+      {display ? (
+        <div className="font-heading text-2xl font-bold text-foreground">{display}</div>
+      ) : loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Henter…
+        </div>
+      ) : error ? (
+        <div className="flex items-start gap-1 text-xs text-muted-foreground">
+          <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>{hint ?? "Data utilgjengelig."}</span>
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground">
+          {hint ??
+            (connected
+              ? "Modulen er koblet. Data kommer når integrasjonen er ferdig."
+              : "Koble modulen under Moduler for å peke på eksisterende org.")}
+        </div>
+      )}
     </div>
   );
 }
