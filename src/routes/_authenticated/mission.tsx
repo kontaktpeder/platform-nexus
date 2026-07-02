@@ -191,12 +191,15 @@ function GlobalMission() {
         {empty && <EmptyState />}
 
         {!loading && !hasError && featured && (
-          <FeaturedActionCard
-            action={featured}
-            busy={busyKey === featured.key}
-            onAction={handleAction}
-          />
+          <div id="featured-action">
+            <FeaturedActionCard
+              action={featured}
+              busy={busyKey === featured.key}
+              onAction={handleAction}
+            />
+          </div>
         )}
+
 
         {!loading && !hasError && queue.length > 0 && (
           <QueueList actions={queue} busyKey={busyKey} onAction={handleAction} />
