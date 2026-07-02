@@ -64,6 +64,15 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
         apiKey,
       });
 
+      const snapshot = {
+        module_slug: result.info.module_slug,
+        module_name: result.info.module_name,
+        capabilities: result.info.capabilities ?? [],
+        deep_links: result.info.deep_links ?? { org_home: "/orgs/{org_id}" },
+        widgets: result.info.widgets ?? [],
+        fetched_at: now,
+      };
+
       const { data: conn, error: upsertErr } = await supabaseAdmin
         .from("module_connections")
         .upsert(
@@ -76,6 +85,7 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
             external_org_name: result.orgName,
             resolved_org_home_url: result.orgHome,
             module_slug: data.moduleSlug,
+            module_info_snapshot: snapshot,
             status: "connected",
             connected_by: userId,
             connected_at: now,
