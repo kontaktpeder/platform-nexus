@@ -75,8 +75,20 @@ export function ContextPanel({
 function ContextBlock({ label, s }: { label: string; s: ContextSummary }) {
   return (
     <div>
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
+      <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span>{label}</span>
+        {s.included_sources.length > 0 && (
+          <span className="flex flex-wrap gap-1 text-[9px] font-medium normal-case tracking-normal text-muted-foreground/80">
+            {s.included_sources.map((src) => (
+              <span
+                key={src}
+                className="rounded-full border border-border/60 px-1.5 py-px"
+              >
+                {src}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
       <p className="text-sm text-foreground/90">{s.summary}</p>
       {s.key_facts.length > 0 && (
