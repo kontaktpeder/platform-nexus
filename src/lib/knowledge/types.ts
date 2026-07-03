@@ -12,12 +12,33 @@ export type EntityRelationshipKind =
   | "blocked_by"
   | "related_to";
 
+export type OwnerContext =
+  | "personal"
+  | "peder-enk"
+  | "gold-of-sicily"
+  | "unknown";
+
+export const ANCHOR_SLUGS = ["personal", "peder-enk", "gold-of-sicily"] as const;
+export type AnchorSlug = (typeof ANCHOR_SLUGS)[number];
+export const ANCHOR_SLUG_SET: ReadonlySet<string> = new Set(ANCHOR_SLUGS);
+export function isAnchorSlug(slug: string): slug is AnchorSlug {
+  return ANCHOR_SLUG_SET.has(slug);
+}
+
+export const OWNER_CONTEXT_LABEL: Record<OwnerContext, string> = {
+  personal: "Personlig",
+  "peder-enk": "Peder ENK",
+  "gold-of-sicily": "Gold of Sicily",
+  unknown: "Ukjent",
+};
+
 export type EntityMetadata = {
   platform_org_id?: string;
-  platform_org_slug?: string;
+  platform_org_slug?: string | null;
   platform_workspace_id?: string;
   email_domain?: string;
   external_ref?: string;
+  is_anchor?: boolean;
   [key: string]: unknown;
 };
 
@@ -31,6 +52,7 @@ export type Entity = {
   summary: string | null;
   last_seen_at: string | null;
   metadata: EntityMetadata;
+  owner_context: OwnerContext;
   created_at: string;
   updated_at: string;
 };

@@ -84,6 +84,7 @@ export type Database = {
           last_seen_at: string | null
           metadata: Json
           name: string
+          owner_context: Database["public"]["Enums"]["owner_context"]
           slug: string
           summary: string | null
           type: Database["public"]["Enums"]["entity_type"]
@@ -97,6 +98,7 @@ export type Database = {
           last_seen_at?: string | null
           metadata?: Json
           name: string
+          owner_context?: Database["public"]["Enums"]["owner_context"]
           slug: string
           summary?: string | null
           type: Database["public"]["Enums"]["entity_type"]
@@ -110,6 +112,7 @@ export type Database = {
           last_seen_at?: string | null
           metadata?: Json
           name?: string
+          owner_context?: Database["public"]["Enums"]["owner_context"]
           slug?: string
           summary?: string | null
           type?: Database["public"]["Enums"]["entity_type"]
@@ -750,6 +753,7 @@ export type Database = {
         | "error"
         | "disconnected"
       module_status: "available" | "beta" | "coming_soon"
+      owner_context: "personal" | "peder-enk" | "gold-of-sicily" | "unknown"
       workspace_type:
         | "drift"
         | "produksjon"
@@ -906,6 +910,7 @@ export const Constants = {
         "disconnected",
       ],
       module_status: ["available", "beta", "coming_soon"],
+      owner_context: ["personal", "peder-enk", "gold-of-sicily", "unknown"],
       workspace_type: [
         "drift",
         "produksjon",

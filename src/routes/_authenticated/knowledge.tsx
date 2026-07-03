@@ -78,6 +78,7 @@ import {
   RELATIONSHIP_KINDS,
   RELATIONSHIP_LABEL,
 } from "@/lib/knowledge/types";
+import { ContextAnchorsSection } from "@/components/platform/knowledge/ContextAnchorsSection";
 
 
 export const Route = createFileRoute("/_authenticated/knowledge")({
@@ -152,6 +153,8 @@ function KnowledgePage() {
             No entities yet. Create one, or seed demo data.
           </div>
         )}
+
+        <ContextAnchorsSection onOpen={setSelected} />
 
         <ContextSection />
 
@@ -435,6 +438,12 @@ function EntityDrawer({
             </SheetHeader>
 
             <div className="mt-6 space-y-6">
+              {entity.metadata?.is_anchor === true && (
+                <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Dette er en kontekst-anchor for Relationship Engine. Slug og
+                  type er reservert.
+                </div>
+              )}
               <div>
                 <Label>Summary</Label>
                 <Textarea
@@ -469,14 +478,16 @@ function EntityDrawer({
                 <Button onClick={save} disabled={!dirty} size="sm">
                   Save
                 </Button>
-                <Button
-                  onClick={handleDelete}
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto gap-1 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" /> Delete
-                </Button>
+                {entity.metadata?.is_anchor !== true && (
+                  <Button
+                    onClick={handleDelete}
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto gap-1 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </Button>
+                )}
               </div>
 
               <section>

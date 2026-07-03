@@ -54,6 +54,14 @@ export async function loadMissionSnapshot(
   const { inboxDescriptors, workspaceDescriptors } = await import(
     "@/lib/mission-signals.server"
   );
+  const { ensureAnchorEntities } = await import(
+    "@/lib/knowledge/anchor-entities.server"
+  );
+
+  // Best-effort: seed the three Knowledge context anchors. Idempotent, fast.
+  await ensureAnchorEntities(supabase, userId).catch((err) => {
+    console.warn("[anchors] ensure failed", err);
+  });
 
   const gmailAvailable = !!process.env.GOOGLE_MAIL_API_KEY;
   const slackAvailable = !!process.env.SLACK_API_KEY;
