@@ -56,7 +56,8 @@ function normalize<T>(v: T): T { return JSON.parse(JSON.stringify(v ?? null)) as
 
 export const listReviewFeed = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<ReviewFeed> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  .handler(async ({ context }): Promise<any> => {
     const { supabase, userId } = context;
 
     const [entRes, relRes, entListRes] = await Promise.all([
