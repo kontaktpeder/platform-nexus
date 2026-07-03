@@ -438,6 +438,12 @@ function EntityDrawer({
             </SheetHeader>
 
             <div className="mt-6 space-y-6">
+              {entity.metadata?.is_anchor === true && (
+                <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Dette er en kontekst-anchor for Relationship Engine. Slug og
+                  type er reservert.
+                </div>
+              )}
               <div>
                 <Label>Summary</Label>
                 <Textarea
