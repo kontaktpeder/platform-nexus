@@ -78,6 +78,7 @@ import {
   RELATIONSHIP_KINDS,
   RELATIONSHIP_LABEL,
 } from "@/lib/knowledge/types";
+import { ContextAnchorsSection } from "@/components/platform/knowledge/ContextAnchorsSection";
 
 
 export const Route = createFileRoute("/_authenticated/knowledge")({
@@ -152,6 +153,8 @@ function KnowledgePage() {
             No entities yet. Create one, or seed demo data.
           </div>
         )}
+
+        <ContextAnchorsSection onOpen={setSelected} />
 
         <ContextSection />
 
