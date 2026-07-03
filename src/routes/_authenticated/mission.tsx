@@ -399,3 +399,32 @@ function sanitizeActions(actions: GlobalMissionAction[]) {
   }));
 }
 
+
+function ReviewInboxTeaser() {
+  const fetchCount = useServerFn(getReviewCount);
+  const q = useQuery({
+    queryKey: ["review-count"],
+    queryFn: () => fetchCount() as Promise<{ total: number }>,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const total = q.data?.total ?? 0;
+  if (total === 0) return null;
+  return (
+    <Link
+      to="/review"
+      className="mt-3 flex items-center justify-between rounded-2xl border border-border/60 bg-card p-4 text-sm shadow-sm transition hover:border-border"
+    >
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-full bg-amber-500/10 text-amber-700">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="font-medium">AI trenger gjennomgang</p>
+          <p className="text-xs text-muted-foreground">{total} forslag venter i /review</p>
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground">Åpne →</span>
+    </Link>
+  );
+}
