@@ -245,8 +245,10 @@ export type Database = {
           example_count: number
           id: string
           metadata: Json
+          owner_context: Database["public"]["Enums"]["owner_context"] | null
           proposed_name: string
           proposed_type: Database["public"]["Enums"]["entity_type"]
+          raw_signal_id: string | null
           reason: string
           snoozed_until: string | null
           status: string
@@ -260,8 +262,10 @@ export type Database = {
           example_count?: number
           id?: string
           metadata?: Json
+          owner_context?: Database["public"]["Enums"]["owner_context"] | null
           proposed_name: string
           proposed_type: Database["public"]["Enums"]["entity_type"]
+          raw_signal_id?: string | null
           reason: string
           snoozed_until?: string | null
           status?: string
@@ -275,8 +279,10 @@ export type Database = {
           example_count?: number
           id?: string
           metadata?: Json
+          owner_context?: Database["public"]["Enums"]["owner_context"] | null
           proposed_name?: string
           proposed_type?: Database["public"]["Enums"]["entity_type"]
+          raw_signal_id?: string | null
           reason?: string
           snoozed_until?: string | null
           status?: string
@@ -284,7 +290,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "entity_suggestions_raw_signal_id_fkey"
+            columns: ["raw_signal_id"]
+            isOneToOne: false
+            referencedRelation: "raw_signals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       memberships: {
         Row: {
