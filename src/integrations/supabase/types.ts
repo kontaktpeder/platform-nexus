@@ -18,7 +18,9 @@ export type Database = {
         Row: {
           created_at: string
           entity_id: string | null
+          fact_provenance: Json
           id: string
+          included_sources: Json
           key_facts: Json
           last_scanned_at: string
           open_questions: Json
@@ -33,7 +35,9 @@ export type Database = {
         Insert: {
           created_at?: string
           entity_id?: string | null
+          fact_provenance?: Json
           id?: string
+          included_sources?: Json
           key_facts?: Json
           last_scanned_at?: string
           open_questions?: Json
@@ -48,7 +52,9 @@ export type Database = {
         Update: {
           created_at?: string
           entity_id?: string | null
+          fact_provenance?: Json
           id?: string
+          included_sources?: Json
           key_facts?: Json
           last_scanned_at?: string
           open_questions?: Json
