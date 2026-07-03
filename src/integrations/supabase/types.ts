@@ -123,30 +123,45 @@ export type Database = {
       }
       entity_relationships: {
         Row: {
+          confidence: number | null
           created_at: string
           from_entity_id: string
           id: string
           kind: Database["public"]["Enums"]["entity_relationship_kind"]
+          last_signal_at: string | null
           metadata: Json
+          source: string
+          status: string
           to_entity_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
+          confidence?: number | null
           created_at?: string
           from_entity_id: string
           id?: string
           kind?: Database["public"]["Enums"]["entity_relationship_kind"]
+          last_signal_at?: string | null
           metadata?: Json
+          source?: string
+          status?: string
           to_entity_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
+          confidence?: number | null
           created_at?: string
           from_entity_id?: string
           id?: string
           kind?: Database["public"]["Enums"]["entity_relationship_kind"]
+          last_signal_at?: string | null
           metadata?: Json
+          source?: string
+          status?: string
           to_entity_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -174,6 +189,7 @@ export type Database = {
           id: string
           link_source: string
           occurred_at: string | null
+          raw_signal_id: string | null
           signal_type: string
           snippet: string | null
           source: string
@@ -186,6 +202,7 @@ export type Database = {
           id?: string
           link_source?: string
           occurred_at?: string | null
+          raw_signal_id?: string | null
           signal_type: string
           snippet?: string | null
           source: string
@@ -198,6 +215,7 @@ export type Database = {
           id?: string
           link_source?: string
           occurred_at?: string | null
+          raw_signal_id?: string | null
           signal_type?: string
           snippet?: string | null
           source?: string
@@ -209,6 +227,13 @@ export type Database = {
             columns: ["entity_id"]
             isOneToOne: false
             referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entity_signals_raw_signal_id_fkey"
+            columns: ["raw_signal_id"]
+            isOneToOne: false
+            referencedRelation: "raw_signals"
             referencedColumns: ["id"]
           },
         ]
@@ -532,6 +557,155 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      raw_signals: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          external_thread_id: string | null
+          id: string
+          metadata: Json
+          occurred_at: string | null
+          parsed_at: string | null
+          raw_text: string
+          source: string
+          status: string
+          summary: string | null
+          updated_at: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          external_thread_id?: string | null
+          id?: string
+          metadata?: Json
+          occurred_at?: string | null
+          parsed_at?: string | null
+          raw_text: string
+          source: string
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          external_thread_id?: string | null
+          id?: string
+          metadata?: Json
+          occurred_at?: string | null
+          parsed_at?: string | null
+          raw_text?: string
+          source?: string
+          status?: string
+          summary?: string | null
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_signals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      relation_suggestions: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          from_entity_id: string | null
+          from_suggestion_id: string | null
+          id: string
+          metadata: Json
+          raw_signal_id: string | null
+          reasoning: string | null
+          relation_type: string
+          reviewed_at: string | null
+          status: string
+          to_entity_id: string | null
+          to_suggestion_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          from_entity_id?: string | null
+          from_suggestion_id?: string | null
+          id?: string
+          metadata?: Json
+          raw_signal_id?: string | null
+          reasoning?: string | null
+          relation_type: string
+          reviewed_at?: string | null
+          status?: string
+          to_entity_id?: string | null
+          to_suggestion_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          from_entity_id?: string | null
+          from_suggestion_id?: string | null
+          id?: string
+          metadata?: Json
+          raw_signal_id?: string | null
+          reasoning?: string | null
+          relation_type?: string
+          reviewed_at?: string | null
+          status?: string
+          to_entity_id?: string | null
+          to_suggestion_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relation_suggestions_from_entity_id_fkey"
+            columns: ["from_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relation_suggestions_from_suggestion_id_fkey"
+            columns: ["from_suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "entity_suggestions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relation_suggestions_raw_signal_id_fkey"
+            columns: ["raw_signal_id"]
+            isOneToOne: false
+            referencedRelation: "raw_signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relation_suggestions_to_entity_id_fkey"
+            columns: ["to_entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "relation_suggestions_to_suggestion_id_fkey"
+            columns: ["to_suggestion_id"]
+            isOneToOne: false
+            referencedRelation: "entity_suggestions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       themes: {
         Row: {
