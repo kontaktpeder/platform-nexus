@@ -301,7 +301,7 @@ async function upsertSignals(opts: {
     summary: r.summary,
     status: "new" as const,
     occurred_at: r.occurred_at,
-    metadata: r.metadata,
+    metadata: r.metadata as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["raw_signals"]["Insert"]["metadata"],
   }));
 
   try {
