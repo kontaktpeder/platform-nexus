@@ -174,7 +174,7 @@ export async function parseNewSignals(opts: {
         .update({
           status: "parsed",
           parsed_at: new Date().toISOString(),
-          summary: signal.summary ?? parsed.summary || null,
+          summary: signal.summary ?? (parsed.summary || null),
         })
         .eq("id", signal.id)
         .eq("user_id", opts.userId);
