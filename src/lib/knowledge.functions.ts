@@ -145,6 +145,18 @@ export const deleteEntity = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { data: existing } = await supabase
+      .from("entities")
+      .select("slug, metadata")
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existing) {
+      const meta = (existing.metadata ?? {}) as { is_anchor?: boolean };
+      if (meta.is_anchor === true || ANCHOR_SLUG_SET.has(existing.slug as string)) {
+        throw new Error("Kontekst-anchor kan ikke slettes.");
+      }
+    }
     const { error } = await supabase
       .from("entities")
       .delete()
@@ -370,11 +382,30 @@ export const seedKnowledgeDemo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { count } = await supabase
+
+    // Anchors first — demo relationships hang off the gold-of-sicily anchor.
+    const { ensureAnchorEntities } = await import(
+      "@/lib/knowledge/anchor-entities.server"
+    );
+    await ensureAnchorEntities(supabase, userId);
+
+    // Skip demo if the user already has non-anchor entities.
+    const { data: nonAnchor } = await supabase
       .from("entities")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId);
-    if ((count ?? 0) > 0) return { seeded: false };
+      .select("id")
+      .eq("user_id", userId)
+      .not("slug", "in", `(personal,peder-enk,gold-of-sicily)`)
+      .limit(1);
+    if ((nonAnchor ?? []).length > 0) return { seeded: false };
+
+    const { data: gosRow } = await supabase
+      .from("entities")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("slug", "gold-of-sicily")
+      .maybeSingle();
+    const gosId = gosRow?.id as string | undefined;
+    if (!gosId) return { seeded: false };
 
     const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
 
@@ -395,9 +426,6 @@ export const seedKnowledgeDemo = createServerFn({ method: "POST" })
       return data as Entity;
     }
 
-    const gos = await make("project", "Gold of Sicily", 75, null, {
-      platform_org_slug: "gold-of-sicily-as",
-    });
     const nordahl = await make(
       "company",
       "Nordahl Events",
@@ -407,8 +435,8 @@ export const seedKnowledgeDemo = createServerFn({ method: "POST" })
     const dennis = await make("person", "Dennis", 70, null);
 
     await supabase.from("entity_relationships").insert([
-      { user_id: userId, from_entity_id: nordahl.id, to_entity_id: gos.id, kind: "customer_of" },
-      { user_id: userId, from_entity_id: dennis.id, to_entity_id: gos.id, kind: "works_on" },
+      { user_id: userId, from_entity_id: nordahl.id, to_entity_id: gosId, kind: "customer_of" },
+      { user_id: userId, from_entity_id: dennis.id, to_entity_id: gosId, kind: "works_on" },
       { user_id: userId, from_entity_id: dennis.id, to_entity_id: nordahl.id, kind: "related_to" },
     ]);
 
