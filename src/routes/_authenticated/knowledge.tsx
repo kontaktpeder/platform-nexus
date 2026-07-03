@@ -478,14 +478,16 @@ function EntityDrawer({
                 <Button onClick={save} disabled={!dirty} size="sm">
                   Save
                 </Button>
-                <Button
-                  onClick={handleDelete}
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto gap-1 text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" /> Delete
-                </Button>
+                {entity.metadata?.is_anchor !== true && (
+                  <Button
+                    onClick={handleDelete}
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto gap-1 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </Button>
+                )}
               </div>
 
               <section>
