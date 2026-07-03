@@ -2,11 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
-import type { ModuleConnectionRow } from "@/lib/module-connections";
 import type { InboxAction } from "@/lib/inbox/types";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import type { UserCommitment } from "@/lib/knowledge/commitment.types";
-import { todayOsloISO } from "@/lib/knowledge/commitment.types";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
