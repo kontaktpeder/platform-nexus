@@ -25,6 +25,12 @@ function toClientRow(row: Record<string, unknown>): ContextSummary {
       : [],
     suggested_next_focus: (row.suggested_next_focus as string) ?? null,
     source_counts: (row.source_counts as ContextSummary["source_counts"]) ?? {},
+    included_sources: Array.isArray(row.included_sources)
+      ? (row.included_sources as ContextSummary["included_sources"])
+      : [],
+    fact_provenance: Array.isArray(row.fact_provenance)
+      ? (row.fact_provenance as ContextSummary["fact_provenance"])
+      : [],
     last_scanned_at: row.last_scanned_at as string,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
@@ -35,13 +41,20 @@ export const runContextScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const { buildContextBundles } = await import("@/lib/context/context-gather.server");
+    const { loadMissionSnapshot } = await import("@/lib/mission-snapshot.server");
+    const { buildContextBundlesFromSnapshot } = await import(
+      "@/lib/context/context-gather.server"
+    );
     const { synthesizeContextSummary } = await import(
       "@/lib/context/context-scan-ai.server"
     );
 
-    const bundles = await buildContextBundles(supabase, userId);
+    const snapshot = await loadMissionSnapshot(supabase, userId);
+    const bundles = await buildContextBundlesFromSnapshot(snapshot, supabase, userId);
     const summaries: ContextSummary[] = [];
+    let global = 0;
+    let workspaces = 0;
+    let entities = 0;
 
     for (const b of bundles) {
       const synth = await synthesizeContextSummary(b);
@@ -55,6 +68,8 @@ export const runContextScan = createServerFn({ method: "POST" })
         open_questions: synth.open_questions,
         suggested_next_focus: synth.suggested_next_focus,
         source_counts: synth.source_counts,
+        included_sources: synth.included_sources,
+        fact_provenance: synth.fact_provenance,
         last_scanned_at: new Date().toISOString(),
       };
       const { data, error } = await supabase
@@ -69,10 +84,21 @@ export const runContextScan = createServerFn({ method: "POST" })
         console.warn("[context-scan] upsert failed", error);
         continue;
       }
-      if (data) summaries.push(toClientRow(data as Record<string, unknown>));
+      if (data) {
+        summaries.push(toClientRow(data as Record<string, unknown>));
+        if (synth.scope_type === "global") global += 1;
+        else if (synth.scope_type === "workspace") workspaces += 1;
+        else entities += 1;
+      }
     }
 
-    return normalize({ scanned: summaries.length, summaries });
+    return normalize({
+      scanned: summaries.length,
+      global,
+      workspaces,
+      entities,
+      summaries,
+    });
   });
 
 export const listContextSummaries = createServerFn({ method: "POST" })
