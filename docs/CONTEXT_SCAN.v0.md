@@ -1,8 +1,8 @@
 # Context Scan v0
 
-> **Status:** Active — added on top of Knowledge v0–v3.
-> **Goal:** Turn the signals we already have into a short, calm understanding
-> the AI briefing (and the user) can lean on. No new module crawling.
+> **Superseded by [CONTEXT_SCAN.v1.md](./CONTEXT_SCAN.v1.md)** for the source-of-truth fix
+> (shared MissionSnapshot, verbatim widget facts, workspace bundles, "ukjent" rule).
+> Original goal below is unchanged; only the data pipeline moved to v1.
 
 ## What it is
 

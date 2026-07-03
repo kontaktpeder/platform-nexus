@@ -1,0 +1,2 @@
+ALTER TABLE public.context_summaries ADD COLUMN IF NOT EXISTS included_sources jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.context_summaries ADD COLUMN IF NOT EXISTS fact_provenance jsonb NOT NULL DEFAULT '[]'::jsonb;

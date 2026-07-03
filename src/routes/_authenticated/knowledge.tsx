@@ -1017,7 +1017,7 @@ function CommitmentsSection() {
   );
 }
 
-// ─── Context Scan v0 ────────────────────────────────────────────────────────
+// ─── Context Scan v1 ────────────────────────────────────────────────────────
 
 function ContextSection() {
   const qc = useQueryClient();
@@ -1031,6 +1031,7 @@ function ContextSection() {
   });
   const summaries = q.data ?? [];
   const global = summaries.find((s) => s.scope_type === "global") ?? null;
+  const workspaces = summaries.filter((s) => s.scope_type === "workspace");
   const entities = summaries.filter(
     (s) => s.scope_type === "entity" || s.scope_type === "project",
   );
@@ -1045,8 +1046,15 @@ function ContextSection() {
   async function doScan() {
     setScanning(true);
     try {
-      const res = (await scan()) as { scanned: number };
-      toast(`Kontekst oppdatert (${res.scanned} kort)`);
+      const res = (await scan()) as {
+        scanned: number;
+        global: number;
+        workspaces: number;
+        entities: number;
+      };
+      toast(
+        `Kontekst oppdatert (${res.scanned} kort · ${res.workspaces} arbeidsflater, ${res.entities} enheter)`,
+      );
       qc.invalidateQueries({ queryKey: ["context"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Skanning feilet");
@@ -1061,7 +1069,8 @@ function ContextSection() {
         <div>
           <h2 className="text-sm font-semibold">Kontekst</h2>
           <p className="text-xs text-muted-foreground">
-            Rullende forståelseskort bygget fra signalene dine — ikke fra modul-DB.
+            Rullende forståelseskort bygget fra signalene dine — bruker samme
+            data som Mission.
           </p>
           {lastScan && (
             <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -1098,27 +1107,70 @@ function ContextSection() {
       )}
 
       {summaries.length > 0 && (
-        <div className="space-y-3">
-          {global && <ContextCard title="Global oversikt" s={global} />}
-          {entities.map((s) => (
-            <ContextCard
-              key={s.id}
-              title={s.scope_ref ?? "Enhet"}
-              s={s}
-            />
-          ))}
+        <div className="space-y-5">
+          {global && (
+            <div>
+              <SectionLabel>Global oversikt</SectionLabel>
+              <ContextCard title="Alle organisasjoner" s={global} />
+            </div>
+          )}
+          {workspaces.length > 0 && (
+            <div>
+              <SectionLabel>Arbeidsflater</SectionLabel>
+              <div className="space-y-2">
+                {workspaces.map((s) => (
+                  <ContextCard key={s.id} title={s.scope_ref ?? "Arbeidsflate"} s={s} />
+                ))}
+              </div>
+            </div>
+          )}
+          {entities.length > 0 && (
+            <div>
+              <SectionLabel>Enheter</SectionLabel>
+              <div className="space-y-2">
+                {entities.map((s) => (
+                  <ContextCard key={s.id} title={s.scope_ref ?? "Enhet"} s={s} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
   );
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
 function ContextCard({ title, s }: { title: string; s: ContextSummary }) {
   return (
     <div className="rounded-xl border border-border/60 bg-background p-3">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {title}
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {title}
+        </div>
+        <div className="text-[10px] text-muted-foreground/80">
+          Sist skannet {s.last_scanned_at.slice(0, 16).replace("T", " ")}
+        </div>
       </div>
+      {s.included_sources.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {s.included_sources.map((src) => (
+            <span
+              key={src}
+              className="rounded-full border border-border/60 px-1.5 py-px text-[10px] text-muted-foreground"
+            >
+              {src}
+            </span>
+          ))}
+        </div>
+      )}
       <p className="text-sm text-foreground/90">{s.summary}</p>
       {s.key_facts.length > 0 && (
         <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
@@ -1142,5 +1194,6 @@ function ContextCard({ title, s }: { title: string; s: ContextSummary }) {
     </div>
   );
 }
+
 
 
