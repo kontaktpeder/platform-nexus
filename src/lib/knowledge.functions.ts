@@ -11,7 +11,7 @@ import type {
   EntitySignal,
   EntityType,
 } from "@/lib/knowledge/types";
-import { RELATIONSHIP_KINDS, ENTITY_TYPES } from "@/lib/knowledge/types";
+import { RELATIONSHIP_KINDS, ENTITY_TYPES, ANCHOR_SLUG_SET } from "@/lib/knowledge/types";
 
 function assertEntityType(v: unknown): EntityType {
   if (typeof v === "string" && (ENTITY_TYPES as string[]).includes(v)) return v as EntityType;
@@ -85,6 +85,9 @@ export const createEntity = createServerFn({ method: "POST" })
 
     const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
     const slug = await slugifyEntityName(supabase, userId, name);
+    if (ANCHOR_SLUG_SET.has(slug)) {
+      throw new Error("Slug er reservert for en kontekst-anchor.");
+    }
 
     const { data: row, error } = await supabase
       .from("entities")
