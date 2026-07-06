@@ -12,6 +12,7 @@ export type ReviewSignalCtx = {
   source: string;
   summary: string | null;
   occurred_at: string | null;
+  metadata: Record<string, unknown> | null;
 } | null;
 
 export type ReviewEntityItem = {
