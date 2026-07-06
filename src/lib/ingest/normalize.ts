@@ -68,7 +68,10 @@ export type SlackNormalizeInput = {
   user?: string | null;
   user_display_name?: string | null;
   channel_name?: string | null;
+  permalink?: string | null;
   kind: "dm" | "mention" | "channel";
+  source_type?: string | null; // e.g. "slack_channel"
+  mention_user_id?: string | null; // slack user id of the ingesting user (for @-mention heuristic)
 };
 
 export function normalizeSlackMessage(msg: SlackNormalizeInput): NormalizedSignal {
@@ -78,6 +81,9 @@ export function normalizeSlackMessage(msg: SlackNormalizeInput): NormalizedSigna
   const raw_text = text.slice(0, 8000) || "(empty slack message)";
   const summary = text ? text.slice(0, 200) : null;
   const occurred_at = tsToIso(msg.ts);
+  const missionCandidate = msg.kind !== "channel"
+    ? true
+    : looksMissionRelevant(text, msg.mention_user_id ?? null);
   return {
     source: "slack",
     external_id,
@@ -92,9 +98,25 @@ export function normalizeSlackMessage(msg: SlackNormalizeInput): NormalizedSigna
       thread_ts: msg.thread_ts ?? null,
       user_id: msg.user ?? null,
       user_display_name: msg.user_display_name ?? null,
+      permalink: msg.permalink ?? null,
       kind: msg.kind,
+      source_type: msg.source_type ?? (msg.kind === "channel" ? "slack_channel" : `slack_${msg.kind}`),
+      mission_candidate: missionCandidate,
     },
   };
+}
+
+// Heuristic: does a channel message look like something a person needs to act on?
+// Keep conservative — Mission is prioritization, not a firehose.
+const MISSION_KEYWORDS = [
+  /\btodo\b/i, /\bfrist\b/i, /\bdeadline\b/i, /\bhaster\b/i, /\basap\b/i,
+  /\bavvik\b/i, /\bfeil\b/i, /\bnedetid\b/i, /\bdrift(shendelse)?\b/i,
+  /\bordre\b/i, /\bkan du\b/i, /\bhusk\b/i, /\?\s*$/,
+];
+function looksMissionRelevant(text: string, myUserId: string | null): boolean {
+  if (!text) return false;
+  if (myUserId && text.includes(`<@${myUserId}>`)) return true;
+  return MISSION_KEYWORDS.some((re) => re.test(text));
 }
 
 function tsToIso(ts: string): string | null {

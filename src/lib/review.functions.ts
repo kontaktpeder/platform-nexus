@@ -12,6 +12,7 @@ export type ReviewSignalCtx = {
   source: string;
   summary: string | null;
   occurred_at: string | null;
+  metadata: Record<string, unknown> | null;
 } | null;
 
 export type ReviewEntityItem = {
@@ -98,12 +99,18 @@ export const listReviewFeed = createServerFn({ method: "POST" })
     if (signalIds.length) {
       const { data: sigs } = await supabase
         .from("raw_signals")
-        .select("id, source, summary, occurred_at")
+        .select("id, source, summary, occurred_at, metadata")
         .in("id", signalIds)
         .eq("user_id", userId);
       signalMap = new Map((sigs ?? []).map((s) => [
         s.id as string,
-        { id: s.id as string, source: s.source as string, summary: s.summary as string | null, occurred_at: s.occurred_at as string | null },
+        {
+          id: s.id as string,
+          source: s.source as string,
+          summary: s.summary as string | null,
+          occurred_at: s.occurred_at as string | null,
+          metadata: (s.metadata as Record<string, unknown> | null) ?? null,
+        },
       ]));
     }
 
