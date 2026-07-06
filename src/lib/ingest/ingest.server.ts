@@ -168,7 +168,8 @@ export async function ingestSlack(opts: {
   }
 
   // DMs
-  try {
+  const maxDms = opts.maxDms ?? 15;
+  if (maxDms > 0) try {
     const dms = await slackCall<{ channels: SlackChannel[] }>("conversations.list", {
       ...shared,
       query: "types=im&limit=50",
