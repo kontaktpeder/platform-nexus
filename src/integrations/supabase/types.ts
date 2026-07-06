@@ -721,6 +721,56 @@ export type Database = {
           },
         ]
       }
+      slack_channel_ingest_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          id: string
+          ingest_mode: string
+          last_ingested_at: string | null
+          last_message_ts: string | null
+          organization_id: string
+          slack_channel_id: string
+          slack_channel_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          ingest_mode?: string
+          last_ingested_at?: string | null
+          last_message_ts?: string | null
+          organization_id: string
+          slack_channel_id: string
+          slack_channel_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          ingest_mode?: string
+          last_ingested_at?: string | null
+          last_message_ts?: string | null
+          organization_id?: string
+          slack_channel_id?: string
+          slack_channel_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slack_channel_ingest_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       themes: {
         Row: {
           background: string
