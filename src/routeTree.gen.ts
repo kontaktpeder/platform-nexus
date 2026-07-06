@@ -19,6 +19,7 @@ import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
+import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
 import { Route as AuthenticatedOOrgSlugWWsSlugRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug'
 import { Route as AuthenticatedOOrgSlugWWsSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.index'
@@ -75,6 +76,12 @@ const AuthenticatedOOrgSlugIndexRoute =
     path: '/o/$orgSlug/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOOrgSlugSlackChannelsRoute =
+  AuthenticatedOOrgSlugSlackChannelsRouteImport.update({
+    id: '/o/$orgSlug/slack-channels',
+    path: '/o/$orgSlug/slack-channels',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOOrgSlugSettingsRoute =
   AuthenticatedOOrgSlugSettingsRouteImport.update({
     id: '/o/$orgSlug/settings',
@@ -116,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
+  '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
   '/o/$orgSlug/w/$wsSlug': typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
   '/o/$orgSlug/w/$wsSlug/modules': typeof AuthenticatedOOrgSlugWWsSlugModulesRoute
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
+  '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug': typeof AuthenticatedOOrgSlugIndexRoute
   '/o/$orgSlug/w/$wsSlug/modules': typeof AuthenticatedOOrgSlugWWsSlugModulesRoute
   '/o/$orgSlug/w/$wsSlug/settings': typeof AuthenticatedOOrgSlugWWsSlugSettingsRoute
@@ -149,6 +158,7 @@ export interface FileRoutesById {
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
+  '/_authenticated/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/_authenticated/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
   '/_authenticated/o/$orgSlug/w/$wsSlug': typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
   '/_authenticated/o/$orgSlug/w/$wsSlug/modules': typeof AuthenticatedOOrgSlugWWsSlugModulesRoute
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/settings'
     | '/o/$orgSlug/settings'
+    | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug/'
     | '/o/$orgSlug/w/$wsSlug'
     | '/o/$orgSlug/w/$wsSlug/modules'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/settings'
     | '/o/$orgSlug/settings'
+    | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug'
     | '/o/$orgSlug/w/$wsSlug/modules'
     | '/o/$orgSlug/w/$wsSlug/settings'
@@ -199,6 +211,7 @@ export interface FileRouteTypes {
     | '/_authenticated/review'
     | '/_authenticated/settings'
     | '/_authenticated/o/$orgSlug/settings'
+    | '/_authenticated/o/$orgSlug/slack-channels'
     | '/_authenticated/o/$orgSlug/'
     | '/_authenticated/o/$orgSlug/w/$wsSlug'
     | '/_authenticated/o/$orgSlug/w/$wsSlug/modules'
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgSlugIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/o/$orgSlug/slack-channels': {
+      id: '/_authenticated/o/$orgSlug/slack-channels'
+      path: '/o/$orgSlug/slack-channels'
+      fullPath: '/o/$orgSlug/slack-channels'
+      preLoaderRoute: typeof AuthenticatedOOrgSlugSlackChannelsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/o/$orgSlug/settings': {
       id: '/_authenticated/o/$orgSlug/settings'
       path: '/o/$orgSlug/settings'
@@ -351,6 +371,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedOOrgSlugSettingsRoute: typeof AuthenticatedOOrgSlugSettingsRoute
+  AuthenticatedOOrgSlugSlackChannelsRoute: typeof AuthenticatedOOrgSlugSlackChannelsRoute
   AuthenticatedOOrgSlugIndexRoute: typeof AuthenticatedOOrgSlugIndexRoute
   AuthenticatedOOrgSlugWWsSlugRoute: typeof AuthenticatedOOrgSlugWWsSlugRouteWithChildren
 }
@@ -363,6 +384,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedOOrgSlugSettingsRoute: AuthenticatedOOrgSlugSettingsRoute,
+  AuthenticatedOOrgSlugSlackChannelsRoute:
+    AuthenticatedOOrgSlugSlackChannelsRoute,
   AuthenticatedOOrgSlugIndexRoute: AuthenticatedOOrgSlugIndexRoute,
   AuthenticatedOOrgSlugWWsSlugRoute:
     AuthenticatedOOrgSlugWWsSlugRouteWithChildren,

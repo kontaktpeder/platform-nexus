@@ -147,6 +147,18 @@ function OrgSettings() {
             </div>
           )}
         </section>
+
+        <section className="surface-card p-5">
+          <h2 className="font-heading text-lg font-semibold">Integrasjoner</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Slack-kanaler Platform får lov å lese for denne organisasjonen.
+          </p>
+          <div className="mt-3">
+            <Button asChild variant="outline" size="sm">
+              <a href={`/o/${orgSlug}/slack-channels`}>Slack-kanaler →</a>
+            </Button>
+          </div>
+        </section>
       </main>
     </div>
   );
