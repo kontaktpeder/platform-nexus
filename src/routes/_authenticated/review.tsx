@@ -242,7 +242,7 @@ function EntityReviewCard({ item, existingEntities }: { item: ReviewEntityItem; 
         <KindBadge item={item} />
         <Badge variant="outline">{ENTITY_TYPE_LABEL[item.proposedType]}</Badge>
         <ConfidenceChip level={item.confidence} />
-        <SourceBadge source={item.signal?.source} />
+        <SourceBadge signal={item.signal} />
         <span className="ml-auto text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString("nb-NO")}</span>
       </div>
       <h3 className="text-base font-semibold leading-tight">{item.proposedName}</h3>
@@ -342,7 +342,7 @@ function RelationReviewCard({ item }: { item: ReviewRelationItem }) {
         <KindBadge item={item} />
         <Badge variant="outline">{RELATIONSHIP_LABEL[item.relationType]}</Badge>
         <ConfidenceChip level={item.confidence} />
-        <SourceBadge source={item.signal?.source} />
+        <SourceBadge signal={item.signal} />
         <span className="ml-auto text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString("nb-NO")}</span>
       </div>
       <p className="text-sm">
