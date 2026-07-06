@@ -202,7 +202,8 @@ export async function ingestSlack(opts: {
   }
 
   // Mentions via assistant.search.context
-  try {
+  const maxMentions = opts.maxMentions ?? 15;
+  if (maxMentions > 0) try {
     const search = await slackCall<{
       results?: {
         messages?: {
