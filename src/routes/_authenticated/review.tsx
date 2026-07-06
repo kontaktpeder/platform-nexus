@@ -149,10 +149,25 @@ function KindBadge({ item }: { item: ReviewItem }) {
   return <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10">Entitet</Badge>;
 }
 
-function SourceBadge({ source }: { source: string | null | undefined }) {
-  if (!source) return null;
-  const label = source.charAt(0).toUpperCase() + source.slice(1);
-  return <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{label}</Badge>;
+function SourceBadge({ signal }: { signal: ReviewEntityItem["signal"] | ReviewRelationItem["signal"] }) {
+  if (!signal) return null;
+  const label = signal.source.charAt(0).toUpperCase() + signal.source.slice(1);
+  const meta = signal.metadata ?? {};
+  const sourceType = typeof meta.source_type === "string" ? meta.source_type : null;
+  const channelName = typeof meta.channel_name === "string" ? meta.channel_name : null;
+  return (
+    <>
+      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">{label}</Badge>
+      {channelName && (
+        <Badge variant="outline" className="text-[10px]">#{channelName}</Badge>
+      )}
+      {sourceType === "slack_channel" && (
+        <Badge className="bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/10 text-[10px]" variant="secondary">
+          kanal-whitelist
+        </Badge>
+      )}
+    </>
+  );
 }
 
 function ConfidenceChip({ level }: { level: "low" | "medium" | "high" | number | null }) {
