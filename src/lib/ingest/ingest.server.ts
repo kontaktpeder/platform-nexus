@@ -224,7 +224,7 @@ export async function ingestSlack(opts: {
         channel_types: ["public_channel", "private_channel", "mpim", "im"],
         sort: "timestamp",
         sort_dir: "desc",
-        limit: opts.maxMentions ?? 15,
+        limit: maxMentions,
       },
     });
     const items = search.results?.messages?.items ?? [];
