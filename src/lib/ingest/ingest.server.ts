@@ -148,6 +148,7 @@ export async function ingestSlack(opts: {
   maxDms?: number;
   maxPerChannel?: number;
   maxMentions?: number;
+  onlyRuleId?: string | null;
 }): Promise<IngestResult> {
   const apiKey = process.env.SLACK_API_KEY;
   const lovableKey = process.env.LOVABLE_API_KEY;
