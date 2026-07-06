@@ -244,6 +244,20 @@ export async function ingestSlack(opts: {
     result.errors.push(err instanceof Error ? err.message : "slack mention search failed");
   }
 
+  // Channel whitelist ingest (org-configured `slack_channel_ingest_rules`)
+  try {
+    const channelRows = await ingestSlackWhitelistedChannels({
+      supabase: opts.supabase,
+      shared,
+      myUserId: me.user_id,
+      result,
+      onlyRuleId: opts.onlyRuleId ?? null,
+    });
+    rows.push(...channelRows);
+  } catch (err) {
+    result.errors.push(err instanceof Error ? err.message : "slack channel whitelist failed");
+  }
+
   result.fetched = rows.length;
   return upsertSignals({
     supabase: opts.supabase,
@@ -252,6 +266,91 @@ export async function ingestSlack(opts: {
     rows,
     result,
   });
+}
+
+// ── Slack channel whitelist ──────────────────────────────────────────────
+
+type SlackRuleRow = {
+  id: string;
+  organization_id: string;
+  slack_channel_id: string;
+  slack_channel_name: string | null;
+  enabled: boolean;
+  ingest_mode: string;
+  last_message_ts: string | null;
+};
+
+async function ingestSlackWhitelistedChannels(opts: {
+  supabase: SupabaseClient<Database>;
+  shared: { apiKey: string; lovableKey: string };
+  myUserId: string;
+  result: IngestResult;
+  onlyRuleId: string | null;
+}): Promise<NormalizedSignal[]> {
+  const rows: NormalizedSignal[] = [];
+  let q = opts.supabase
+    .from("slack_channel_ingest_rules")
+    .select("id, organization_id, slack_channel_id, slack_channel_name, enabled, ingest_mode, last_message_ts")
+    .eq("enabled", true);
+  if (opts.onlyRuleId) q = q.eq("id", opts.onlyRuleId);
+  const { data: rules, error } = await q;
+  if (error) {
+    opts.result.errors.push(`slack rule lookup: ${error.message}`);
+    return rows;
+  }
+  const list = (rules ?? []) as SlackRuleRow[];
+  if (list.length === 0) return rows;
+
+  // Admin client for updating last_message_ts even if the runner isn't org admin.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  for (const rule of list) {
+    try {
+      const query = new URLSearchParams({
+        channel: rule.slack_channel_id,
+        limit: "50",
+      });
+      if (rule.last_message_ts) query.set("oldest", rule.last_message_ts);
+      const hist = await slackCall<{ messages: SlackHistoryMsg[] }>(
+        "conversations.history",
+        { ...opts.shared, query: query.toString() },
+      );
+      const msgs = (hist.messages ?? []).filter((m) => {
+        if (!rule.last_message_ts) return true;
+        return Number(m.ts) > Number(rule.last_message_ts);
+      });
+      let newestTs = rule.last_message_ts;
+      for (const m of msgs) {
+        rows.push(
+          normalizeSlackMessage({
+            channel_id: rule.slack_channel_id,
+            ts: m.ts,
+            thread_ts: m.thread_ts ?? null,
+            text: m.text,
+            user: m.user ?? null,
+            channel_name: rule.slack_channel_name,
+            kind: "channel",
+            source_type: "slack_channel",
+            mention_user_id: opts.myUserId,
+          }),
+        );
+        if (!newestTs || Number(m.ts) > Number(newestTs)) newestTs = m.ts;
+      }
+      const { error: upErr } = await supabaseAdmin
+        .from("slack_channel_ingest_rules")
+        .update({
+          last_message_ts: newestTs,
+          last_ingested_at: new Date().toISOString(),
+        })
+        .eq("id", rule.id);
+      if (upErr) opts.result.errors.push(`slack rule ${rule.id} bookmark: ${upErr.message}`);
+    } catch (err) {
+      opts.result.errors.push(
+        err instanceof Error ? err.message : `slack channel ${rule.slack_channel_id} failed`,
+      );
+    }
+  }
+  return rows;
 }
 
 // ── Upsert ───────────────────────────────────────────────────────────────
