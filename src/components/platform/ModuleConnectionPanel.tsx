@@ -105,6 +105,10 @@ export function ModuleConnectionPanel({
           verify_api_key: verifyApiKey.trim(),
         },
       });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
       toast.success(`Koblet til ${res.orgName}`);
       setVerifyApiKey("");
     } catch (e) {
@@ -118,6 +122,10 @@ export function ModuleConnectionPanel({
       const res = await retest.mutateAsync({
         data: { orgId, connectionId: connection.id },
       });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
       toast.success(`Fortsatt koblet: ${res.orgName}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Retest feilet");
