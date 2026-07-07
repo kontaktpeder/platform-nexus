@@ -251,6 +251,7 @@ export function buildGlobalActions(input: {
     channelName?: string | null;
   }>;
   max?: number;
+  missionReturnUrl?: string;
 }): GlobalMissionAction[] {
   const max = input.max ?? 7;
   const all: GlobalMissionAction[] = [];
@@ -260,7 +261,9 @@ export function buildGlobalActions(input: {
     const alertActions = buildModuleAlertActions({
       moduleAlerts: ws.moduleAlerts,
       modules: ws.modules,
+      missionReturnUrl: input.missionReturnUrl,
     });
+
     for (const a of alertActions) {
       const sev = a.severity ?? "info";
       all.push({
