@@ -46,6 +46,8 @@ function estimatedMinutes(a: GlobalMissionAction): number {
 
 import { formatOccurredAt } from "@/lib/format-occurred-at";
 import { EntityLinkBadge } from "./EntityLinkBadge";
+import { SeverityBadge } from "./QueueList";
+
 
 export type FeaturedActionCardProps = {
   action: GlobalMissionAction;
