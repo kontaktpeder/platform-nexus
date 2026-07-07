@@ -116,18 +116,32 @@ const SEVERITY_PRIORITY: Record<ModuleAlertSeverity, number> = {
   info: 8,
 };
 
+export function appendReturnParam(href: string, returnUrl: string): string {
+  try {
+    const u = new URL(href);
+    u.searchParams.set("return", returnUrl);
+    return u.toString();
+  } catch {
+    return href;
+  }
+}
+
 export function buildModuleAlertActions(input: {
   moduleAlerts: WorkspaceAlertsMap | undefined;
   modules: WorkspaceModule[];
+  missionReturnUrl?: string;
 }): MissionAction[] {
-  const { moduleAlerts, modules } = input;
+  const { moduleAlerts, modules, missionReturnUrl } = input;
   if (!moduleAlerts) return [];
 
   const out: MissionAction[] = [];
   for (const [key, alert] of Object.entries(moduleAlerts)) {
     const mod = modules.find((m) => m.slug === alert.moduleSlug);
     const moduleName = mod?.name ?? alert.moduleName ?? alert.moduleSlug;
-    const href = alert.action_url ?? alert.connectionHomeUrl ?? null;
+    let href = alert.action_url ?? alert.connectionHomeUrl ?? null;
+    if (href && alert.action_url && missionReturnUrl) {
+      href = appendReturnParam(href, missionReturnUrl);
+    }
     out.push({
       key,
       moduleSlug: alert.moduleSlug,
@@ -140,6 +154,7 @@ export function buildModuleAlertActions(input: {
       severity: alert.severity,
     });
   }
+
 
   out.sort((a, b) => {
     const sa = SEVERITY_ORDER[a.severity ?? "info"];
