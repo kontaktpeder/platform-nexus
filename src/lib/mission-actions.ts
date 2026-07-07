@@ -218,6 +218,12 @@ export function getActionSourceFromKey(key: string): MissionSource {
   return "workspace";
 }
 
+function tierFromSeverity(sev: ModuleAlertSeverity): MissionTier {
+  if (sev === "critical") return "urgent";
+  if (sev === "warning") return "important";
+  return "later";
+}
+
 export function buildGlobalActions(input: {
   workspaces: Array<{
     orgSlug: string;
@@ -226,6 +232,7 @@ export function buildGlobalActions(input: {
     wsName: string;
     widgetData: WidgetDataMap;
     modules: WorkspaceModule[];
+    moduleAlerts?: WorkspaceAlertsMap;
   }>;
   inbox?: Array<{
     key: string;
@@ -247,8 +254,37 @@ export function buildGlobalActions(input: {
   const all: GlobalMissionAction[] = [];
 
   for (const ws of input.workspaces) {
-    const actions = buildNextActions({ widgetData: ws.widgetData, modules: ws.modules });
-    for (const a of actions) {
+    // 1) Module Alerts (v1.1) — actionable items from each module.
+    const alertActions = buildModuleAlertActions({
+      moduleAlerts: ws.moduleAlerts,
+      modules: ws.modules,
+    });
+    for (const a of alertActions) {
+      const sev = a.severity ?? "info";
+      all.push({
+        key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
+        source: "workspace",
+        title: a.title,
+        description: a.description,
+        href: a.href,
+        priority: a.priority,
+        tier: tierFromSeverity(sev),
+        severity: sev,
+        moduleSlug: a.moduleSlug,
+        moduleName: a.moduleName,
+        orgSlug: ws.orgSlug,
+        orgName: ws.orgName,
+        wsSlug: ws.wsSlug,
+        wsName: ws.wsName,
+      });
+    }
+
+    // 2) Legacy widget-derived info cards (month_revenue etc.) as fallback.
+    const infoActions = buildNextActions({
+      widgetData: ws.widgetData,
+      modules: ws.modules,
+    });
+    for (const a of infoActions) {
       all.push({
         key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
         source: "workspace",
