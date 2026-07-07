@@ -43,27 +43,14 @@ type Rule = {
 };
 
 /**
- * NOTE: Finance / Work action-rules were removed as of Module Contract v1.1.
- * Actionable items now come from `/module/alerts` per module and are built
- * via `buildModuleAlertActions`. Info-only widget cards remain here as a
- * fallback until every module publishes alerts.
+ * NOTE: Legacy widget-derived Mission cards were removed as of Module Contract
+ * v1.1. Actionable items now come from `/module/alerts` per module and are
+ * built via `buildModuleAlertActions`. Info widgets (like month_revenue) still
+ * render in `MissionWidgetsGrid` on the workspace, but never as global
+ * Mission actions.
  */
-const RULES: Rule[] = [
-  {
-    moduleSlug: "finance",
-    widgetId: "month_revenue",
-    priority: 10,
-    kind: "info",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      if (!display) return null;
-      return {
-        title: "Month revenue",
-        description: display,
-      };
-    },
-  },
-];
+const RULES: Rule[] = [];
+
 
 export function buildNextActions(input: {
   widgetData: WidgetDataMap | undefined;
