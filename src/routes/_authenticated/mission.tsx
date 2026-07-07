@@ -125,11 +125,14 @@ function GlobalMission() {
         };
       }
     }
+    const missionReturnUrl =
+      typeof window !== "undefined" ? `${window.location.origin}/mission` : undefined;
     return [
-      ...buildGlobalActions({ workspaces, inbox, max: 20 }),
+      ...buildGlobalActions({ workspaces, inbox, max: 20, missionReturnUrl }),
       ...buildCommitmentActions(openCommitments, entityMap),
     ];
   }, [workspaces, inbox, openCommitments, entityLinks]);
+
 
   // Optimistic: hide keys the user just acted on until refetch confirms.
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());

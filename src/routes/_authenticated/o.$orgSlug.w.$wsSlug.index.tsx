@@ -38,13 +38,17 @@ function MissionControl() {
     refetchOnWindowFocus: false,
   });
 
+  const missionReturnUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/mission` : undefined;
   const actions = [
     ...buildModuleAlertActions({
       moduleAlerts: alertsQ.data?.alerts,
       modules,
+      missionReturnUrl,
     }),
     ...buildNextActions({ widgetData: widgetData.data, modules }),
   ];
+
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
