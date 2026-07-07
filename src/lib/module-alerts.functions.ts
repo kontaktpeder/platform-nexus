@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { WorkspaceAlertsResult } from "@/lib/module-alerts.server";
+import type { WorkspaceAlertsResult } from "@/lib/module-alerts.types";
 
 const Input = z.object({
   orgId: z.string().uuid(),
