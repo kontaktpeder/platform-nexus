@@ -2,6 +2,10 @@ import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
 import { parseModuleInfoSnapshot, resolveWidgetHref } from "@/lib/module-registry";
+import type {
+  ModuleAlertSeverity,
+  WorkspaceAlertsMap,
+} from "@/lib/module-alerts.types";
 
 export type MissionAction = {
   key: string;
@@ -12,6 +16,7 @@ export type MissionAction = {
   href: string | null;
   priority: number;
   kind: "action" | "info";
+  severity?: ModuleAlertSeverity;
 };
 
 export function parseCount(display: string | undefined): number {
@@ -37,52 +42,13 @@ type Rule = {
   build: (display: string) => { title: string; description: string } | null;
 };
 
+/**
+ * NOTE: Finance / Work action-rules were removed as of Module Contract v1.1.
+ * Actionable items now come from `/module/alerts` per module and are built
+ * via `buildModuleAlertActions`. Info-only widget cards remain here as a
+ * fallback until every module publishes alerts.
+ */
 const RULES: Rule[] = [
-  {
-    moduleSlug: "finance",
-    widgetId: "unpaid_invoices",
-    priority: 1,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const n = parseCount(display);
-      if (n <= 0) return null;
-      return {
-        title: "Review unpaid invoices",
-        description: `${display} open invoice${n === 1 ? "" : "s"} need attention`,
-      };
-    },
-  },
-  {
-    moduleSlug: "work",
-    widgetId: "today_hours",
-    priority: 2,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const h = parseHours(display);
-      if (h <= 0) return null;
-      return {
-        title: "Review today's logged hours",
-        description: `${display} logged today`,
-      };
-    },
-  },
-  {
-    moduleSlug: "work",
-    widgetId: "active_projects",
-    priority: 3,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const n = parseCount(display);
-      if (n <= 0) return null;
-      return {
-        title: "Open active projects",
-        description: `${display} active project${n === 1 ? "" : "s"}`,
-      };
-    },
-  },
   {
     moduleSlug: "finance",
     widgetId: "month_revenue",
@@ -149,6 +115,56 @@ export function buildNextActions(input: {
   return [...primary, ...info].slice(0, 3);
 }
 
+// ─── Module Alerts (Module Contract v1.1) ────────────────────────────────────
+
+const SEVERITY_ORDER: Record<ModuleAlertSeverity, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
+
+const SEVERITY_PRIORITY: Record<ModuleAlertSeverity, number> = {
+  critical: 1,
+  warning: 3,
+  info: 8,
+};
+
+export function buildModuleAlertActions(input: {
+  moduleAlerts: WorkspaceAlertsMap | undefined;
+  modules: WorkspaceModule[];
+}): MissionAction[] {
+  const { moduleAlerts, modules } = input;
+  if (!moduleAlerts) return [];
+
+  const out: MissionAction[] = [];
+  for (const [key, alert] of Object.entries(moduleAlerts)) {
+    const mod = modules.find((m) => m.slug === alert.moduleSlug);
+    const moduleName = mod?.name ?? alert.moduleName ?? alert.moduleSlug;
+    const href = alert.action_url ?? alert.connectionHomeUrl ?? null;
+    out.push({
+      key,
+      moduleSlug: alert.moduleSlug,
+      moduleName,
+      title: alert.title,
+      description: alert.description ?? "",
+      href,
+      priority: alert.priority ?? SEVERITY_PRIORITY[alert.severity],
+      kind: alert.severity === "info" ? "info" : "action",
+      severity: alert.severity,
+    });
+  }
+
+  out.sort((a, b) => {
+    const sa = SEVERITY_ORDER[a.severity ?? "info"];
+    const sb = SEVERITY_ORDER[b.severity ?? "info"];
+    if (sa !== sb) return sa - sb;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.title.localeCompare(b.title);
+  });
+
+  return out;
+}
+
 // ─── Global (cross-workspace) ────────────────────────────────────────────────
 
 export type MissionTier = "urgent" | "important" | "later";
@@ -162,6 +178,7 @@ export type GlobalMissionAction = {
   href: string | null;
   priority: number;
   tier: MissionTier;
+  severity?: ModuleAlertSeverity;
   // Workspace-only:
   moduleSlug?: string;
   moduleName?: string;
@@ -201,6 +218,12 @@ export function getActionSourceFromKey(key: string): MissionSource {
   return "workspace";
 }
 
+function tierFromSeverity(sev: ModuleAlertSeverity): MissionTier {
+  if (sev === "critical") return "urgent";
+  if (sev === "warning") return "important";
+  return "later";
+}
+
 export function buildGlobalActions(input: {
   workspaces: Array<{
     orgSlug: string;
@@ -209,6 +232,7 @@ export function buildGlobalActions(input: {
     wsName: string;
     widgetData: WidgetDataMap;
     modules: WorkspaceModule[];
+    moduleAlerts?: WorkspaceAlertsMap;
   }>;
   inbox?: Array<{
     key: string;
@@ -230,8 +254,37 @@ export function buildGlobalActions(input: {
   const all: GlobalMissionAction[] = [];
 
   for (const ws of input.workspaces) {
-    const actions = buildNextActions({ widgetData: ws.widgetData, modules: ws.modules });
-    for (const a of actions) {
+    // 1) Module Alerts (v1.1) — actionable items from each module.
+    const alertActions = buildModuleAlertActions({
+      moduleAlerts: ws.moduleAlerts,
+      modules: ws.modules,
+    });
+    for (const a of alertActions) {
+      const sev = a.severity ?? "info";
+      all.push({
+        key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
+        source: "workspace",
+        title: a.title,
+        description: a.description,
+        href: a.href,
+        priority: a.priority,
+        tier: tierFromSeverity(sev),
+        severity: sev,
+        moduleSlug: a.moduleSlug,
+        moduleName: a.moduleName,
+        orgSlug: ws.orgSlug,
+        orgName: ws.orgName,
+        wsSlug: ws.wsSlug,
+        wsName: ws.wsName,
+      });
+    }
+
+    // 2) Legacy widget-derived info cards (month_revenue etc.) as fallback.
+    const infoActions = buildNextActions({
+      widgetData: ws.widgetData,
+      modules: ws.modules,
+    });
+    for (const a of infoActions) {
       all.push({
         key: `${ws.orgSlug}:${ws.wsSlug}:${a.key}`,
         source: "workspace",

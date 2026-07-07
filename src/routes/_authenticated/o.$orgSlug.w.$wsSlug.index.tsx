@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Blocks } from "lucide-react";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { getWorkspaceWidgetData } from "@/lib/widget-data.functions";
-import { buildNextActions } from "@/lib/mission-actions";
+import { getWorkspaceModuleAlerts } from "@/lib/module-alerts.functions";
+import { buildNextActions, buildModuleAlertActions } from "@/lib/mission-actions";
 import { MissionHeader } from "@/components/platform/mission/MissionHeader";
 import { WorkspaceContextBar } from "@/components/platform/mission/WorkspaceContextBar";
 import { NextActions } from "@/components/platform/mission/NextActions";
@@ -29,7 +30,21 @@ function MissionControl() {
     refetchOnWindowFocus: false,
   });
 
-  const actions = buildNextActions({ widgetData: widgetData.data, modules });
+  const fetchAlerts = useServerFn(getWorkspaceModuleAlerts);
+  const alertsQ = useQuery({
+    queryKey: ["module-alerts", org.id, ws.id],
+    queryFn: () => fetchAlerts({ data: { orgId: org.id, workspaceId: ws.id } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const actions = [
+    ...buildModuleAlertActions({
+      moduleAlerts: alertsQ.data?.alerts,
+      modules,
+    }),
+    ...buildNextActions({ widgetData: widgetData.data, modules }),
+  ];
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">

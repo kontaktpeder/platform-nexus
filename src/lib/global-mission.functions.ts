@@ -5,6 +5,7 @@ import type { WorkspaceModule } from "@/lib/workspaceContext";
 import type { InboxAction } from "@/lib/inbox/types";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import type { UserCommitment } from "@/lib/knowledge/commitment.types";
+import type { WorkspaceAlertsMap } from "@/lib/module-alerts.types";
 
 export type GlobalWorkspaceEntry = {
   orgId: string;
@@ -14,6 +15,8 @@ export type GlobalWorkspaceEntry = {
   wsSlug: string;
   wsName: string;
   widgetData: WidgetDataMap;
+  moduleAlerts: WorkspaceAlertsMap;
+  moduleAlertErrors: Record<string, string>;
   modules: WorkspaceModule[];
 };
 

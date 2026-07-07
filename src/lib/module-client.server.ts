@@ -1,4 +1,5 @@
 // Server-only. Module Contract v1 client.
+import type { ModuleAlert } from "@/lib/module-alerts.types";
 
 export const CONTRACT_VERSION = "1.0";
 
@@ -140,6 +141,30 @@ export async function fetchModuleWidgets(params: {
     throw new ModuleClientError(`Ustøttet contract_version: ${b.contract_version}`);
   }
   return Array.isArray(b.widgets) ? b.widgets : [];
+}
+
+/**
+ * Fetch generic module alerts (Module Contract v1.1 additive endpoint).
+ * A module without /module/alerts returns 404 → treated as empty list.
+ */
+export async function fetchModuleAlerts(params: {
+  baseUrl: string;
+  apiKey: string;
+}): Promise<ModuleAlert[]> {
+  const res = await fetch(
+    `${normalizeBase(params.baseUrl)}/api/public/v1/module/alerts`,
+    { headers: { Authorization: `Bearer ${params.apiKey}` } },
+  );
+  if (res.status === 404) return [];
+  const body = await parseJson(res);
+  if (!res.ok) {
+    throw new ModuleClientError(`Alerts feilet (${res.status})`, res.status, body);
+  }
+  const b = body as { contract_version?: string; alerts?: ModuleAlert[] };
+  if (b.contract_version && b.contract_version !== CONTRACT_VERSION) {
+    throw new ModuleClientError(`Ustøttet contract_version: ${b.contract_version}`);
+  }
+  return Array.isArray(b.alerts) ? b.alerts : [];
 }
 
 /** Full verify-flyt i henhold til Module Contract v1. */

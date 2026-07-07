@@ -19,6 +19,7 @@ import {
   buildGlobalActions,
   buildNextActions,
   buildCommitmentActions,
+  buildModuleAlertActions,
   type GlobalMissionAction,
   type MissionAction,
 } from "@/lib/mission-actions";
@@ -122,11 +123,24 @@ export async function loadMissionSnapshot(
           config: (m.config ?? {}) as Record<string, unknown>,
           connection: connMap.get(m.id) ?? null,
         }));
-        const widgetData = await fetchWorkspaceWidgetData({
-          supabaseAdmin,
-          orgId: ws.org_id as string,
-          workspaceId: ws.id as string,
-        });
+        const { fetchWorkspaceModuleAlerts } = await import(
+          "@/lib/module-alerts.server"
+        );
+        const [widgetData, alertsRes] = await Promise.all([
+          fetchWorkspaceWidgetData({
+            supabaseAdmin,
+            orgId: ws.org_id as string,
+            workspaceId: ws.id as string,
+          }),
+          fetchWorkspaceModuleAlerts({
+            supabaseAdmin,
+            orgId: ws.org_id as string,
+            workspaceId: ws.id as string,
+          }).catch((err) => {
+            console.warn("[module-alerts] workspace fetch failed", err);
+            return { alerts: {}, errors: {} };
+          }),
+        ]);
         return {
           orgId: ws.org_id as string,
           orgSlug: org?.slug ?? "",
@@ -135,6 +149,8 @@ export async function loadMissionSnapshot(
           wsSlug: ws.slug as string,
           wsName: ws.name as string,
           widgetData,
+          moduleAlerts: alertsRes.alerts,
+          moduleAlertErrors: alertsRes.errors,
           modules,
         };
       }),
@@ -164,10 +180,16 @@ export async function loadMissionSnapshot(
   // Derived actions used by both /mission and Context Scan.
   const workspaceActions: Record<string, MissionAction[]> = {};
   for (const ws of entries) {
-    workspaceActions[`${ws.orgSlug}/${ws.wsSlug}`] = buildNextActions({
-      widgetData: ws.widgetData,
-      modules: ws.modules,
-    });
+    workspaceActions[`${ws.orgSlug}/${ws.wsSlug}`] = [
+      ...buildModuleAlertActions({
+        moduleAlerts: ws.moduleAlerts,
+        modules: ws.modules,
+      }),
+      ...buildNextActions({
+        widgetData: ws.widgetData,
+        modules: ws.modules,
+      }),
+    ];
   }
 
   const entityMap: Record<

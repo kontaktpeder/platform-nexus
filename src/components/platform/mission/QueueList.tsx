@@ -112,7 +112,9 @@ function QueueRow({
   const dot = tierDot[action.tier];
   const meta =
     action.source === "workspace"
-      ? [action.orgName, action.wsName].filter(Boolean).join(" · ")
+      ? [action.orgName, action.wsName, action.moduleName]
+          .filter(Boolean)
+          .join(" · ")
       : action.sender || "";
 
   const gmailMessageId =
