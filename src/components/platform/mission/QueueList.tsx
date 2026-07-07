@@ -166,6 +166,7 @@ function QueueRow({
           <span className="truncate text-sm font-medium text-foreground">
             {action.title}
           </span>
+          {action.severity && <SeverityBadge severity={action.severity} />}
           <span className={`h-1.5 w-1.5 flex-none rounded-full ${dot}`} aria-hidden />
         </div>
         {(meta || action.entityName) && (
