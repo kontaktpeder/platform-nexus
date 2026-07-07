@@ -1,4 +1,5 @@
 // Server-only. Module Contract v1 client.
+import type { ModuleAlert } from "@/lib/module-alerts.types";
 
 export const CONTRACT_VERSION = "1.0";
 
