@@ -2,16 +2,14 @@
 import { fetchModuleAlerts } from "@/lib/module-client.server";
 import { decryptSecret } from "@/lib/module-secrets.server";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
-import type { WorkspaceAlertsMap } from "@/lib/module-alerts.types";
+import type {
+  WorkspaceAlertsMap,
+  WorkspaceAlertsResult,
+} from "@/lib/module-alerts.types";
 
 type AdminClient = Awaited<
   typeof import("@/integrations/supabase/client.server")
 >["supabaseAdmin"];
-
-export type WorkspaceAlertsResult = {
-  alerts: WorkspaceAlertsMap;
-  errors: Record<string, string>; // moduleSlug → error message
-};
 
 export async function fetchWorkspaceModuleAlerts(input: {
   supabaseAdmin: AdminClient;
