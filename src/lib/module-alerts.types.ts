@@ -33,3 +33,8 @@ export type WorkspaceAlertsMap = Record<
     connectionHomeUrl: string | null;
   }
 >;
+
+export type WorkspaceAlertsResult = {
+  alerts: WorkspaceAlertsMap;
+  errors: Record<string, string>;
+};
