@@ -139,7 +139,7 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
         { onConflict: "workspace_id,module_id" },
       );
 
-      throw new Error(msg);
+      return { ok: false as const, status: "error" as const, error: msg };
     }
   });
 
@@ -154,6 +154,8 @@ export const retestModuleConnection = createServerFn({ method: "POST" })
 
     await assertOrgAdmin(supabase, data.orgId, userId);
 
+    const { ModuleClientError } = await import("@/lib/module-client.server");
+
     const { data: conn, error } = await supabaseAdmin
       .from("module_connections")
       .select("id, external_org_id, external_base_url, module_slug")
@@ -161,7 +163,7 @@ export const retestModuleConnection = createServerFn({ method: "POST" })
       .eq("org_id", data.orgId)
       .maybeSingle();
     if (error || !conn || !conn.module_slug) {
-      throw new Error("Kobling ikke funnet");
+      return { ok: false as const, error: "Kobling ikke funnet" };
     }
 
     const { data: sec } = await supabaseAdmin
@@ -169,42 +171,65 @@ export const retestModuleConnection = createServerFn({ method: "POST" })
       .select("api_key_ciphertext")
       .eq("connection_id", conn.id)
       .maybeSingle();
-    if (!sec) throw new Error("Ingen lagret verify-nøkkel — koble på nytt med nøkkel");
+    if (!sec) {
+      return {
+        ok: false as const,
+        error: "Ingen lagret verify-nøkkel — koble på nytt med nøkkel",
+      };
+    }
 
     const apiKey = decryptSecret(sec.api_key_ciphertext);
     const now = new Date().toISOString();
 
-    const result = await verifyModuleConnection({
-      baseUrl: conn.external_base_url,
-      expectedModuleSlug: conn.module_slug,
-      externalOrgId: conn.external_org_id,
-      apiKey,
-    });
+    try {
+      const result = await verifyModuleConnection({
+        baseUrl: conn.external_base_url,
+        expectedModuleSlug: conn.module_slug,
+        externalOrgId: conn.external_org_id,
+        apiKey,
+      });
 
-    const snapshot = {
-      module_slug: result.info.module_slug,
-      module_name: result.info.module_name,
-      capabilities: result.info.capabilities ?? [],
-      deep_links: result.info.deep_links ?? { org_home: "/orgs/{org_id}" },
-      widgets: result.info.widgets ?? [],
-      fetched_at: now,
-    };
+      const snapshot = {
+        module_slug: result.info.module_slug,
+        module_name: result.info.module_name,
+        capabilities: result.info.capabilities ?? [],
+        deep_links: result.info.deep_links ?? { org_home: "/orgs/{org_id}" },
+        widgets: result.info.widgets ?? [],
+        fetched_at: now,
+      };
 
-    await supabaseAdmin
-      .from("module_connections")
-      .update({
-        status: "connected",
-        external_org_name: result.orgName,
-        resolved_org_home_url: result.orgHome,
-        module_info_snapshot: snapshot as unknown as import("@/integrations/supabase/types").Json,
-        last_verified_at: now,
-        error_message: null,
-      })
-      .eq("id", conn.id);
+      await supabaseAdmin
+        .from("module_connections")
+        .update({
+          status: "connected",
+          external_org_name: result.orgName,
+          resolved_org_home_url: result.orgHome,
+          module_info_snapshot: snapshot as unknown as import("@/integrations/supabase/types").Json,
+          last_verified_at: now,
+          error_message: null,
+        })
+        .eq("id", conn.id);
 
-    return {
-      ok: true as const,
-      orgName: result.orgName,
-      orgHome: result.orgHome,
-    };
+      return {
+        ok: true as const,
+        orgName: result.orgName,
+        orgHome: result.orgHome,
+      };
+    } catch (e) {
+      const msg =
+        e instanceof ModuleClientError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Retest feilet";
+      await supabaseAdmin
+        .from("module_connections")
+        .update({
+          status: "error",
+          last_verified_at: now,
+          error_message: msg,
+        })
+        .eq("id", conn.id);
+      return { ok: false as const, error: msg };
+    }
   });
