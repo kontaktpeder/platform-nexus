@@ -84,6 +84,32 @@ function GlobalMission() {
 
   const openCommitments = data?.openCommitments ?? [];
 
+  // Aggregate module-alert fetch errors across all workspaces so the user
+  // sees when a module (e.g. Finance) failed to report its status instead of
+  // silently missing from the queue.
+  const moduleFetchErrors = useMemo(() => {
+    const out: Array<{
+      moduleSlug: string;
+      orgName: string;
+      wsName: string;
+      error: string;
+    }> = [];
+    for (const ws of workspaces) {
+      const errs = ws.moduleAlertErrors ?? {};
+      for (const [slug, err] of Object.entries(errs)) {
+        if (!err) continue;
+        out.push({
+          moduleSlug: slug,
+          orgName: ws.orgName,
+          wsName: ws.wsName,
+          error: String(err),
+        });
+      }
+    }
+    return out;
+  }, [workspaces]);
+
+
   const rawActions = useMemo(() => {
     // Build entity map keyed by entity_id for commitment enrichment.
     const entityMap: Record<
