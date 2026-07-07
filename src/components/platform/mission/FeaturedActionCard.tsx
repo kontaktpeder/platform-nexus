@@ -46,6 +46,8 @@ function estimatedMinutes(a: GlobalMissionAction): number {
 
 import { formatOccurredAt } from "@/lib/format-occurred-at";
 import { EntityLinkBadge } from "./EntityLinkBadge";
+import { SeverityBadge } from "./QueueList";
+
 
 export type FeaturedActionCardProps = {
   action: GlobalMissionAction;
@@ -98,8 +100,10 @@ export function FeaturedActionCard({ action, busy, onAction }: FeaturedActionCar
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {src.label}
             </span>
+            {action.severity && <SeverityBadge severity={action.severity} />}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
+
             <span>{formatOccurredAt(action.occurredAt)}</span>
             <RowMenu
               action={action}

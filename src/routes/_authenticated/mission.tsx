@@ -84,6 +84,32 @@ function GlobalMission() {
 
   const openCommitments = data?.openCommitments ?? [];
 
+  // Aggregate module-alert fetch errors across all workspaces so the user
+  // sees when a module (e.g. Finance) failed to report its status instead of
+  // silently missing from the queue.
+  const moduleFetchErrors = useMemo(() => {
+    const out: Array<{
+      moduleSlug: string;
+      orgName: string;
+      wsName: string;
+      error: string;
+    }> = [];
+    for (const ws of workspaces) {
+      const errs = ws.moduleAlertErrors ?? {};
+      for (const [slug, err] of Object.entries(errs)) {
+        if (!err) continue;
+        out.push({
+          moduleSlug: slug,
+          orgName: ws.orgName,
+          wsName: ws.wsName,
+          error: String(err),
+        });
+      }
+    }
+    return out;
+  }, [workspaces]);
+
+
   const rawActions = useMemo(() => {
     // Build entity map keyed by entity_id for commitment enrichment.
     const entityMap: Record<
@@ -326,6 +352,33 @@ function GlobalMission() {
         )}
 
         <ReviewInboxTeaser />
+
+        {moduleFetchErrors.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800">
+            <p className="font-medium">
+              Kunne ikke hente {moduleFetchErrors.length === 1 ? "status" : "status for noen moduler"}
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs text-amber-800/80">
+              {moduleFetchErrors.map((e, i) => {
+                const modLabel =
+                  e.moduleSlug.charAt(0).toUpperCase() + e.moduleSlug.slice(1);
+                return (
+                  <li key={`${e.moduleSlug}-${e.orgName}-${e.wsName}-${i}`}>
+                    Kunne ikke hente {modLabel}-status
+                    {(e.orgName || e.wsName) && (
+                      <span className="opacity-70">
+                        {" "}· {[e.orgName, e.wsName].filter(Boolean).join(" / ")}
+                      </span>
+                    )}
+                    <span className="ml-1 opacity-60">— {e.error}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+
 
 
 
