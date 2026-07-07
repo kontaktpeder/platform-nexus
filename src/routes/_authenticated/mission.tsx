@@ -353,6 +353,33 @@ function GlobalMission() {
 
         <ReviewInboxTeaser />
 
+        {moduleFetchErrors.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800">
+            <p className="font-medium">
+              Kunne ikke hente {moduleFetchErrors.length === 1 ? "status" : "status for noen moduler"}
+            </p>
+            <ul className="mt-1 space-y-0.5 text-xs text-amber-800/80">
+              {moduleFetchErrors.map((e, i) => {
+                const modLabel =
+                  e.moduleSlug.charAt(0).toUpperCase() + e.moduleSlug.slice(1);
+                return (
+                  <li key={`${e.moduleSlug}-${e.orgName}-${e.wsName}-${i}`}>
+                    Kunne ikke hente {modLabel}-status
+                    {(e.orgName || e.wsName) && (
+                      <span className="opacity-70">
+                        {" "}· {[e.orgName, e.wsName].filter(Boolean).join(" / ")}
+                      </span>
+                    )}
+                    <span className="ml-1 opacity-60">— {e.error}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+
+
 
 
 
