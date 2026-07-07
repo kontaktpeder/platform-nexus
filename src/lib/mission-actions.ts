@@ -42,52 +42,13 @@ type Rule = {
   build: (display: string) => { title: string; description: string } | null;
 };
 
+/**
+ * NOTE: Finance / Work action-rules were removed as of Module Contract v1.1.
+ * Actionable items now come from `/module/alerts` per module and are built
+ * via `buildModuleAlertActions`. Info-only widget cards remain here as a
+ * fallback until every module publishes alerts.
+ */
 const RULES: Rule[] = [
-  {
-    moduleSlug: "finance",
-    widgetId: "unpaid_invoices",
-    priority: 1,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const n = parseCount(display);
-      if (n <= 0) return null;
-      return {
-        title: "Review unpaid invoices",
-        description: `${display} open invoice${n === 1 ? "" : "s"} need attention`,
-      };
-    },
-  },
-  {
-    moduleSlug: "work",
-    widgetId: "today_hours",
-    priority: 2,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const h = parseHours(display);
-      if (h <= 0) return null;
-      return {
-        title: "Review today's logged hours",
-        description: `${display} logged today`,
-      };
-    },
-  },
-  {
-    moduleSlug: "work",
-    widgetId: "active_projects",
-    priority: 3,
-    kind: "action",
-    deepLinkKey: "org_home",
-    build: (display) => {
-      const n = parseCount(display);
-      if (n <= 0) return null;
-      return {
-        title: "Open active projects",
-        description: `${display} active project${n === 1 ? "" : "s"}`,
-      };
-    },
-  },
   {
     moduleSlug: "finance",
     widgetId: "month_revenue",
