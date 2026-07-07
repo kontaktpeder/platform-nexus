@@ -180,10 +180,16 @@ export async function loadMissionSnapshot(
   // Derived actions used by both /mission and Context Scan.
   const workspaceActions: Record<string, MissionAction[]> = {};
   for (const ws of entries) {
-    workspaceActions[`${ws.orgSlug}/${ws.wsSlug}`] = buildNextActions({
-      widgetData: ws.widgetData,
-      modules: ws.modules,
-    });
+    workspaceActions[`${ws.orgSlug}/${ws.wsSlug}`] = [
+      ...buildModuleAlertActions({
+        moduleAlerts: ws.moduleAlerts,
+        modules: ws.modules,
+      }),
+      ...buildNextActions({
+        widgetData: ws.widgetData,
+        modules: ws.modules,
+      }),
+    ];
   }
 
   const entityMap: Record<
