@@ -122,11 +122,24 @@ export async function loadMissionSnapshot(
           config: (m.config ?? {}) as Record<string, unknown>,
           connection: connMap.get(m.id) ?? null,
         }));
-        const widgetData = await fetchWorkspaceWidgetData({
-          supabaseAdmin,
-          orgId: ws.org_id as string,
-          workspaceId: ws.id as string,
-        });
+        const { fetchWorkspaceModuleAlerts } = await import(
+          "@/lib/module-alerts.server"
+        );
+        const [widgetData, alertsRes] = await Promise.all([
+          fetchWorkspaceWidgetData({
+            supabaseAdmin,
+            orgId: ws.org_id as string,
+            workspaceId: ws.id as string,
+          }),
+          fetchWorkspaceModuleAlerts({
+            supabaseAdmin,
+            orgId: ws.org_id as string,
+            workspaceId: ws.id as string,
+          }).catch((err) => {
+            console.warn("[module-alerts] workspace fetch failed", err);
+            return { alerts: {}, errors: {} };
+          }),
+        ]);
         return {
           orgId: ws.org_id as string,
           orgSlug: org?.slug ?? "",
@@ -135,6 +148,8 @@ export async function loadMissionSnapshot(
           wsSlug: ws.slug as string,
           wsName: ws.name as string,
           widgetData,
+          moduleAlerts: alertsRes.alerts,
+          moduleAlertErrors: alertsRes.errors,
           modules,
         };
       }),
