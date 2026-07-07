@@ -19,6 +19,8 @@ import type {
   MissionSource,
   MissionTier,
 } from "@/lib/mission-actions";
+import type { ModuleAlertSeverity } from "@/lib/module-alerts.types";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
