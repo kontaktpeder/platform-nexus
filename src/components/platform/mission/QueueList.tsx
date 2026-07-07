@@ -45,6 +45,36 @@ const tierDot: Record<MissionTier, string> = {
   later: "bg-blue-500",
 };
 
+const severityMeta: Record<
+  ModuleAlertSeverity,
+  { label: string; className: string }
+> = {
+  critical: {
+    label: "Kritisk",
+    className: "border-red-500/30 bg-red-500/10 text-red-600",
+  },
+  warning: {
+    label: "Bør sjekkes",
+    className: "border-amber-500/30 bg-amber-500/10 text-amber-700",
+  },
+  info: {
+    label: "Info",
+    className: "border-blue-500/30 bg-blue-500/10 text-blue-600",
+  },
+};
+
+export function SeverityBadge({ severity }: { severity: ModuleAlertSeverity }) {
+  const m = severityMeta[severity];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${m.className}`}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+
 const INITIAL = 3;
 
 export type QueueListProps = {
