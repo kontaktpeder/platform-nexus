@@ -2,6 +2,10 @@ import type { WidgetDataMap } from "@/lib/widget-data.functions";
 import type { WorkspaceModule } from "@/lib/workspaceContext";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
 import { parseModuleInfoSnapshot, resolveWidgetHref } from "@/lib/module-registry";
+import type {
+  ModuleAlertSeverity,
+  WorkspaceAlertsMap,
+} from "@/lib/module-alerts.types";
 
 export type MissionAction = {
   key: string;
@@ -12,6 +16,7 @@ export type MissionAction = {
   href: string | null;
   priority: number;
   kind: "action" | "info";
+  severity?: ModuleAlertSeverity;
 };
 
 export function parseCount(display: string | undefined): number {
