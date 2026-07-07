@@ -19,6 +19,7 @@ import {
   buildGlobalActions,
   buildNextActions,
   buildCommitmentActions,
+  buildModuleAlertActions,
   type GlobalMissionAction,
   type MissionAction,
 } from "@/lib/mission-actions";
