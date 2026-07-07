@@ -115,6 +115,56 @@ export function buildNextActions(input: {
   return [...primary, ...info].slice(0, 3);
 }
 
+// ─── Module Alerts (Module Contract v1.1) ────────────────────────────────────
+
+const SEVERITY_ORDER: Record<ModuleAlertSeverity, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
+
+const SEVERITY_PRIORITY: Record<ModuleAlertSeverity, number> = {
+  critical: 1,
+  warning: 3,
+  info: 8,
+};
+
+export function buildModuleAlertActions(input: {
+  moduleAlerts: WorkspaceAlertsMap | undefined;
+  modules: WorkspaceModule[];
+}): MissionAction[] {
+  const { moduleAlerts, modules } = input;
+  if (!moduleAlerts) return [];
+
+  const out: MissionAction[] = [];
+  for (const [key, alert] of Object.entries(moduleAlerts)) {
+    const mod = modules.find((m) => m.slug === alert.moduleSlug);
+    const moduleName = mod?.name ?? alert.moduleName ?? alert.moduleSlug;
+    const href = alert.action_url ?? alert.connectionHomeUrl ?? null;
+    out.push({
+      key,
+      moduleSlug: alert.moduleSlug,
+      moduleName,
+      title: alert.title,
+      description: alert.description ?? "",
+      href,
+      priority: alert.priority ?? SEVERITY_PRIORITY[alert.severity],
+      kind: alert.severity === "info" ? "info" : "action",
+      severity: alert.severity,
+    });
+  }
+
+  out.sort((a, b) => {
+    const sa = SEVERITY_ORDER[a.severity ?? "info"];
+    const sb = SEVERITY_ORDER[b.severity ?? "info"];
+    if (sa !== sb) return sa - sb;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.title.localeCompare(b.title);
+  });
+
+  return out;
+}
+
 // ─── Global (cross-workspace) ────────────────────────────────────────────────
 
 export type MissionTier = "urgent" | "important" | "later";
@@ -128,6 +178,7 @@ export type GlobalMissionAction = {
   href: string | null;
   priority: number;
   tier: MissionTier;
+  severity?: ModuleAlertSeverity;
   // Workspace-only:
   moduleSlug?: string;
   moduleName?: string;
