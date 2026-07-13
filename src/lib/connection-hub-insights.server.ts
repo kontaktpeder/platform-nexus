@@ -21,6 +21,7 @@ function cellFromItem(item: ConnectionHubItem | undefined): ConnectionMatrixCell
 }
 
 import {
+  moduleOrgsLikelySame,
   orgNamesAlign,
 } from "@/lib/connection-hub-names.server";
 
@@ -144,24 +145,23 @@ export function detectConnectionGaps(input: {
       work?.status === "connected" &&
       finance.externalOrgId &&
       work.externalOrgId &&
-      finance.externalOrgId !== work.externalOrgId
+      !moduleOrgsLikelySame(finance, work)
     ) {
       gaps.push({
         severity: "error",
         title: `Finance og Work peker på ulike org i ${ws.name}`,
-        description: `Finance → ${finance.externalOrgName ?? finance.externalOrgId}. Work → ${work.externalOrgName ?? work.externalOrgId}. De bør normalt være samme organisasjon.`,
+        description: `Finance → ${finance.externalOrgName ?? finance.externalOrgId}. Work → ${work.externalOrgName ?? work.externalOrgId}. Navnene bør peke på samme selskap.`,
         actionHref: modulesHref,
         platform: null,
       });
     }
 
-    const linkedToSameExternalOrg =
+    const financeWorkAligned =
       finance?.status === "connected" &&
       work?.status === "connected" &&
-      !!finance.externalOrgId &&
-      finance.externalOrgId === work.externalOrgId;
+      moduleOrgsLikelySame(finance, work);
 
-    if (finance?.status === "connected" && finance.externalOrgName && !linkedToSameExternalOrg) {
+    if (finance?.status === "connected" && finance.externalOrgName && !financeWorkAligned) {
       if (!orgNamesAlign(input.org, finance.externalOrgName)) {
         gaps.push({
           severity: "info",
@@ -173,7 +173,7 @@ export function detectConnectionGaps(input: {
       }
     }
 
-    if (work?.status === "connected" && work.externalOrgName && !linkedToSameExternalOrg) {
+    if (work?.status === "connected" && work.externalOrgName && !financeWorkAligned) {
       if (!orgNamesAlign(input.org, work.externalOrgName)) {
         gaps.push({
           severity: "info",

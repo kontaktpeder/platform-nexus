@@ -21,6 +21,20 @@ export function namesRoughlyMatch(a: string, b: string): boolean {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
+/** Finance and Work each have their own org UUID — compare names, not IDs. */
+export function moduleOrgsLikelySame(
+  a: { externalOrgId: string | null; externalOrgName: string | null },
+  b: { externalOrgId: string | null; externalOrgName: string | null },
+): boolean {
+  if (a.externalOrgId && b.externalOrgId && a.externalOrgId === b.externalOrgId) {
+    return true;
+  }
+  if (a.externalOrgName?.trim() && b.externalOrgName?.trim()) {
+    return namesRoughlyMatch(a.externalOrgName, b.externalOrgName);
+  }
+  return false;
+}
+
 export function orgNamesAlign(
   platform: { name: string; slug: string },
   externalName: string | null | undefined,
