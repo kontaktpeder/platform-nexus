@@ -291,9 +291,12 @@ export type SavedGmailDraft = {
 
 function buildMultipartRaw(opts: {
   to: string;
+  cc?: string;
   subject: string;
   body: string;
   attachment: { filename: string; mimeType: string; data: Uint8Array };
+  inReplyTo?: string;
+  references?: string;
 }): string {
   const boundary = `mission_${Date.now().toString(36)}`;
   const textPart = [
@@ -314,9 +317,17 @@ function buildMultipartRaw(opts: {
     attachmentB64,
   ].join("\r\n");
 
+  const subject =
+    opts.inReplyTo && !opts.subject.toLowerCase().startsWith("re:")
+      ? `Re: ${opts.subject}`
+      : opts.subject;
+
   const mime = [
     `To: ${opts.to}`,
-    `Subject: ${opts.subject}`,
+    ...(opts.cc?.trim() ? [`Cc: ${opts.cc}`] : []),
+    `Subject: ${subject}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
     "MIME-Version: 1.0",
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     "",
@@ -337,9 +348,13 @@ export type SentGmailMessage = {
 
 export async function sendGmailWithAttachment(opts: {
   to: string;
+  cc?: string;
   subject: string;
   body: string;
   attachment: { filename: string; mimeType: string; data: Uint8Array };
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string;
 }): Promise<SentGmailMessage> {
   const { apiKey, lovableKey } = gmailKeys();
   const raw = buildMultipartRaw(opts);
@@ -347,7 +362,7 @@ export async function sendGmailWithAttachment(opts: {
     `/users/me/messages/send`,
     apiKey,
     lovableKey,
-    { raw },
+    { raw, ...(opts.threadId ? { threadId: opts.threadId } : {}) },
   );
   return { messageId: sent.id, threadId: sent.threadId };
 }

@@ -233,3 +233,77 @@ export const retestModuleConnection = createServerFn({ method: "POST" })
       return { ok: false as const, error: msg };
     }
   });
+
+const SaveInvoicesKeyInput = z.object({
+  orgId: z.string().uuid(),
+  connectionId: z.string().uuid(),
+  invoices_api_key: z.string().min(20),
+});
+
+export const saveModuleInvoicesApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SaveInvoicesKeyInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { encryptSecret } = await import("@/lib/module-secrets.server");
+
+    await assertOrgAdmin(supabase, data.orgId, userId);
+
+    const { data: conn } = await supabaseAdmin
+      .from("module_connections")
+      .select("id, external_base_url, module_slug, status")
+      .eq("id", data.connectionId)
+      .eq("org_id", data.orgId)
+      .maybeSingle();
+    if (!conn || conn.module_slug !== "finance") {
+      throw new Error("Finance-kobling ikke funnet");
+    }
+    if (conn.status !== "connected") {
+      throw new Error("Koble Finance med verify-nøkkel først");
+    }
+
+    const { data: sec } = await supabaseAdmin
+      .from("module_connection_secrets")
+      .select("connection_id")
+      .eq("connection_id", data.connectionId)
+      .maybeSingle();
+    if (!sec) throw new Error("Ingen lagret verify-nøkkel — koble modul først");
+
+    const apiKey = data.invoices_api_key.trim();
+    const base = conn.external_base_url.replace(/\/+$/, "");
+    const test = await fetch(`${base}/api/public/v1/invoices?limit=1`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!test.ok) {
+      const text = await test.text().catch(() => "");
+      throw new Error(
+        test.status === 403
+          ? "Nøkkelen mangler invoices:read"
+          : `Kunne ikke verifisere faktura-nøkkel (${test.status})${text ? `: ${text.slice(0, 120)}` : ""}`,
+      );
+    }
+
+    const { error } = await supabaseAdmin
+      .from("module_connection_secrets")
+      .update({ invoices_api_key_ciphertext: encryptSecret(apiKey) })
+      .eq("connection_id", data.connectionId);
+    if (error) throw new Error(error.message);
+
+    return { ok: true as const };
+  });
+
+export const getModuleInvoicesKeyStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ orgId: z.string().uuid(), connectionId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: sec } = await supabaseAdmin
+      .from("module_connection_secrets")
+      .select("invoices_api_key_ciphertext")
+      .eq("connection_id", data.connectionId)
+      .maybeSingle();
+    return { hasInvoicesKey: !!sec?.invoices_api_key_ciphertext };
+  });

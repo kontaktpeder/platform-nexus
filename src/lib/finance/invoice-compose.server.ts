@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { InvoiceStoryline } from "@/lib/finance/invoice-storyline.server";
+import type { GmailThreadSuggestion } from "@/lib/inbox/gmail-thread.server";
+import { formatEmailList } from "@/lib/email-recipients";
 
 type DB = SupabaseClient<Database>;
 
@@ -20,6 +22,9 @@ export type InvoiceComposeContext = {
   storyline: InvoiceStoryline;
   defaultSubject: string;
   defaultTo: string;
+  defaultCc: string;
+  replyThread: GmailThreadSuggestion | null;
+  useReplyInThread: boolean;
 };
 
 function defaultSubject(
@@ -73,6 +78,14 @@ export async function loadInvoiceComposeContext(input: {
 
   const { filename } = await fetchFinanceInvoicePdf(fin, input.invoiceId);
 
+  const { findInvoiceReplyThread } = await import("@/lib/inbox/gmail-thread.server");
+  const replyThread = invoice.customer_email
+    ? await findInvoiceReplyThread({
+        anchorEmail: invoice.customer_email,
+        nameHints: ["bernhard", "vår", "vaar", "sicily"],
+      }).catch(() => null)
+    : null;
+
   const summary = {
     id: invoice.id,
     invoice_number: invoice.invoice_number,
@@ -83,14 +96,22 @@ export async function loadInvoiceComposeContext(input: {
     issue_date: invoice.issue_date,
   };
 
+  const defaultTo =
+    replyThread && replyThread.participantEmails.length > 0
+      ? formatEmailList(replyThread.participantEmails)
+      : invoice.customer_email;
+
   return {
     invoice: summary,
     orgName: fin.orgName,
     orgSlug: fin.orgSlug,
     pdfFilename: filename,
     storyline,
-    defaultSubject: defaultSubject(summary, storyline.escalationLevel),
-    defaultTo: invoice.customer_email,
+    defaultSubject: replyThread?.subject ?? defaultSubject(summary, storyline.escalationLevel),
+    defaultTo,
+    defaultCc: "",
+    replyThread,
+    useReplyInThread: !!replyThread,
   };
 }
 

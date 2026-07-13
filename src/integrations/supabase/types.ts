@@ -430,18 +430,21 @@ export type Database = {
           api_key_ciphertext: string
           connection_id: string
           created_at: string
+          invoices_api_key_ciphertext: string | null
           updated_at: string
         }
         Insert: {
           api_key_ciphertext: string
           connection_id: string
           created_at?: string
+          invoices_api_key_ciphertext?: string | null
           updated_at?: string
         }
         Update: {
           api_key_ciphertext?: string
           connection_id?: string
           created_at?: string
+          invoices_api_key_ciphertext?: string | null
           updated_at?: string
         }
         Relationships: [

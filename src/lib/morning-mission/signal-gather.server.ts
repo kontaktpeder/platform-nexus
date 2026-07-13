@@ -86,7 +86,7 @@ async function unpaidInvoiceSignals(input: {
       subject: count === 1 ? "1 ubetalt faktura" : `${count} ubetalte fakturaer`,
       from: `Finance · ${input.ws.orgName}`,
       snippet:
-        "Finance-nøkkelen trenger invoices:read for Send purring fra Mission. Oppdater verify-nøkkel i Moduler.",
+        "Finance-nøkkelen trenger invoices:read. Lim inn faktura-nøkkel under Moduler → Finance.",
       occurred_at: null,
       href: invoicesHref,
       tags: ["unpaid_invoice", "finance_widget", "warning"],

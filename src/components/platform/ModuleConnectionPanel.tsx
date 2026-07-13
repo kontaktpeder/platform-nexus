@@ -15,6 +15,7 @@ import {
 import {
   useRetestModuleConnection,
   useVerifyAndSaveModuleConnection,
+  useSaveModuleInvoicesApiKey,
 } from "@/lib/module-verify.hooks";
 
 type Props = {
@@ -66,12 +67,14 @@ export function ModuleConnectionPanel({
   const [externalOrgId, setExternalOrgId] = useState(connection?.external_org_id ?? "");
   const [baseUrl, setBaseUrl] = useState(connection?.external_base_url ?? "");
   const [verifyApiKey, setVerifyApiKey] = useState("");
+  const [invoicesApiKey, setInvoicesApiKey] = useState("");
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
 
   const verify = useVerifyAndSaveModuleConnection(orgSlug, wsSlug);
   const retest = useRetestModuleConnection(orgSlug, wsSlug);
+  const saveInvoicesKey = useSaveModuleInvoicesApiKey(orgSlug, wsSlug);
 
   const disconnect = useMutation({
     mutationFn: async () => {
@@ -137,7 +140,25 @@ export function ModuleConnectionPanel({
   const isConnected = connection?.status === "connected";
   const openUrl = connection ? resolveModuleOpenUrl(connection) : null;
   const lastVerified = formatTime(connection?.last_verified_at);
-  const busy = verify.isPending || retest.isPending || disconnect.isPending;
+  const busy = verify.isPending || retest.isPending || disconnect.isPending || saveInvoicesKey.isPending;
+
+  const onSaveInvoicesKey = async () => {
+    if (!connection) return;
+    try {
+      await saveInvoicesKey.mutateAsync({
+        data: {
+          orgId,
+          connectionId: connection.id,
+          invoices_api_key: invoicesApiKey.trim(),
+        },
+      });
+      toast.success("Faktura-nøkkel lagret — Send purring i Mission er klar");
+      setInvoicesApiKey("");
+      invalidate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke lagre faktura-nøkkel");
+    }
+  };
 
   return (
     <div className="mt-3 flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
@@ -170,10 +191,11 @@ export function ModuleConnectionPanel({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Opprett en verify-nøkkel i {moduleName} med scope{" "}
+        Verify-nøkkel trenger scope{" "}
         <code className="font-mono">platform:read</code> +{" "}
-        <code className="font-mono">platform:verify</code>. Nøkkelen lagres kryptert server-side og
-        vises aldri i klienten.
+        <code className="font-mono">platform:verify</code>. For Send purring fra Mission kan du
+        legge inn en egen Finance-nøkkel med <code className="font-mono">invoices:read</code>{" "}
+        nedenfor — du trenger ikke lage én kombinert nøkkel.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -219,6 +241,45 @@ export function ModuleConnectionPanel({
           />
         </div>
       </div>
+
+      {moduleSlug === "finance" && isConnected && canEdit && (
+        <div className="rounded-lg border border-border/50 bg-background/60 p-3">
+          <p className="text-xs font-medium">Faktura-nøkkel for Mission (valgfritt)</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Lim inn «Gold of Sicily integration»-nøkkelen din med{" "}
+            <code className="font-mono">invoices:read</code>. Verify-nøkkelen over endres ikke.
+          </p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Label htmlFor={`inv-key-${moduleId}`} className="sr-only">
+                Faktura-nøkkel
+              </Label>
+              <Input
+                id={`inv-key-${moduleId}`}
+                type="password"
+                autoComplete="off"
+                value={invoicesApiKey}
+                onChange={(e) => setInvoicesApiKey(e.target.value)}
+                placeholder="fc_live_... (invoices:read)"
+                disabled={busy}
+                className="font-mono text-xs"
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onSaveInvoicesKey}
+              disabled={busy || invoicesApiKey.trim().length < 20}
+            >
+              {saveInvoicesKey.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Lagre faktura-nøkkel"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {canEdit && (
         <div className="flex flex-wrap gap-2">

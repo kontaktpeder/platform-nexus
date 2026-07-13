@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   retestModuleConnection,
   verifyAndSaveModuleConnection,
+  saveModuleInvoicesApiKey,
 } from "./module-verify.functions";
 
 export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string) {
@@ -17,6 +18,16 @@ export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string
 
 export function useRetestModuleConnection(orgSlug: string, wsSlug: string) {
   const fn = useServerFn(retestModuleConnection);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+  });
+}
+
+export function useSaveModuleInvoicesApiKey(orgSlug: string, wsSlug: string) {
+  const fn = useServerFn(saveModuleInvoicesApiKey);
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,

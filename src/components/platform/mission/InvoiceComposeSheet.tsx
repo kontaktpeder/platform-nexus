@@ -15,12 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   getInvoiceComposeContext,
   generateInvoiceEmailDraft,
   sendInvoiceEmail,
 } from "@/lib/invoice-compose.functions";
 import type { InvoiceComposeContext } from "@/lib/finance/invoice-compose.server";
+import { formatEmailList, parseEmailList } from "@/lib/email-recipients";
 
 export type InvoiceComposeSheetProps = {
   open: boolean;
@@ -46,9 +48,11 @@ export function InvoiceComposeSheet({
   const [ctx, setCtx] = useState<InvoiceComposeContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [to, setTo] = useState("");
+  const [cc, setCc] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [instruction, setInstruction] = useState("");
+  const [replyInThread, setReplyInThread] = useState(true);
   const [confirmSend, setConfirmSend] = useState(false);
 
   useEffect(() => {
@@ -65,7 +69,9 @@ export function InvoiceComposeSheet({
         if (cancelled) return;
         setCtx(result);
         setTo(result.defaultTo);
+        setCc(result.defaultCc);
         setSubject(result.defaultSubject);
+        setReplyInThread(result.useReplyInThread);
       })
       .catch((e) => {
         toast.error(e instanceof Error ? e.message : "Kunne ikke laste faktura");
@@ -86,6 +92,7 @@ export function InvoiceComposeSheet({
           invoiceId,
           orgSlug,
           to,
+          cc: cc.trim() || undefined,
           subject,
           instruction: instruction.trim() || undefined,
         },
@@ -98,7 +105,19 @@ export function InvoiceComposeSheet({
   const send = useMutation({
     mutationFn: () =>
       doSend({
-        data: { invoiceId, orgSlug, to, subject, body, briefItemId },
+        data: {
+          invoiceId,
+          orgSlug,
+          to,
+          cc: cc.trim() || undefined,
+          subject,
+          body,
+          briefItemId,
+          replyInThread: replyInThread && !!ctx?.replyThread,
+          threadId: ctx?.replyThread?.threadId,
+          inReplyTo: ctx?.replyThread?.rfcMessageId,
+          references: ctx?.replyThread?.references,
+        },
       }),
     onSuccess: () => {
       toast.success("E-post sendt");
@@ -109,13 +128,19 @@ export function InvoiceComposeSheet({
       toast.error(e instanceof Error ? e.message : "Kunne ikke sende e-post"),
   });
 
+  function addRecipient(email: string) {
+    const current = parseEmailList(to);
+    if (current.includes(email.toLowerCase())) return;
+    setTo(formatEmailList([...current, email]));
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="font-heading text-lg">Send purring fra Mission</SheetTitle>
           <SheetDescription>
-            Forhåndsvis utkastet her. PDF fra Finance legges ved automatisk når du sender.
+            Legg til flere mottakere og svar i samme tråd. PDF vedlegges når du sender.
           </SheetDescription>
         </SheetHeader>
 
@@ -133,36 +158,66 @@ export function InvoiceComposeSheet({
                 {ctx.invoice.customer_name} ·{" "}
                 {ctx.invoice.invoice_number ? `#${ctx.invoice.invoice_number}` : "faktura"}
               </p>
-              <p className="mt-1 text-muted-foreground">
-                {ctx.storyline.entityName && (
-                  <span className="block">Kontekst: {ctx.storyline.entityName}</span>
-                )}
-                Beløp: {Math.round(ctx.invoice.total).toLocaleString("nb-NO")} kr
-                {ctx.invoice.due_date && (
-                  <span>
-                    {" "}
-                    · Forfall{" "}
-                    {new Date(ctx.invoice.due_date).toLocaleDateString("nb-NO")}
-                  </span>
-                )}
-              </p>
-              {ctx.storyline.events.length > 0 && (
-                <ul className="mt-3 space-y-1 border-t border-border/60 pt-2 text-xs text-muted-foreground">
-                  {ctx.storyline.events.slice(0, 5).map((e, i) => (
-                    <li key={i}>
-                      {e.at ? new Date(e.at).toLocaleDateString("nb-NO") : "?"} — {e.label}
-                      {e.source === "gmail" && e.snippet ? `: ${e.snippet.slice(0, 60)}` : ""}
-                    </li>
-                  ))}
-                </ul>
+              {ctx.replyThread && (
+                <p className="mt-2 rounded-md bg-background/80 px-2 py-1.5 text-xs text-muted-foreground">
+                  Fant tråd: {ctx.replyThread.label}
+                </p>
               )}
             </section>
 
             <div className="space-y-3">
+              {ctx.replyThread && (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={replyInThread}
+                    onCheckedChange={(v) => setReplyInThread(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">Svar i samme Gmail-tråd</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      E-posten havner i lenken du har hatt med Vår, Bernhard og andre i tråden.
+                    </span>
+                  </span>
+                </label>
+              )}
+
               <div className="space-y-1">
-                <Label htmlFor="inv-to">Til</Label>
-                <Input id="inv-to" value={to} onChange={(e) => setTo(e.target.value)} />
+                <Label htmlFor="inv-to">Til (flere adresser med komma)</Label>
+                <Input
+                  id="inv-to"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder="faktura@kunde.no, bernhard@..., vaar@..."
+                  className="font-mono text-xs"
+                />
+                {ctx.replyThread && ctx.replyThread.participantEmails.length > 1 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {ctx.replyThread.participantEmails.map((email) => (
+                      <button
+                        key={email}
+                        type="button"
+                        className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted"
+                        onClick={() => addRecipient(email)}
+                      >
+                        + {email}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="inv-cc">Kopi (valgfritt)</Label>
+                <Input
+                  id="inv-cc"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  placeholder="epost@eksempel.no, ..."
+                  className="font-mono text-xs"
+                />
+              </div>
+
               <div className="space-y-1">
                 <Label htmlFor="inv-subject">Emne</Label>
                 <Input
@@ -171,6 +226,7 @@ export function InvoiceComposeSheet({
                   onChange={(e) => setSubject(e.target.value)}
                 />
               </div>
+
               <div className="space-y-1">
                 <Label htmlFor="inv-instruction">Ekstra instruks (valgfritt)</Label>
                 <Input
@@ -195,6 +251,7 @@ export function InvoiceComposeSheet({
                   Generer forslag
                 </Button>
               </div>
+
               <div className="space-y-1">
                 <Label htmlFor="inv-body">Forhåndsvisning</Label>
                 <Textarea
@@ -205,6 +262,7 @@ export function InvoiceComposeSheet({
                   placeholder="Generer forslag, eller skriv selv."
                 />
               </div>
+
               <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
                 <Paperclip className="h-3.5 w-3.5" />
                 Vedlegg: {ctx.pdfFilename}
@@ -217,7 +275,7 @@ export function InvoiceComposeSheet({
                 Forhåndsvisning før sending
               </div>
               <p className="mt-1 text-muted-foreground">
-                Sjekk mottaker, emne og tekst. E-posten sendes fra din Gmail når du bekrefter.
+                Sjekk mottakere, emne og tekst. Ingenting sendes før du trykker Send nå.
               </p>
             </section>
           </>

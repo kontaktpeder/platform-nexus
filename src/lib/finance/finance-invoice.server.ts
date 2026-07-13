@@ -1,5 +1,4 @@
 // Server-only Finance invoice API via module connection.
-import { decryptSecret } from "@/lib/module-secrets.server";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
 
 type AdminClient = Awaited<
@@ -19,7 +18,11 @@ export type FinanceInvoiceSummary = {
 
 export type FinanceConnectionContext = {
   connection: ModuleConnectionRow;
+  /** Platform verify key (widgets, module endpoints). */
   apiKey: string;
+  /** invoices:read key — separate from verify when configured. */
+  invoicesApiKey: string;
+  hasInvoicesKey: boolean;
   orgSlug: string;
   orgName: string;
   workspaceId: string;
@@ -97,14 +100,20 @@ export async function resolveFinanceConnection(input: {
 
   const { data: sec } = await input.supabaseAdmin
     .from("module_connection_secrets")
-    .select("api_key_ciphertext")
+    .select("api_key_ciphertext, invoices_api_key_ciphertext")
     .eq("connection_id", conn.id)
     .maybeSingle();
-  if (!sec) return null;
+  if (!sec?.api_key_ciphertext) return null;
+
+  const { getModuleConnectionSecrets } = await import("@/lib/module-connection-secrets.server");
+  const secrets = await getModuleConnectionSecrets(input.supabaseAdmin, conn.id as string);
+  if (!secrets) return null;
 
   return {
     connection: conn as ModuleConnectionRow,
-    apiKey: decryptSecret(sec.api_key_ciphertext),
+    apiKey: secrets.verifyApiKey,
+    invoicesApiKey: secrets.invoicesApiKey,
+    hasInvoicesKey: secrets.hasInvoicesKey,
     orgSlug: orgs.slug as string,
     orgName: orgs.name as string,
     workspaceId,
@@ -117,7 +126,7 @@ export async function listUnpaidFinanceInvoices(
 ): Promise<FinanceInvoiceSummary[]> {
   const res = await financeFetch<{ data?: FinanceInvoiceSummary[] }>(
     ctx.connection.external_base_url,
-    ctx.apiKey,
+    ctx.invoicesApiKey,
     "/api/public/v1/invoices?status=sent&limit=20",
   );
   return (res.data ?? []).map((inv) => ({
@@ -138,7 +147,7 @@ export async function fetchFinanceInvoice(
 ): Promise<FinanceInvoiceSummary> {
   const res = await financeFetch<{ data?: FinanceInvoiceSummary }>(
     ctx.connection.external_base_url,
-    ctx.apiKey,
+    ctx.invoicesApiKey,
     `/api/public/v1/invoices/${encodeURIComponent(invoiceId)}`,
   );
   if (!res.data) throw new Error("Faktura ikke funnet");
@@ -160,7 +169,7 @@ export async function fetchFinanceInvoicePdf(
 ): Promise<{ filename: string; bytes: Uint8Array }> {
   const res = await fetch(
     `${normalizeBase(ctx.connection.external_base_url)}/api/public/v1/invoices/${encodeURIComponent(invoiceId)}/pdf`,
-    { headers: { Authorization: `Bearer ${ctx.apiKey}` } },
+    { headers: { Authorization: `Bearer ${ctx.invoicesApiKey}` } },
   );
   if (!res.ok) throw new Error("Kunne ikke hente faktura-PDF");
   const buf = new Uint8Array(await res.arrayBuffer());

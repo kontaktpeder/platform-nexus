@@ -6,6 +6,12 @@ import {
   formatNok,
   loadInvoiceComposeContext,
 } from "@/lib/finance/invoice-compose.server";
+import { isValidEmailList, parseEmailList, formatEmailList } from "@/lib/email-recipients";
+
+const emailListSchema = z
+  .string()
+  .min(3)
+  .refine(isValidEmailList, { message: "Ugyldig e-postliste" });
 
 const ComposeInput = z.object({
   invoiceId: z.string().uuid(),
@@ -27,7 +33,8 @@ export const getInvoiceComposeContext = createServerFn({ method: "POST" })
 const GenerateInput = z.object({
   invoiceId: z.string().uuid(),
   orgSlug: z.string().min(1),
-  to: z.string().email(),
+  to: emailListSchema,
+  cc: z.string().optional(),
   subject: z.string().max(300),
   instruction: z.string().max(800).optional(),
 });
@@ -85,10 +92,15 @@ export const generateInvoiceEmailDraft = createServerFn({ method: "POST" })
 const SendInput = z.object({
   invoiceId: z.string().uuid(),
   orgSlug: z.string().min(1),
-  to: z.string().email(),
+  to: emailListSchema,
+  cc: z.string().optional(),
   subject: z.string().min(1).max(300),
   body: z.string().min(1).max(20000),
   briefItemId: z.string().optional(),
+  replyInThread: z.boolean().optional(),
+  threadId: z.string().optional(),
+  inReplyTo: z.string().optional(),
+  references: z.string().optional(),
 });
 
 export const sendInvoiceEmail = createServerFn({ method: "POST" })
@@ -109,8 +121,12 @@ export const sendInvoiceEmail = createServerFn({ method: "POST" })
     if (!fin) throw new Error("Finance er ikke koblet.");
 
     const pdf = await fetchFinanceInvoicePdf(fin, data.invoiceId);
+    const toHeader = formatEmailList(parseEmailList(data.to));
+    const ccHeader = data.cc?.trim() ? formatEmailList(parseEmailList(data.cc)) : undefined;
+
     const sent = await sendGmailWithAttachment({
-      to: data.to,
+      to: toHeader,
+      cc: ccHeader,
       subject: data.subject,
       body: data.body,
       attachment: {
@@ -118,6 +134,9 @@ export const sendInvoiceEmail = createServerFn({ method: "POST" })
         mimeType: "application/pdf",
         data: pdf.bytes,
       },
+      threadId: data.replyInThread ? data.threadId : undefined,
+      inReplyTo: data.replyInThread ? data.inReplyTo : undefined,
+      references: data.replyInThread ? data.references : undefined,
     });
 
     const ctx = await loadInvoiceComposeContext({
