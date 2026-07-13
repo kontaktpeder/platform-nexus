@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, ExternalLink, Link2, Loader2, RefreshCw, Unlink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
   useVerifyAndSaveModuleConnection,
   useSaveModuleInvoicesApiKey,
 } from "@/lib/module-verify.hooks";
+import { getFinanceInvoicesAccess } from "@/lib/module-verify.functions";
 
 type Props = {
   orgId: string;
@@ -75,6 +77,16 @@ export function ModuleConnectionPanel({
   const verify = useVerifyAndSaveModuleConnection(orgSlug, wsSlug);
   const retest = useRetestModuleConnection(orgSlug, wsSlug);
   const saveInvoicesKey = useSaveModuleInvoicesApiKey(orgSlug, wsSlug);
+  const fetchInvoicesAccess = useServerFn(getFinanceInvoicesAccess);
+  const invoicesAccess = useQuery({
+    enabled: moduleSlug === "finance" && !!connection?.id && connection.status === "connected",
+    queryKey: ["finance-invoices-access", connection?.id],
+    queryFn: () =>
+      fetchInvoicesAccess({
+        data: { orgId, connectionId: connection!.id },
+      }),
+    staleTime: 60_000,
+  });
 
   const disconnect = useMutation({
     mutationFn: async () => {
@@ -191,11 +203,10 @@ export function ModuleConnectionPanel({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Verify-nøkkel trenger scope{" "}
-        <code className="font-mono">platform:read</code> +{" "}
-        <code className="font-mono">platform:verify</code>. For Send purring fra Mission kan du
-        legge inn en egen Finance-nøkkel med <code className="font-mono">invoices:read</code>{" "}
-        nedenfor — du trenger ikke lage én kombinert nøkkel.
+        Verify-nøkkel trenger scope <code className="font-mono">platform:read</code> +{" "}
+        <code className="font-mono">platform:verify</code>. For Send purring fra Mission trenger
+        nøkkelen også <code className="font-mono">invoices:read</code> — enten på verify-nøkkelen
+        eller som egen faktura-nøkkel nedenfor.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -242,42 +253,53 @@ export function ModuleConnectionPanel({
         </div>
       </div>
 
-      {moduleSlug === "finance" && isConnected && canEdit && (
+      {moduleSlug === "finance" && isConnected && (
         <div className="rounded-lg border border-border/50 bg-background/60 p-3">
-          <p className="text-xs font-medium">Faktura-nøkkel for Mission (valgfritt)</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Lim inn «Gold of Sicily integration»-nøkkelen din med{" "}
-            <code className="font-mono">invoices:read</code>. Verify-nøkkelen over endres ikke.
-          </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <Label htmlFor={`inv-key-${moduleId}`} className="sr-only">
-                Faktura-nøkkel
-              </Label>
-              <Input
-                id={`inv-key-${moduleId}`}
-                type="password"
-                autoComplete="off"
-                value={invoicesApiKey}
-                onChange={(e) => setInvoicesApiKey(e.target.value)}
-                placeholder="fc_live_... (invoices:read)"
-                disabled={busy}
-                className="font-mono text-xs"
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onSaveInvoicesKey}
-              disabled={busy || invoicesApiKey.trim().length < 20}
-            >
-              {saveInvoicesKey.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Lagre faktura-nøkkel"
+          {invoicesAccess.data?.invoicesCapable ? (
+            <p className="text-xs text-emerald-700 dark:text-emerald-400">
+              Faktura-tilgang OK — verify-nøkkelen har <code className="font-mono">invoices:read</code>.
+              Egen faktura-nøkkel er ikke nødvendig.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs font-medium">Faktura-nøkkel for Mission</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Verify-nøkkelen mangler <code className="font-mono">invoices:read</code>. Lim inn en
+                nøkkel med det scopet her, eller oppdater verify-nøkkelen over og test på nytt.
+              </p>
+              {canEdit && (
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="min-w-0 flex-1">
+                    <Label htmlFor={`inv-key-${moduleId}`} className="sr-only">
+                      Faktura-nøkkel
+                    </Label>
+                    <Input
+                      id={`inv-key-${moduleId}`}
+                      type="password"
+                      autoComplete="off"
+                      value={invoicesApiKey}
+                      onChange={(e) => setInvoicesApiKey(e.target.value)}
+                      placeholder="fc_live_... (invoices:read)"
+                      disabled={busy}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={onSaveInvoicesKey}
+                    disabled={busy || invoicesApiKey.trim().length < 20}
+                  >
+                    {saveInvoicesKey.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Lagre faktura-nøkkel"
+                    )}
+                  </Button>
+                </div>
               )}
-            </Button>
-          </div>
+            </>
+          )}
         </div>
       )}
 

@@ -25,7 +25,7 @@ function moduleStatus(
   platform: HubPlatformId,
   enabled: boolean,
   connection: ModuleConnectionRow | null,
-  hasInvoicesKey: boolean,
+  invoicesCapable: boolean,
 ): { status: HubStatus; detail: string | null } {
   if (!enabled) {
     return { status: "disabled", detail: "Modulen er ikke slått på for denne arbeidsflaten." };
@@ -37,10 +37,11 @@ function moduleStatus(
     };
   }
   if (connection.status === "connected") {
-    if (platform === "finance" && !hasInvoicesKey) {
+    if (platform === "finance" && !invoicesCapable) {
       return {
         status: "partial",
-        detail: "Koblet, men faktura-nøkkel for Mission mangler (invoices:read).",
+        detail:
+          "Koblet, men verify-nøkkelen mangler invoices:read — legg til scope eller egen faktura-nøkkel.",
       };
     }
     return {
@@ -69,13 +70,13 @@ function buildWorkspaceItem(input: {
   ws: WorkspaceRow;
   enabled: boolean;
   connection: ModuleConnectionRow | null;
-  hasInvoicesKey: boolean;
+  invoicesCapable: boolean;
 }): ConnectionHubItem {
   const { status, detail } = moduleStatus(
     input.platform,
     input.enabled,
     input.connection,
-    input.hasInvoicesKey,
+    input.invoicesCapable,
   );
   return {
     platform: input.platform,
@@ -169,7 +170,7 @@ export async function buildOrgConnectionHub(input: {
   modules: ModuleRow[];
   enabled: EnabledRow[];
   connections: ModuleConnectionRow[];
-  invoicesKeyByConnectionId: Map<string, boolean>;
+  invoicesCapableByConnectionId: Map<string, boolean>;
   slackChannelRuleCount: number;
 }): Promise<ConnectionHubResponse> {
   const connectable = input.modules.filter((m) => isConnectableModule(m.status as "available"));
@@ -196,8 +197,8 @@ export async function buildOrgConnectionHub(input: {
           ws,
           enabled: enabledSet.has(key),
           connection: conn,
-          hasInvoicesKey: conn
-            ? (input.invoicesKeyByConnectionId.get(conn.id) ?? false)
+          invoicesCapable: conn
+            ? (input.invoicesCapableByConnectionId.get(conn.id) ?? false)
             : false,
         }),
       );

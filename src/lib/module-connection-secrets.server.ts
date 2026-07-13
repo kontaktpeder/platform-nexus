@@ -30,3 +30,31 @@ export async function getModuleConnectionSecrets(
 
   return { verifyApiKey, invoicesApiKey, hasInvoicesKey };
 }
+
+/** True when GET /invoices succeeds with the effective invoices key (verify or separate). */
+export async function probeFinanceInvoicesApi(
+  baseUrl: string,
+  apiKey: string,
+): Promise<boolean> {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/api/public/v1/invoices?limit=1`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function financeInvoicesCapable(
+  supabaseAdmin: AdminClient,
+  connection: { id: string; external_base_url: string; module_slug?: string | null; status: string },
+): Promise<boolean> {
+  if (connection.module_slug !== "finance" || connection.status !== "connected") {
+    return false;
+  }
+  const secrets = await getModuleConnectionSecrets(supabaseAdmin, connection.id);
+  if (!secrets) return false;
+  return probeFinanceInvoicesApi(connection.external_base_url, secrets.invoicesApiKey);
+}

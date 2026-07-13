@@ -293,6 +293,41 @@ export const saveModuleInvoicesApiKey = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const getFinanceInvoicesAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ orgId: z.string().uuid(), connectionId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { financeInvoicesCapable, getModuleConnectionSecrets } = await import(
+      "@/lib/module-connection-secrets.server"
+    );
+
+    await assertOrgAdmin(context.supabase, data.orgId, context.userId);
+
+    const { data: conn } = await supabaseAdmin
+      .from("module_connections")
+      .select("id, external_base_url, module_slug, status")
+      .eq("id", data.connectionId)
+      .eq("org_id", data.orgId)
+      .maybeSingle();
+    if (!conn) throw new Error("Kobling ikke funnet");
+
+    const secrets = await getModuleConnectionSecrets(supabaseAdmin, data.connectionId);
+    const invoicesCapable = await financeInvoicesCapable(supabaseAdmin, {
+      id: conn.id,
+      external_base_url: conn.external_base_url,
+      module_slug: conn.module_slug,
+      status: conn.status,
+    });
+
+    return {
+      invoicesCapable,
+      hasSeparateInvoicesKey: secrets?.hasInvoicesKey ?? false,
+    };
+  });
+
 export const getModuleInvoicesKeyStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>

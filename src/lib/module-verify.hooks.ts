@@ -14,6 +14,7 @@ export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
       void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+      void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
     },
   });
 }
@@ -26,6 +27,7 @@ export function useRetestModuleConnection(orgSlug: string, wsSlug: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
       void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+      void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
     },
   });
 }
@@ -38,6 +40,7 @@ export function useSaveModuleInvoicesApiKey(orgSlug: string, wsSlug: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
       void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+      void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
     },
   });
 }

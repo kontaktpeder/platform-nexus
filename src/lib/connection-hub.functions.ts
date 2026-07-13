@@ -53,18 +53,23 @@ export const getOrgConnectionHub = createServerFn({ method: "POST" })
     ]);
 
     const connectionIds = (connections ?? []).map((c) => c.id as string);
-    const invoicesKeyByConnectionId = new Map<string, boolean>();
-    if (connectionIds.length > 0) {
-      const { data: secrets } = await supabaseAdmin
-        .from("module_connection_secrets")
-        .select("connection_id, invoices_api_key_ciphertext")
-        .in("connection_id", connectionIds);
-      for (const s of secrets ?? []) {
-        invoicesKeyByConnectionId.set(
-          s.connection_id as string,
-          !!s.invoices_api_key_ciphertext,
-        );
-      }
+    const invoicesCapableByConnectionId = new Map<string, boolean>();
+    const financeConnections = (connections ?? []).filter(
+      (c) => c.module_slug === "finance" && c.status === "connected",
+    );
+    if (financeConnections.length > 0) {
+      const { financeInvoicesCapable } = await import("@/lib/module-connection-secrets.server");
+      await Promise.all(
+        financeConnections.map(async (conn) => {
+          const capable = await financeInvoicesCapable(supabaseAdmin, {
+            id: conn.id as string,
+            external_base_url: conn.external_base_url as string,
+            module_slug: conn.module_slug as string,
+            status: conn.status as string,
+          });
+          invoicesCapableByConnectionId.set(conn.id as string, capable);
+        }),
+      );
     }
 
     return buildOrgConnectionHub({
@@ -77,7 +82,7 @@ export const getOrgConnectionHub = createServerFn({ method: "POST" })
         enabled: boolean;
       }>,
       connections: (connections ?? []) as import("@/lib/module-connections").ModuleConnectionRow[],
-      invoicesKeyByConnectionId,
+      invoicesCapableByConnectionId,
       slackChannelRuleCount: slackChannelRuleCount ?? 0,
     });
   });
