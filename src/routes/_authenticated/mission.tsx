@@ -166,7 +166,7 @@ function GlobalMission() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TopBar title="Mission" />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
         <GlobalMissionHeader
           firstName={firstName}
           count={activeCount}
