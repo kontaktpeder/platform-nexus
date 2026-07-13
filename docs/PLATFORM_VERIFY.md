@@ -9,7 +9,7 @@ Platform Core kobler et workspace til en ekstern modul-organisasjon i henhold ti
 2. Admin fyller inn:
    - **Ekstern organisasjon-ID** (UUID i modulen)
    - **Base URL** (f.eks. `https://financecore.lovable.app`)
-   - **Verify-nøkkel** (`fc_live_...` / `wc_live_...`), scope: `platform:read` + `platform:verify`
+   - **Verify-nøkkel** (`fc_live_...` / `wc_live_...`), scope: `platform:read` + `platform:verify` + `invoices:read` (siste kreves for Send purring fra Mission)
 3. **«Test og lagre kobling»** kaller `verifyAndSaveModuleConnection` (ServerFn):
    - `GET /api/public/v1/module/health` — sjekker `status: ok` og `module_slug`
    - `GET /api/public/v1/module/info` — henter deep links
