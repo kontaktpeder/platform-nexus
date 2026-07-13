@@ -113,7 +113,11 @@ async function buildMorningMission(
   const { listMissionHints } = await import("@/lib/mission-hints.server");
 
   const workspaces = await loadWorkspacesForUser(supabase, userId);
-  const { signals: allSignals, slackStatus } = await gatherMorningSignals({ workspaces, userId });
+  const { signals: allSignals, slackStatus } = await gatherMorningSignals({
+    workspaces,
+    userId,
+    forceSlack: true,
+  });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
   const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
@@ -167,9 +171,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
       null;
 
     const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
-    const { listMissionHints } = await import("@/lib/mission-hints.server");
     const actionStates = await listMissionActionStates(supabase, userId);
-    const hints = await listMissionHints(supabase, userId);
 
     let cached = data?.force ? null : await getCachedBrief(supabase, userId, briefDate);
     const fromCache = !!cached;
@@ -194,19 +196,12 @@ export const getMorningMission = createServerFn({ method: "POST" })
       };
     }
 
-    const { applyTrustRules } = await import("@/lib/morning-mission/morning-mission-trust.server");
-    const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
-    const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
-    const workspaces = await loadWorkspacesForUser(supabase, userId);
-    const { signals: allSignals, slackStatus } = await gatherMorningSignals({ workspaces, userId });
-    const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
-    const trusted = applyTrustRules(cached.payload, forAi, userEmail);
-    const filtered = filterPayloadByStates(trusted, actionStates);
+    const filtered = filterPayloadByStates(cached.payload, actionStates);
 
     return {
       briefDate,
       generatedAt: cached.generated_at,
-      payload: { ...filtered, slack_status: slackStatus },
+      payload: filtered,
       sourceSignalIds: cached.source_signal_ids,
       fromCache,
     };

@@ -4,6 +4,13 @@ import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import { isSameOsloWeek, isSlackTsThisWeek, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/slack/api";
+const SLACK_CACHE_MS = 5 * 60_000;
+const DM_CHANNEL_LIMIT = 8;
+const MENTION_LIMIT = 15;
+
+type SlackFetchResult = { signals: MissionSignal[]; status: SlackMissionStatus };
+
+let slackCache: { at: number; result: SlackFetchResult } | null = null;
 
 type SlackResp<T> = T & { ok: boolean; error?: string };
 
@@ -60,10 +67,50 @@ function slackStatusBase(connected: boolean): SlackMissionStatus {
   };
 }
 
-export async function fetchSlackMissionSignals(): Promise<{
-  signals: MissionSignal[];
-  status: SlackMissionStatus;
-}> {
+function buildStatusMessage(signals: MissionSignal[]): Pick<SlackMissionStatus, "message" | "suggestion"> {
+  const activity = signals.length;
+  const mentionCount = signals.filter((s) => s.tags.includes("slack_mention")).length;
+  const dmCount = signals.filter((s) => s.tags.includes("slack_dm")).length;
+
+  if (activity === 0) {
+    return {
+      message: "Slack: Ingen mentions eller DM-er denne uken.",
+      suggestion:
+        "Du har kanskje ikke mottatt ukeplan fra organisasjonen ennå — ingen har nevnt deg eller sendt DM siden mandag.",
+    };
+  }
+
+  const parts: string[] = [];
+  if (mentionCount > 0) parts.push(`${mentionCount} ${mentionCount === 1 ? "mention" : "mentions"}`);
+  if (dmCount > 0) parts.push(`${dmCount} ${dmCount === 1 ? "DM" : "DM-er"}`);
+  return { message: `Slack: ${parts.join(" og ")} denne uken.`, suggestion: null };
+}
+
+async function resolveDisplayNames(
+  userIds: string[],
+  shared: { apiKey: string; lovableKey: string },
+  cache: Map<string, string>,
+): Promise<void> {
+  const missing = userIds.filter((id) => id && !cache.has(id));
+  await Promise.all(
+    missing.map(async (userId) => {
+      try {
+        const info = await slackCall<{
+          user: { profile?: { display_name?: string; real_name?: string }; name?: string };
+        }>("users.info", {
+          ...shared,
+          query: `user=${encodeURIComponent(userId)}`,
+        });
+        const p = info.user.profile;
+        cache.set(userId, p?.display_name || p?.real_name || info.user.name || userId);
+      } catch {
+        cache.set(userId, userId);
+      }
+    }),
+  );
+}
+
+async function fetchSlackMissionSignalsUncached(): Promise<SlackFetchResult> {
   const apiKey = process.env.SLACK_API_KEY;
   const lovableKey = process.env.LOVABLE_API_KEY;
   const weekNumber = parseInt(
@@ -89,39 +136,19 @@ export async function fetchSlackMissionSignals(): Promise<{
   const signals: MissionSignal[] = [];
   const errors: string[] = [];
   const weekStart = osloWeekStartUnix();
+  const nameCache = new Map<string, string>();
 
   try {
     const me = await slackCall<AuthTest>("auth.test", shared);
     const teamHome = me.url?.replace(/\/$/, "") ?? "https://slack.com";
-    const nameCache = new Map<string, string>();
 
-    async function displayName(userId: string): Promise<string> {
-      if (nameCache.has(userId)) return nameCache.get(userId)!;
-      try {
-        const info = await slackCall<{
-          user: { profile?: { display_name?: string; real_name?: string }; name?: string };
-        }>("users.info", {
-          ...shared,
-          query: `user=${encodeURIComponent(userId)}`,
-        });
-        const p = info.user.profile;
-        const name = p?.display_name || p?.real_name || info.user.name || userId;
-        nameCache.set(userId, name);
-        return name;
-      } catch {
-        return userId;
-      }
-    }
-
-    // Mentions — only this week
-    try {
-      const search = await slackCall<{
+    const [mentionResult, dmListResult] = await Promise.allSettled([
+      slackCall<{
         results?: {
           messages?: {
             items?: Array<{
               text?: string;
               ts: string;
-              thread_ts?: string;
               channel?: { id: string; name?: string };
               user?: string;
             }>;
@@ -135,117 +162,102 @@ export async function fetchSlackMissionSignals(): Promise<{
           channel_types: ["public_channel", "private_channel", "mpim", "im"],
           sort: "timestamp",
           sort_dir: "desc",
-          limit: 30,
+          limit: MENTION_LIMIT,
         },
-      });
-      const items = search.results?.messages?.items ?? [];
+      }),
+      slackCall<{ channels: Channel[] }>("conversations.list", {
+        ...shared,
+        query: "types=im&limit=30",
+      }),
+    ]);
+
+    // Mentions — only this week
+    if (mentionResult.status === "fulfilled") {
+      const items = mentionResult.value.results?.messages?.items ?? [];
+      const weekItems = items.filter((it) => it.ts && isSlackTsThisWeek(it.ts) && it.channel?.id);
+      const userIds = weekItems.map((it) => it.user).filter(Boolean) as string[];
+      await resolveDisplayNames(userIds, shared, nameCache);
+
       const seen = new Set<string>();
-      for (const it of items) {
-        if (!isSlackTsThisWeek(it.ts)) continue;
-        const channelId = it.channel?.id ?? "";
-        if (!channelId) continue;
+      for (const it of weekItems) {
+        const channelId = it.channel!.id;
         const key = `${channelId}:${it.ts}`;
         if (seen.has(key)) continue;
         seen.add(key);
-
         const ch = channelLabel(it.channel?.name);
-        const sender = it.user ? await displayName(it.user) : "Ukjent";
-        const snippet = (it.text ?? "").slice(0, 200);
+        const sender = it.user ? (nameCache.get(it.user) ?? "Ukjent") : "Ukjent";
         signals.push({
           id: `slack:mention:${channelId}:${it.ts}`,
           source: "slack",
           subject: `${ch}: nevnt av ${sender}`,
           from: `Slack · ${ch}`,
-          snippet,
+          snippet: (it.text ?? "").slice(0, 200),
           occurred_at: slackTsToIso(it.ts),
           href: `${teamHome}/archives/${channelId}/p${it.ts.replace(".", "")}`,
           tags: ["slack_mention", "slack_week"],
-          meta: {
-            channel_id: channelId,
-            channel_name: it.channel?.name ?? null,
-            ts: it.ts,
-            kind: "mention",
-          },
+          meta: { channel_id: channelId, channel_name: it.channel?.name ?? null, ts: it.ts, kind: "mention" },
         });
       }
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : "mention search failed");
+    } else {
+      errors.push(
+        mentionResult.reason instanceof Error ? mentionResult.reason.message : "mention search failed",
+      );
     }
 
-    // DMs — messages from others this week
-    try {
-      const dms = await slackCall<{ channels: Channel[] }>("conversations.list", {
-        ...shared,
-        query: "types=im&limit=50",
-      });
-      const seenDm = new Set<string>();
-      for (const channel of (dms.channels ?? []).slice(0, 20)) {
-        try {
-          const query = new URLSearchParams({
-            channel: channel.id,
-            limit: "20",
-            oldest: String(weekStart),
-          });
-          const hist = await slackCall<{ messages: HistoryMsg[] }>("conversations.history", {
+    // DMs — parallel history per channel (capped)
+    if (dmListResult.status === "fulfilled") {
+      const dmChannels = (dmListResult.value.channels ?? []).slice(0, DM_CHANNEL_LIMIT);
+      const dmUserIds = dmChannels.map((c) => c.user).filter(Boolean) as string[];
+      await resolveDisplayNames(dmUserIds, shared, nameCache);
+
+      const dmHistories = await Promise.allSettled(
+        dmChannels.map((channel) =>
+          slackCall<{ messages: HistoryMsg[] }>("conversations.history", {
             ...shared,
-            query: query.toString(),
+            query: new URLSearchParams({
+              channel: channel.id,
+              limit: "10",
+              oldest: String(weekStart),
+            }).toString(),
+          }).then((hist) => ({ channel, hist })),
+        ),
+      );
+
+      const seenDm = new Set<string>();
+      for (const result of dmHistories) {
+        if (result.status !== "fulfilled") continue;
+        const { channel, hist } = result.value;
+        const senderName = channel.user ? (nameCache.get(channel.user) ?? "DM") : "DM";
+        for (const m of hist.messages ?? []) {
+          if (!m.ts || !isSlackTsThisWeek(m.ts)) continue;
+          if (m.user === me.user_id) continue;
+          const text = (m.text ?? "").trim();
+          if (!text) continue;
+          const key = `${channel.id}:${m.ts}`;
+          if (seenDm.has(key)) continue;
+          seenDm.add(key);
+          signals.push({
+            id: `slack:dm:${channel.id}:${m.ts}`,
+            source: "slack",
+            subject: `DM fra ${senderName}`,
+            from: "Slack · DM",
+            snippet: text.slice(0, 200),
+            occurred_at: slackTsToIso(m.ts),
+            href: `${teamHome}/messages/${channel.id}`,
+            tags: ["slack_dm", "slack_week"],
+            meta: { channel_id: channel.id, ts: m.ts, kind: "dm" },
           });
-          const senderName = channel.user ? await displayName(channel.user) : "DM";
-          for (const m of hist.messages ?? []) {
-            if (!m.ts || !isSlackTsThisWeek(m.ts)) continue;
-            if (m.user === me.user_id) continue;
-            const text = (m.text ?? "").trim();
-            if (!text) continue;
-            const key = `${channel.id}:${m.ts}`;
-            if (seenDm.has(key)) continue;
-            seenDm.add(key);
-            signals.push({
-              id: `slack:dm:${channel.id}:${m.ts}`,
-              source: "slack",
-              subject: `DM fra ${senderName}`,
-              from: "Slack · DM",
-              snippet: text.slice(0, 200),
-              occurred_at: slackTsToIso(m.ts),
-              href: `${teamHome}/messages/${channel.id}`,
-              tags: ["slack_dm", "slack_week"],
-              meta: {
-                channel_id: channel.id,
-                ts: m.ts,
-                kind: "dm",
-              },
-            });
-          }
-        } catch {
-          // skip this DM channel
         }
       }
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : "dm list failed");
-    }
-
-    const activity = signals.length;
-    const mentionCount = signals.filter((s) => s.tags.includes("slack_mention")).length;
-    const dmCount = signals.filter((s) => s.tags.includes("slack_dm")).length;
-
-    let message: string;
-    let suggestion: string | null = null;
-
-    if (activity === 0) {
-      message = "Slack: Ingen mentions eller DM-er denne uken.";
-      suggestion =
-        "Du har kanskje ikke mottatt ukeplan fra organisasjonen ennå — ingen har nevnt deg eller sendt DM siden mandag.";
     } else {
-      const parts: string[] = [];
-      if (mentionCount > 0) {
-        parts.push(`${mentionCount} ${mentionCount === 1 ? "mention" : "mentions"}`);
-      }
-      if (dmCount > 0) {
-        parts.push(`${dmCount} ${dmCount === 1 ? "DM" : "DM-er"}`);
-      }
-      message = `Slack: ${parts.join(" og ")} denne uken.`;
+      errors.push(dmListResult.reason instanceof Error ? dmListResult.reason.message : "dm list failed");
     }
 
-    if (errors.length > 0 && activity === 0) {
+    const statusMsg = buildStatusMessage(signals);
+    let message = statusMsg.message;
+    let suggestion = statusMsg.suggestion;
+
+    if (errors.length > 0 && signals.length === 0) {
       message = "Slack: Kunne ikke lese aktivitet denne uken.";
       suggestion = errors[0] ?? "Sjekk Slack-tilkoblingen i Lovable Cloud.";
     }
@@ -254,8 +266,8 @@ export async function fetchSlackMissionSignals(): Promise<{
       signals,
       status: {
         connected: true,
-        read_ok: errors.length === 0 || activity > 0,
-        activity_this_week: activity,
+        read_ok: errors.length === 0 || signals.length > 0,
+        activity_this_week: signals.length,
         week_number: weekNumber,
         message,
         suggestion,
@@ -277,6 +289,18 @@ export async function fetchSlackMissionSignals(): Promise<{
   }
 }
 
+export async function fetchSlackMissionSignals(opts?: {
+  force?: boolean;
+}): Promise<SlackFetchResult> {
+  const now = Date.now();
+  if (!opts?.force && slackCache && now - slackCache.at < SLACK_CACHE_MS) {
+    return slackCache.result;
+  }
+  const result = await fetchSlackMissionSignalsUncached();
+  slackCache = { at: now, result };
+  return result;
+}
+
 /** Drop AI items that claim Slack without a matching slack signal id. */
 export function stripHallucinatedSlackItems<T extends { source_ids: string[]; source_label?: string | null }>(
   items: T[],
@@ -296,11 +320,8 @@ export function stripHallucinatedSlackItems<T extends { source_ids: string[]; so
   });
 }
 
-/** Prefer this_week items that actually come from slack signals. */
 export function slackSignalsThisWeek(signals: MissionSignal[]): MissionSignal[] {
-  return signals.filter(
-    (s) => s.source === "slack" && isSameOsloWeek(s.occurred_at),
-  );
+  return signals.filter((s) => s.source === "slack" && isSameOsloWeek(s.occurred_at));
 }
 
 export function ensureSlackWeeklyItems(

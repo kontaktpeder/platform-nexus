@@ -63,7 +63,6 @@ async function unpaidInvoiceSignals(input: {
     console.warn("[morning-mission] Finance invoices API failed, trying widget fallback:", msg);
   }
 
-  // Fallback: widget only needs platform:read (verify key default scopes).
   const { fetchWorkspaceWidgetData } = await import("@/lib/widget-data.server");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const widgetData = await fetchWorkspaceWidgetData({
@@ -127,48 +126,55 @@ export function moduleAlertsToSignals(input: {
   return out;
 }
 
-export async function gatherMorningSignals(input: {
-  workspaces: MorningWorkspaceInput[];
-  userId: string;
-}): Promise<{
-  signals: MissionSignal[];
-  slackStatus: import("@/lib/morning-mission.types").SlackMissionStatus;
-}> {
-  const gmail = (await fetchRecentGmailSignals({ hours: 72, max: 40 })).map(gmailToSignal);
-
+async function gatherWorkspaceSignals(
+  workspaces: MorningWorkspaceInput[],
+  userId: string,
+): Promise<MissionSignal[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { resolveFinanceConnection } = await import("@/lib/finance/finance-invoice.server");
 
-  const moduleSignals: MissionSignal[] = [];
-  const financeInvoiceSignals: MissionSignal[] = [];
-
-  const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
-  const { signals: slackSignals, status: slackStatus } = await fetchSlackMissionSignals();
-
-  for (const ws of input.workspaces) {
-    moduleSignals.push(
-      ...moduleAlertsToSignals({
+  const perWs = await Promise.all(
+    workspaces.map(async (ws) => {
+      const module = moduleAlertsToSignals({
         orgName: ws.orgName,
         orgSlug: ws.orgSlug,
         wsName: ws.wsName,
         moduleAlerts: ws.moduleAlerts ?? {},
-      }),
-    );
+      });
+      const fin = await resolveFinanceConnection({
+        supabaseAdmin,
+        userId,
+        orgSlug: ws.orgSlug,
+      }).catch(() => null);
+      if (!fin) return module;
+      const unpaid = await unpaidInvoiceSignals({ ws, fin });
+      return [...module, ...unpaid];
+    }),
+  );
 
-    const { resolveFinanceConnection } = await import("@/lib/finance/finance-invoice.server");
-    const fin = await resolveFinanceConnection({
-      supabaseAdmin,
-      userId: input.userId,
-      orgSlug: ws.orgSlug,
-    }).catch(() => null);
+  return perWs.flat();
+}
 
-    if (!fin) continue;
+export async function gatherMorningSignals(input: {
+  workspaces: MorningWorkspaceInput[];
+  userId: string;
+  forceSlack?: boolean;
+}): Promise<{
+  signals: MissionSignal[];
+  slackStatus: import("@/lib/morning-mission.types").SlackMissionStatus;
+}> {
+  const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
 
-    const unpaid = await unpaidInvoiceSignals({ ws, fin });
-    financeInvoiceSignals.push(...unpaid);
-  }
+  const [gmailRaw, slackResult, workspaceSignals] = await Promise.all([
+    fetchRecentGmailSignals({ hours: 72, max: 40 }),
+    fetchSlackMissionSignals({ force: input.forceSlack }),
+    gatherWorkspaceSignals(input.workspaces, input.userId),
+  ]);
+
+  const gmail = gmailRaw.map(gmailToSignal);
 
   return {
-    signals: [...gmail, ...slackSignals, ...moduleSignals, ...financeInvoiceSignals],
-    slackStatus,
+    signals: [...gmail, ...slackResult.signals, ...workspaceSignals],
+    slackStatus: slackResult.status,
   };
 }
