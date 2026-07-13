@@ -11,7 +11,7 @@ import {
   listAuthProviders,
 } from "@/lib/auth-helpers";
 import { clearPasswordRecoveryPending } from "@/lib/auth-recovery";
-import { TopBar } from "@/components/platform/TopBar";
+import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +89,7 @@ function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar title="Settings" subtitle="Account" />
+      <GlobalTopBar title="Meg" subtitle="Konto og innstillinger" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
         <section className="surface-card p-5">
           <h2 className="font-heading text-base font-semibold">Konto</h2>

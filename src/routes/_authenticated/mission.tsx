@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { TopBar } from "@/components/platform/TopBar";
+import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { GlobalMissionHeader } from "@/components/platform/mission/GlobalMissionHeader";
 import { MorningMissionView } from "@/components/platform/mission/MorningMissionView";
@@ -165,7 +165,7 @@ function GlobalMission() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar title="Mission" />
+      <GlobalTopBar title="Dagens plan" subtitle="AI-morgenbrief på tvers av alt" />
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
         <GlobalMissionHeader
           firstName={firstName}
@@ -244,7 +244,7 @@ function ReviewInboxTeaser() {
         </div>
         <div>
           <p className="font-medium">AI trenger gjennomgang</p>
-          <p className="text-xs text-muted-foreground">{total} forslag venter i /review</p>
+          <p className="text-xs text-muted-foreground">{total} forslag venter i Innboks</p>
         </div>
       </div>
       <span className="text-xs text-muted-foreground">Åpne →</span>

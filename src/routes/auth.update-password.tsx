@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { listAuthProviders } from "@/lib/auth-helpers";
+import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import {
   bootstrapPasswordRecoverySession,
   clearPasswordRecoveryPending,
@@ -131,7 +132,8 @@ function UpdatePasswordPage() {
       });
 
       clearPasswordRecoveryPending();
-      navigate({ to: "/mission", replace: true });
+      const target = getAuthenticatedHomeTarget();
+      navigate({ to: target.to, params: target.params, replace: true });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Kunne ikke oppdatere passord");
     } finally {

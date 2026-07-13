@@ -1,7 +1,7 @@
 function greeting(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "God morgen";
+  if (hour < 18) return "God ettermiddag";
+  return "God kveld";
 }
 
 function osloHour(): number {
@@ -26,14 +26,12 @@ export function MissionHeader({ orgName, wsName }: { orgName: string; wsName: st
   return (
     <section className="mb-4">
       <div className="text-xs uppercase tracking-wider text-muted-foreground">{date}</div>
-      <h1 className="mt-1 font-heading text-2xl font-bold">
-        {hello}
-      </h1>
+      <h1 className="mt-1 font-heading text-2xl font-bold">{hello}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         <span className="font-medium text-foreground">{orgName}</span> · {wsName}
       </p>
       <p className="mt-2 text-sm text-muted-foreground">
-        Here is what needs your attention today.
+        Dette trenger oppmerksomhet i arbeidsflaten.
       </p>
     </section>
   );

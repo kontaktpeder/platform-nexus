@@ -57,7 +57,7 @@ function WorkspaceShell() {
         <div className="flex min-h-screen flex-col bg-background">
           <TopBar
             title={data.ws.name}
-            subtitle={data.org.name}
+            subtitle={`${data.org.name} · arbeidsflate`}
             back={{ to: "/o/$orgSlug", params: { orgSlug } }}
           />
           <div className="flex-1">

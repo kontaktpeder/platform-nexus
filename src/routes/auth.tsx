@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/hooks/useAuth";
-import { listAuthProviders } from "@/lib/auth-helpers";
+import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,8 @@ function AuthPage() {
       if (signedInUser?.id) {
         sessionStorage.setItem("platform:auth:userIdBefore", signedInUser.id);
       }
-      navigate({ to: "/mission", replace: true });
+      const target = getAuthenticatedHomeTarget();
+      navigate({ to: target.to, params: target.params, replace: true });
     },
     [navigate],
   );

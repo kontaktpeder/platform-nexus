@@ -6,7 +6,8 @@ import { Building2, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createOrganization } from "@/lib/organization.functions";
 import { setLastWorkspace } from "@/lib/last-workspace";
-import { TopBar } from "@/components/platform/TopBar";
+import { WorkspaceResumeCard } from "@/components/platform/WorkspaceResumeCard";
+import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/app")({
-  head: () => ({ meta: [{ title: "Mine organisasjoner — Platform Core" }] }),
+  head: () => ({ meta: [{ title: "Hjem — Platform Core" }] }),
   component: OrgPicker,
 });
 
@@ -24,6 +25,7 @@ function OrgPicker() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const createOrgFn = useServerFn(createOrganization);
+  const lastWs = useResolvedLastWorkspace();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
 
@@ -57,9 +59,10 @@ function OrgPicker() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar title="Mine organisasjoner" subtitle="Workspaces & organizations" />
+      <GlobalTopBar title="Hjem" subtitle="Organisasjoner og arbeidsflater" />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
+        {lastWs.data && <WorkspaceResumeCard workspace={lastWs.data} />}
 
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-heading text-xl font-semibold">Organisasjoner</h2>

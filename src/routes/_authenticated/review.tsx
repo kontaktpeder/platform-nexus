@@ -3,7 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sparkles, Users, Link2, Compass, CheckCircle2, XCircle, GitMerge, RefreshCw } from "lucide-react";
-import { TopBar } from "@/components/platform/TopBar";
+import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
+import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -57,6 +58,7 @@ function ReviewPage() {
         `Hentet ${g + s} nye signaler · Parsed ${parse.parsed}/${parse.scanned} · ${parse.entitySuggestions} entity-forslag · ${parse.relationSuggestions} relasjons-forslag`,
       );
       await qc.invalidateQueries({ queryKey: ["review-feed"] });
+      await qc.invalidateQueries({ queryKey: ["review-count"] });
     } catch (err) {
       setPipelineMsg(err instanceof Error ? err.message : "Feil ved pipeline");
     } finally {
@@ -70,10 +72,7 @@ function ReviewPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar
-        title="Review"
-        subtitle="AI-innboks — ingenting skrives før du godkjenner"
-      />
+      <GlobalTopBar title="Innboks" subtitle="AI-forslag — ingenting skrives før du godkjenner" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6 pb-28 sm:px-8">
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="gap-1"><Sparkles className="h-3 w-3" />{counts.total} åpne</Badge>
@@ -81,7 +80,14 @@ function ReviewPage() {
           <Badge variant="secondary" className="gap-1"><Compass className="h-3 w-3" />{counts.context} kontekst</Badge>
           <Badge variant="secondary" className="gap-1"><Link2 className="h-3 w-3" />{counts.relations} relasjoner</Badge>
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["review-feed"] })}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void qc.invalidateQueries({ queryKey: ["review-feed"] });
+                void qc.invalidateQueries({ queryKey: ["review-count"] });
+              }}
+            >
               <RefreshCw className="mr-1 h-3.5 w-3.5" /> Oppdater
             </Button>
             <Button size="sm" onClick={runFullPipeline} disabled={runningPipeline}>
@@ -122,6 +128,7 @@ function ReviewPage() {
           ))}
         </ul>
       </main>
+      <PlatformBottomNav />
     </div>
   );
 }
@@ -207,7 +214,10 @@ function EntityReviewCard({ item, existingEntities }: { item: ReviewEntityItem; 
   const [pending, setPending] = useState<null | "accept" | "reject" | "merge">(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["review-feed"] });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["review-feed"] });
+    void qc.invalidateQueries({ queryKey: ["review-count"] });
+  };
 
   const mAccept = useMutation({
     mutationFn: () => accept({ data: { suggestionId: item.id, ownerContext } }),
@@ -317,7 +327,10 @@ function RelationReviewCard({ item }: { item: ReviewRelationItem }) {
   const reject = useServerFn(rejectRelationSuggestion);
   const [pending, setPending] = useState<null | "accept" | "reject">(null);
   const [err, setErr] = useState<string | null>(null);
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["review-feed"] });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["review-feed"] });
+    void qc.invalidateQueries({ queryKey: ["review-count"] });
+  };
 
   const bothResolved = item.fromResolved && item.toResolved;
 

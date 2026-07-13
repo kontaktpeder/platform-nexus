@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Link2, X, Sparkles, Wand2, Check, Clock } from "lucide-react";
-import { TopBar } from "@/components/platform/TopBar";
+import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,7 +114,7 @@ function KnowledgePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar title="Knowledge" subtitle="People, companies, projects" />
+      <GlobalTopBar title="Kunnskap" subtitle="Personer, selskaper og prosjekter" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-28 sm:px-6">
         <div className="mb-4 flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">

@@ -54,8 +54,8 @@ function ThemeSettings() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
-      <h1 className="font-heading text-2xl font-bold">Innstillinger</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Tema for arbeidsflaten. Modulene arver automatisk.</p>
+      <h1 className="font-heading text-2xl font-bold">Utseende</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Farger og fonter for arbeidsflaten.</p>
 
       <section className="surface-card mt-6 space-y-4 p-5">
         <h2 className="font-heading text-lg font-semibold">Palett</h2>
