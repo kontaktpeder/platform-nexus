@@ -113,7 +113,7 @@ async function buildMorningMission(
   const { listMissionHints } = await import("@/lib/mission-hints.server");
 
   const workspaces = await loadWorkspacesForUser(supabase, userId);
-  const allSignals = await gatherMorningSignals({ workspaces, userId });
+  const { signals: allSignals, slackStatus } = await gatherMorningSignals({ workspaces, userId });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
   const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
@@ -122,9 +122,10 @@ async function buildMorningMission(
     userName,
     userEmail,
     hints,
+    slackStatus,
   });
   const sourceSignalIds = forAi.map((s) => s.id);
-  return { payload, sourceSignalIds };
+  return { payload: { ...payload, slack_status: slackStatus }, sourceSignalIds };
 }
 
 async function resolveUserEmail(supabase: DB, claims: Record<string, unknown>): Promise<string | null> {
@@ -197,7 +198,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
     const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
     const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
     const workspaces = await loadWorkspacesForUser(supabase, userId);
-    const allSignals = await gatherMorningSignals({ workspaces, userId });
+    const { signals: allSignals, slackStatus } = await gatherMorningSignals({ workspaces, userId });
     const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
     const trusted = applyTrustRules(cached.payload, forAi, userEmail);
     const filtered = filterPayloadByStates(trusted, actionStates);
@@ -205,7 +206,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
     return {
       briefDate,
       generatedAt: cached.generated_at,
-      payload: filtered,
+      payload: { ...filtered, slack_status: slackStatus },
       sourceSignalIds: cached.source_signal_ids,
       fromCache,
     };

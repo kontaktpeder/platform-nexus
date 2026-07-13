@@ -25,6 +25,15 @@ export type MorningMissionHygiene = {
   source_ids: string[];
 };
 
+export type SlackMissionStatus = {
+  connected: boolean;
+  read_ok: boolean;
+  activity_this_week: number;
+  week_number: number | null;
+  message: string;
+  suggestion: string | null;
+};
+
 export type MorningMissionPayload = {
   today: MorningMissionItem[];
   this_week: MorningMissionItem[];
@@ -33,6 +42,7 @@ export type MorningMissionPayload = {
   noise: MorningMissionNoise[];
   hygiene: MorningMissionHygiene[];
   weekly_summary?: string | null;
+  slack_status?: SlackMissionStatus | null;
 };
 
 export type MorningMissionResponse = {

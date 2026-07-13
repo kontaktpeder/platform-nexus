@@ -3,8 +3,10 @@ import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import type { MorningMissionPayload } from "@/lib/morning-mission.types";
+import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import { applyTrustRules } from "@/lib/morning-mission/morning-mission-trust.server";
+import { stripHallucinatedSlackItems, ensureSlackWeeklyItems } from "@/lib/morning-mission/slack-mission.server";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -38,6 +40,18 @@ const PayloadSchema = z.object({
   weekly_summary: z.string().nullable().optional(),
 });
 
+function labelForSignalIds(ids: string[], signals: MissionSignal[]): string | null {
+  for (const id of ids) {
+    const s = signals.find((x) => x.id === id);
+    if (!s) continue;
+    if (s.source === "slack") return s.from;
+    if (s.source === "gmail") return "Gmail";
+    if (s.source === "finance") return "Finance";
+    if (s.source === "work") return "Work";
+  }
+  return null;
+}
+
 function hrefForSignalIds(ids: string[], signals: MissionSignal[]): string | null {
   for (const id of ids) {
     const s = signals.find((x) => x.id === id);
@@ -54,18 +68,41 @@ function enrichPayload(
     items.map((item) => ({
       ...item,
       href: hrefForSignalIds(item.source_ids, signals),
-      source_label: item.source_label ?? null,
+      source_label: item.source_label ?? labelForSignalIds(item.source_ids, signals),
     }));
 
-  return {
-    today: enrich(raw.today).slice(0, 5),
-    this_week: enrich(raw.this_week),
-    waiting: enrich(raw.waiting),
+  const cleaned = {
+    today: stripHallucinatedSlackItems(enrich(raw.today), signals),
+    this_week: stripHallucinatedSlackItems(enrich(raw.this_week), signals),
+    waiting: stripHallucinatedSlackItems(enrich(raw.waiting), signals),
     closed: enrich(raw.closed),
     noise: raw.noise,
     hygiene: raw.hygiene,
     weekly_summary: raw.weekly_summary?.trim() ?? null,
   };
+
+  return {
+    today: cleaned.today.slice(0, 5),
+    this_week: cleaned.this_week,
+    waiting: cleaned.waiting,
+    closed: cleaned.closed,
+    noise: cleaned.noise,
+    hygiene: cleaned.hygiene,
+    weekly_summary: cleaned.weekly_summary,
+  };
+}
+
+function finalizePayload(
+  payload: MorningMissionPayload,
+  signals: MissionSignal[],
+): MorningMissionPayload {
+  const stripped = {
+    ...payload,
+    today: stripHallucinatedSlackItems(payload.today, signals),
+    this_week: stripHallucinatedSlackItems(payload.this_week, signals),
+    waiting: stripHallucinatedSlackItems(payload.waiting, signals),
+  };
+  return ensureSlackWeeklyItems(stripped, signals);
 }
 
 function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
@@ -134,6 +171,7 @@ export async function generateMorningMissionAi(input: {
   userName: string | null;
   userEmail?: string | null;
   hints?: import("@/lib/mission-hints.types").MissionHint[];
+  slackStatus?: SlackMissionStatus;
 }): Promise<MorningMissionPayload> {
   if (input.signals.length === 0) {
     return {
@@ -143,13 +181,17 @@ export async function generateMorningMissionAi(input: {
       closed: [],
       noise: [],
       hygiene: [],
-      weekly_summary: "Ingen nye signaler de siste dagene.",
+      weekly_summary: null,
     };
   }
 
   const key = process.env.LOVABLE_API_KEY;
   if (!key) {
-    return applyTrustRules(fallbackPayload(input.signals), input.signals, input.userEmail ?? null);
+    return applyTrustRules(
+      finalizePayload(fallbackPayload(input.signals), input.signals),
+      input.signals,
+      input.userEmail ?? null,
+    );
   }
 
   const gateway = createLovableAiGatewayProvider(key);
@@ -181,6 +223,12 @@ export async function generateMorningMissionAi(input: {
     "Avslag, fullførte saker, irrelevant historikk → closed.",
     "Reklame, nyhetsbrev, varsler uten handling → noise eller hygiene.",
     "Modul-alerts fra Finance/Work med mangler → today eller this_week etter alvor.",
+    "Slack-signaler (source=slack, tags slack_week): planlegging og koordinering → this_week.",
+    "  Kun Slack med tydelig hast (ASAP, i dag, haster) → today.",
+    "  Ikke finn på Slack-meldinger — bruk KUN signaler med source slack i input.",
+    input.slackStatus?.activity_this_week === 0
+      ? "Det finnes INGEN Slack-signaler denne uken — ikke lag this_week-elementer om Slack eller #drift."
+      : "",
     "For viktige elementer: skriv hva som skjedde, hvorfor det betyr noe, og én konkret neste handling.",
     "Bruk source_ids fra input — ikke finn på nye ID-er.",
     "Item id: bruk kort slug basert på tema, f.eks. 'marco-email-failure'.",
@@ -199,15 +247,19 @@ export async function generateMorningMissionAi(input: {
     meta: s.meta ?? {},
   }));
 
+  const slackContext = input.slackStatus
+    ? { slack_status: input.slackStatus }
+    : {};
+
   try {
     const { output } = await generateText({
       model,
       system,
-      prompt: JSON.stringify({ signals: compact }),
+      prompt: JSON.stringify({ signals: compact, ...slackContext }),
       output: Output.object({ schema: PayloadSchema }),
     });
     return applyTrustRules(
-      enrichPayload(output, input.signals),
+      finalizePayload(enrichPayload(output, input.signals), input.signals),
       input.signals,
       input.userEmail ?? null,
     );
@@ -215,7 +267,7 @@ export async function generateMorningMissionAi(input: {
     if (NoObjectGeneratedError.isInstance(err)) {
       console.warn("[morning-mission] AI malformed, using fallback", err);
       return applyTrustRules(
-        fallbackPayload(input.signals),
+        finalizePayload(fallbackPayload(input.signals), input.signals),
         input.signals,
         input.userEmail ?? null,
       );

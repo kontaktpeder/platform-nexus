@@ -165,7 +165,11 @@ export function MorningMissionView({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-        <WeeklyPlanBoard summary={payload.weekly_summary} items={payload.this_week} />
+        <WeeklyPlanBoard
+          summary={payload.weekly_summary}
+          items={payload.this_week}
+          slackStatus={payload.slack_status}
+        />
 
         <DailyPlanSection
           today={payload.today}

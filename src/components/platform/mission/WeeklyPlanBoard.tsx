@@ -1,18 +1,6 @@
-import { ExternalLink, Pin } from "lucide-react";
-import type { MorningMissionItem } from "@/lib/morning-mission.types";
-
-function osloWeekLabel(): string {
-  const now = new Date();
-  const week = new Intl.DateTimeFormat("nb-NO", {
-    week: "numeric",
-    timeZone: "Europe/Oslo",
-  }).format(now);
-  const month = new Intl.DateTimeFormat("nb-NO", {
-    month: "long",
-    timeZone: "Europe/Oslo",
-  }).format(now);
-  return `Uke ${week} · ${month}`;
-}
+import { ExternalLink, MessageSquare, Pin } from "lucide-react";
+import type { MorningMissionItem, SlackMissionStatus } from "@/lib/morning-mission.types";
+import { osloWeekNumber } from "@/lib/oslo-week";
 
 function WeeklyPlanBullet({ item }: { item: MorningMissionItem }) {
   return (
@@ -51,20 +39,41 @@ function WeeklyPlanBullet({ item }: { item: MorningMissionItem }) {
   );
 }
 
+function SlackStatusBlock({ status }: { status: SlackMissionStatus }) {
+  const muted = status.activity_this_week === 0;
+  return (
+    <div
+      className={`mt-3 rounded-lg border px-3 py-2.5 text-xs leading-relaxed ${
+        muted
+          ? "border-amber-900/15 bg-background/50 text-muted-foreground dark:border-amber-100/10"
+          : "border-amber-900/20 bg-background/70 text-foreground/90"
+      }`}
+    >
+      <div className="flex items-center gap-1.5 font-medium">
+        <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+        <span>{status.message}</span>
+      </div>
+      {status.suggestion && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{status.suggestion}</p>
+      )}
+    </div>
+  );
+}
+
 export function WeeklyPlanBoard({
   summary,
   items,
+  slackStatus,
 }: {
   summary?: string | null;
   items: MorningMissionItem[];
+  slackStatus?: SlackMissionStatus | null;
 }) {
-  const hasContent = Boolean(summary?.trim()) || items.length > 0;
+  const weekNumber = slackStatus?.week_number ?? osloWeekNumber();
+  const hasPlanContent = Boolean(summary?.trim()) || items.length > 0;
 
   return (
-    <aside
-      className="lg:sticky lg:top-6 lg:self-start"
-      aria-label="Ukeplan"
-    >
+    <aside className="lg:sticky lg:top-6 lg:self-start" aria-label="Ukeplan">
       <div className="relative overflow-hidden rounded-2xl border border-amber-900/10 bg-[#f7f3ea] shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_1px_2px_rgba(0,0,0,0.04)] dark:border-amber-100/10 dark:bg-[#1c1914] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-[0.12]"
@@ -83,8 +92,8 @@ export function WeeklyPlanBoard({
                   Ukeplan
                 </span>
               </div>
-              <h2 className="mt-1 font-heading text-lg font-semibold leading-tight text-foreground">
-                {osloWeekLabel()}
+              <h2 className="mt-1 font-heading text-2xl font-semibold leading-tight text-foreground">
+                Uke {weekNumber}
               </h2>
             </div>
             {items.length > 0 && (
@@ -93,6 +102,8 @@ export function WeeklyPlanBoard({
               </span>
             )}
           </div>
+
+          {slackStatus && <SlackStatusBlock status={slackStatus} />}
 
           {summary?.trim() && (
             <p className="mt-3 text-sm leading-relaxed text-foreground/80">{summary}</p>
@@ -104,12 +115,11 @@ export function WeeklyPlanBoard({
                 <WeeklyPlanBullet key={item.id} item={item} />
               ))}
             </ul>
-          ) : hasContent ? null : (
+          ) : !hasPlanContent && !slackStatus ? (
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Ingen ukepunkter ennå. Mission fyller tavlen når den finner ting som hører til uka
-              — fra e-post, Slack, Finance og andre moduler.
+              Ingen ukepunkter ennå. Mission fyller tavlen når den finner ting som hører til uka.
             </p>
-          )}
+          ) : null}
 
           <p className="mt-4 border-t border-dashed border-foreground/10 pt-3 text-[11px] text-muted-foreground">
             Tavlen oppdateres når du trykker Oppdater. Avkryssing kommer senere.

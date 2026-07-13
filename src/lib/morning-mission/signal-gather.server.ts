@@ -130,13 +130,25 @@ export function moduleAlertsToSignals(input: {
 export async function gatherMorningSignals(input: {
   workspaces: MorningWorkspaceInput[];
   userId: string;
-}): Promise<MissionSignal[]> {
+}): Promise<{
+  signals: MissionSignal[];
+  slackStatus: import("@/lib/morning-mission.types").SlackMissionStatus;
+}> {
   const gmail = (await fetchRecentGmailSignals({ hours: 72, max: 40 })).map(gmailToSignal);
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const moduleSignals: MissionSignal[] = [];
   const financeInvoiceSignals: MissionSignal[] = [];
+
+  const orgIds = [...new Set(input.workspaces.map((w) => w.orgId))];
+
+  const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
+  const { signals: slackSignals, status: slackStatus } = await fetchSlackMissionSignals({
+    supabaseAdmin,
+    userId: input.userId,
+    orgIds,
+  });
 
   for (const ws of input.workspaces) {
     moduleSignals.push(
@@ -161,5 +173,8 @@ export async function gatherMorningSignals(input: {
     financeInvoiceSignals.push(...unpaid);
   }
 
-  return [...gmail, ...moduleSignals, ...financeInvoiceSignals];
+  return {
+    signals: [...gmail, ...slackSignals, ...moduleSignals, ...financeInvoiceSignals],
+    slackStatus,
+  };
 }
