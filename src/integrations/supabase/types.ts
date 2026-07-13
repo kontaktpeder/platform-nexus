@@ -395,6 +395,36 @@ export type Database = {
         }
         Relationships: []
       }
+      mission_hints: {
+        Row: {
+          created_at: string
+          hint_text: string
+          id: string
+          match_kind: string
+          match_value: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          hint_text: string
+          id?: string
+          match_kind: string
+          match_value: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          hint_text?: string
+          id?: string
+          match_kind?: string
+          match_value?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       module_connection_secrets: {
         Row: {
           api_key_ciphertext: string

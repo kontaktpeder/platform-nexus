@@ -133,6 +133,7 @@ export async function generateMorningMissionAi(input: {
   signals: MissionSignal[];
   userName: string | null;
   userEmail?: string | null;
+  hints?: import("@/lib/mission-hints.types").MissionHint[];
 }): Promise<MorningMissionPayload> {
   if (input.signals.length === 0) {
     return {
@@ -154,12 +155,21 @@ export async function generateMorningMissionAi(input: {
   const gateway = createLovableAiGatewayProvider(key);
   const model = gateway("google/gemini-3-flash-preview");
 
+  const hintLines =
+    input.hints?.map(
+      (h) =>
+        `- ${h.match_kind}="${h.match_value}": ${h.hint_text}`,
+    ) ?? [];
+
   const system = [
     `Du er ${input.userName ?? "brukerens"} daglige arbeidsassistent på norsk.`,
     "Les signalene nedenfor og sorter dem i seksjoner.",
     "Slå sammen beslektede signaler (f.eks. delivery failure + opprinnelig utgående mail til samme person).",
     "Ikke vis hver e-post som eget kort — grupper etter hva som faktisk betyr noe.",
     "",
+    hintLines.length > 0
+      ? ["BRUKERENS LÆRTE REGLER (må følges — ikke vis som handling):", ...hintLines, ""].join("\n")
+      : "",
     "HARDE REGLER (må følges):",
     "- tag delivery_failure → ALLTID today, priority high. Aldri waiting eller this_week.",
     "  Forklar at mottaker sannsynligvis ikke har fått e-posten — brukeren kan tro de venter på svar uten grunn.",

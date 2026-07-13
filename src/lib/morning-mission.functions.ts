@@ -110,12 +110,19 @@ async function buildMorningMission(
     "@/lib/morning-mission/morning-mission-ai.server"
   );
   const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
+  const { listMissionHints } = await import("@/lib/mission-hints.server");
 
   const workspaces = await loadWorkspacesForUser(supabase, userId);
   const allSignals = await gatherMorningSignals({ workspaces });
   const actionStates = await listMissionActionStates(supabase, userId);
-  const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates });
-  const payload = await generateMorningMissionAi({ signals: forAi, userName, userEmail });
+  const hints = await listMissionHints(supabase, userId);
+  const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
+  const payload = await generateMorningMissionAi({
+    signals: forAi,
+    userName,
+    userEmail,
+    hints,
+  });
   const sourceSignalIds = forAi.map((s) => s.id);
   return { payload, sourceSignalIds };
 }
@@ -159,7 +166,9 @@ export const getMorningMission = createServerFn({ method: "POST" })
       null;
 
     const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
+    const { listMissionHints } = await import("@/lib/mission-hints.server");
     const actionStates = await listMissionActionStates(supabase, userId);
+    const hints = await listMissionHints(supabase, userId);
 
     let cached = data?.force ? null : await getCachedBrief(supabase, userId, briefDate);
     const fromCache = !!cached;
@@ -189,7 +198,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
     const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
     const workspaces = await loadWorkspacesForUser(supabase, userId);
     const allSignals = await gatherMorningSignals({ workspaces });
-    const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates });
+    const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
     const trusted = applyTrustRules(cached.payload, forAi, userEmail);
     const filtered = filterPayloadByStates(trusted, actionStates);
 
@@ -210,11 +219,26 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
         itemId: z.string().min(1),
         action: z.enum(["done", "snoozed", "waiting", "ignored"]),
         snoozePreset: z.enum(["later_today", "tomorrow", "next_week"]).optional(),
+        sourceIds: z.array(z.string()).optional(),
+        hint: z
+          .object({
+            match_kind: z.enum([
+              "from_email",
+              "to_email",
+              "subject_contains",
+              "tag",
+              "source_id",
+            ]),
+            match_value: z.string().min(1),
+            hint_text: z.string().min(1),
+          })
+          .optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { upsertMissionActionState } = await import("@/lib/mission-action-state.server");
+    const { upsertMissionHint } = await import("@/lib/mission-hints.server");
     const key = briefItemKey(data.itemId);
 
     const statusMap = {
@@ -224,14 +248,40 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
       snoozed: "snoozed" as const,
     };
 
+    const status = statusMap[data.action];
+
     await upsertMissionActionState(context.supabase, {
       userId: context.userId,
       actionKey: key,
-      status: statusMap[data.action],
+      status,
       snoozedUntil: data.action === "snoozed" ? snoozeUntil(data.snoozePreset ?? "tomorrow") : null,
     });
 
-    return { ok: true as const };
+    const dismissKeys = new Set<string>([key, ...(data.sourceIds ?? [])]);
+    for (const sourceKey of dismissKeys) {
+      if (sourceKey === key) continue;
+      await upsertMissionActionState(context.supabase, {
+        userId: context.userId,
+        actionKey: sourceKey,
+        status: data.action === "ignored" ? "dismissed" : status,
+        snoozedUntil:
+          data.action === "snoozed" ? snoozeUntil(data.snoozePreset ?? "tomorrow") : null,
+      });
+    }
+
+    if (data.hint) {
+      await upsertMissionHint(context.supabase, {
+        userId: context.userId,
+        hint: data.hint,
+      });
+      await context.supabase
+        .from("morning_mission_briefs")
+        .delete()
+        .eq("user_id", context.userId)
+        .eq("brief_date", todayOsloISO());
+    }
+
+    return { ok: true as const, learned: !!data.hint };
   });
 
 export const undoMorningItem = createServerFn({ method: "POST" })

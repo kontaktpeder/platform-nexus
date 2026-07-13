@@ -14,7 +14,7 @@ import {
   actOnMorningItem,
   undoMorningItem,
 } from "@/lib/morning-mission.functions";
-import type { MorningBriefItemAction } from "@/lib/morning-mission.types";
+import type { MorningBriefItemAction, MorningBriefActionOptions } from "@/lib/morning-mission.types";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/mission")({
@@ -93,14 +93,27 @@ function GlobalMission() {
     }
   }
 
-  async function handleAction(itemId: string, action: MorningBriefItemAction) {
+  async function handleAction(
+    itemId: string,
+    action: MorningBriefItemAction,
+    options?: MorningBriefActionOptions,
+  ) {
     setHiddenIds((prev) => new Set(prev).add(itemId));
     setBusyItemId(itemId);
     try {
-      await runAct({ data: { itemId, action } });
+      const result = await runAct({
+        data: {
+          itemId,
+          action,
+          sourceIds: options?.sourceIds,
+          hint: options?.hint,
+        },
+      });
       const label =
         action === "done"
-          ? "Ferdig"
+          ? result.learned
+            ? "Ferdig — Mission husker dette"
+            : "Ferdig"
           : action === "waiting"
             ? "Markert som venter"
             : action === "ignored"
@@ -127,6 +140,10 @@ function GlobalMission() {
         },
       });
       void queryClient.invalidateQueries({ queryKey: ["morning-mission"] });
+      if (result.learned) {
+        await fetchMorning({ data: { force: true } });
+        await queryClient.invalidateQueries({ queryKey: ["morning-mission"] });
+      }
     } catch (err) {
       setHiddenIds((prev) => {
         const next = new Set(prev);

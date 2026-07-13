@@ -44,3 +44,8 @@ export type MorningMissionResponse = {
 };
 
 export type MorningBriefItemAction = "done" | "snoozed" | "waiting" | "ignored";
+
+export type MorningBriefActionOptions = {
+  sourceIds?: string[];
+  hint?: import("@/lib/mission-hints.types").MissionHintInput;
+};

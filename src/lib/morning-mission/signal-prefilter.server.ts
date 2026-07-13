@@ -1,7 +1,9 @@
 // Cheap pre-filter rules before the Morning Mission AI call.
 import type { GmailRecentSignal } from "@/lib/inbox/gmail-recent.server";
 import type { MissionActionState } from "@/lib/mission-action-state";
+import type { MissionHint } from "@/lib/mission-hints.types";
 import { isOwnNoiseMail } from "@/lib/morning-mission/morning-mission-trust.server";
+import { signalMatchesHint } from "@/lib/morning-mission/mission-hint-match.server";
 
 export type MissionSignal = {
   id: string;
@@ -45,6 +47,7 @@ export function prefilterSignals(input: {
   signals: MissionSignal[];
   userEmail: string | null;
   actionStates: MissionActionState[];
+  hints?: MissionHint[];
 }): { forAi: MissionSignal[]; dropped: string[] } {
   const seen = new Set<string>();
   const dropped: string[] = [];
@@ -63,6 +66,11 @@ export function prefilterSignals(input: {
     }
 
     if (isOwnNoiseMail(s, input.userEmail)) {
+      dropped.push(s.id);
+      continue;
+    }
+
+    if (input.hints?.some((h) => signalMatchesHint(s, h))) {
       dropped.push(s.id);
       continue;
     }
