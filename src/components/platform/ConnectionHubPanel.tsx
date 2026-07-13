@@ -5,6 +5,10 @@ import type { ConnectionHubItem, ConnectionHubResponse } from "@/lib/connection-
 import { PLATFORM_META } from "@/lib/connection-hub.types";
 import { ConnectionStatusBadge } from "@/components/platform/ConnectionStatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  ConnectionGapsPanel,
+  ConnectionMatrixTable,
+} from "@/components/platform/ConnectionMatrix";
 
 import type { LucideIcon } from "lucide-react";
 
@@ -83,6 +87,10 @@ export function ConnectionHubPanel({ hub }: { hub: ConnectionHubResponse }) {
   return (
     <div className="space-y-8">
       <ConnectionHubSummaryBar hub={hub} />
+
+      <ConnectionGapsPanel hub={hub} />
+
+      <ConnectionMatrixTable hub={hub} />
 
       <section>
         <div className="mb-3 flex items-center gap-2">
