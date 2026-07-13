@@ -20,19 +20,9 @@ function cellFromItem(item: ConnectionHubItem | undefined): ConnectionMatrixCell
   };
 }
 
-function normalizeName(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9æøå]/gi, "")
-    .trim();
-}
-
-function namesRoughlyMatch(a: string, b: string): boolean {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
-  if (!na || !nb) return true;
-  return na.includes(nb) || nb.includes(na);
-}
+import {
+  orgNamesAlign,
+} from "@/lib/connection-hub-names.server";
 
 export function buildConnectionMatrix(input: {
   orgSlug: string;
@@ -165,14 +155,32 @@ export function detectConnectionGaps(input: {
       });
     }
 
-    if (finance?.status === "connected" && finance.externalOrgName) {
-      if (!namesRoughlyMatch(input.org.name, finance.externalOrgName)) {
+    const linkedToSameExternalOrg =
+      finance?.status === "connected" &&
+      work?.status === "connected" &&
+      !!finance.externalOrgId &&
+      finance.externalOrgId === work.externalOrgId;
+
+    if (finance?.status === "connected" && finance.externalOrgName && !linkedToSameExternalOrg) {
+      if (!orgNamesAlign(input.org, finance.externalOrgName)) {
         gaps.push({
           severity: "info",
           title: `Finance-org navn avviker fra Platform-org`,
-          description: `Platform: «${input.org.name}». Finance: «${finance.externalOrgName}» i ${ws.name}. Sjekk at du koblet riktig organisasjon.`,
+          description: `Platform: «${input.org.name}». Finance: «${finance.externalOrgName}» i ${ws.name}. Sjekk at du koblet riktig organisasjon, eller trykk Test på nytt under Moduler.`,
           actionHref: modulesHref,
           platform: "finance",
+        });
+      }
+    }
+
+    if (work?.status === "connected" && work.externalOrgName && !linkedToSameExternalOrg) {
+      if (!orgNamesAlign(input.org, work.externalOrgName)) {
+        gaps.push({
+          severity: "info",
+          title: `Work-org navn avviker fra Platform-org`,
+          description: `Platform: «${input.org.name}». Work: «${work.externalOrgName}» i ${ws.name}. Sjekk at du koblet riktig organisasjon, eller trykk Test på nytt under Moduler.`,
+          actionHref: modulesHref,
+          platform: "work",
         });
       }
     }

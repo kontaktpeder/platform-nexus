@@ -52,25 +52,56 @@ export const getOrgConnectionHub = createServerFn({ method: "POST" })
         .eq("enabled", true),
     ]);
 
-    const connectionIds = (connections ?? []).map((c) => c.id as string);
+    const connectionRows = (connections ?? []) as Array<{
+      id: string;
+      org_id: string;
+      workspace_id: string;
+      module_id: string;
+      external_org_id: string;
+      external_base_url: string;
+      status: string;
+      last_verified_at: string | null;
+      error_message: string | null;
+      external_org_name: string | null;
+      module_slug: string | null;
+    }>;
+
     const invoicesCapableByConnectionId = new Map<string, boolean>();
-    const financeConnections = (connections ?? []).filter(
+    const financeConnections = connectionRows.filter(
       (c) => c.module_slug === "finance" && c.status === "connected",
     );
-    if (financeConnections.length > 0) {
-      const { financeInvoicesCapable } = await import("@/lib/module-connection-secrets.server");
-      await Promise.all(
-        financeConnections.map(async (conn) => {
-          const capable = await financeInvoicesCapable(supabaseAdmin, {
-            id: conn.id as string,
-            external_base_url: conn.external_base_url as string,
-            module_slug: conn.module_slug as string,
-            status: conn.status as string,
-          });
-          invoicesCapableByConnectionId.set(conn.id as string, capable);
-        }),
-      );
-    }
+    const [liveOrgNameByConnectionId] = await Promise.all([
+      (async () => {
+        const { fetchLiveExternalOrgNames, persistRefreshedOrgNames } = await import(
+          "@/lib/connection-hub-names.server"
+        );
+        const live = await fetchLiveExternalOrgNames(supabaseAdmin, connectionRows);
+        if (live.size > 0) {
+          void persistRefreshedOrgNames(supabaseAdmin, connectionRows, live);
+        }
+        return live;
+      })(),
+      (async () => {
+        if (financeConnections.length === 0) return;
+        const { financeInvoicesCapable } = await import("@/lib/module-connection-secrets.server");
+        await Promise.all(
+          financeConnections.map(async (conn) => {
+            const capable = await financeInvoicesCapable(supabaseAdmin, {
+              id: conn.id,
+              external_base_url: conn.external_base_url,
+              module_slug: conn.module_slug,
+              status: conn.status,
+            });
+            invoicesCapableByConnectionId.set(conn.id, capable);
+          }),
+        );
+      })(),
+    ]);
+
+    const connectionsWithLiveNames = connectionRows.map((conn) => {
+      const liveName = liveOrgNameByConnectionId.get(conn.id);
+      return liveName ? { ...conn, external_org_name: liveName } : conn;
+    });
 
     return buildOrgConnectionHub({
       org: { id: org.id, name: org.name, slug: org.slug },
@@ -81,7 +112,7 @@ export const getOrgConnectionHub = createServerFn({ method: "POST" })
         module_id: string;
         enabled: boolean;
       }>,
-      connections: (connections ?? []) as import("@/lib/module-connections").ModuleConnectionRow[],
+      connections: connectionsWithLiveNames as import("@/lib/module-connections").ModuleConnectionRow[],
       invoicesCapableByConnectionId,
       slackChannelRuleCount: slackChannelRuleCount ?? 0,
     });
