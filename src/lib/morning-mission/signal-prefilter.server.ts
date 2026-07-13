@@ -1,6 +1,7 @@
 // Cheap pre-filter rules before the Morning Mission AI call.
 import type { GmailRecentSignal } from "@/lib/inbox/gmail-recent.server";
 import type { MissionActionState } from "@/lib/mission-action-state";
+import { isOwnNoiseMail } from "@/lib/morning-mission/morning-mission-trust.server";
 
 export type MissionSignal = {
   id: string;
@@ -34,14 +35,6 @@ export function gmailToSignal(g: GmailRecentSignal): MissionSignal {
   };
 }
 
-function isOwnTestMail(signal: MissionSignal, userEmail: string | null): boolean {
-  if (!userEmail) return false;
-  const email = (signal.meta?.from_email as string | null)?.toLowerCase();
-  if (email !== userEmail.toLowerCase()) return false;
-  const subj = signal.subject.toLowerCase().trim();
-  return subj === "hei" || subj === "test" || subj.startsWith("test ");
-}
-
 function isDismissedSignal(id: string, states: MissionActionState[]): boolean {
   const s = states.find((x) => x.action_key === id || x.action_key === `brief:${id}`);
   if (!s) return false;
@@ -69,7 +62,7 @@ export function prefilterSignals(input: {
       continue;
     }
 
-    if (isOwnTestMail(s, input.userEmail)) {
+    if (isOwnNoiseMail(s, input.userEmail)) {
       dropped.push(s.id);
       continue;
     }

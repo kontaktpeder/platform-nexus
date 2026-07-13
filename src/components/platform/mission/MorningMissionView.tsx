@@ -157,6 +157,7 @@ export function MorningMissionView({
   loading,
   refreshing,
   busyItemId,
+  error,
   onRefresh,
   onAction,
 }: {
@@ -164,6 +165,7 @@ export function MorningMissionView({
   loading: boolean;
   refreshing: boolean;
   busyItemId: string | null;
+  error?: Error | null;
   onRefresh: () => void;
   onAction: (itemId: string, action: MorningBriefItemAction) => void;
 }) {
@@ -171,6 +173,36 @@ export function MorningMissionView({
     return (
       <div className="grid place-items-center py-16">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    const isEnvError = error.message.includes("Missing Supabase environment variable");
+    return (
+      <div className="mt-2 space-y-4">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-medium">Kunne ikke laste morgenbrief</p>
+          <p className="mt-1">{error.message}</p>
+        </div>
+        {isEnvError && (
+          <section className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Lokal oppsett (én gang)</p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5">
+              <li>Åpne Supabase → Project Settings → API</li>
+              <li>Kopier <span className="font-mono text-xs">service_role</span>-nøkkelen</li>
+              <li>
+                Lim inn i <span className="font-mono text-xs">.env</span> som{" "}
+                <span className="font-mono text-xs">SUPABASE_SERVICE_ROLE_KEY=...</span>
+              </li>
+              <li>Start dev-server på nytt (<span className="font-mono text-xs">Ctrl+C</span>, deretter <span className="font-mono text-xs">npm run dev</span>)</li>
+            </ol>
+          </section>
+        )}
+        <Button size="sm" variant="outline" disabled={refreshing} onClick={onRefresh}>
+          {refreshing ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+          Prøv igjen
+        </Button>
       </div>
     );
   }

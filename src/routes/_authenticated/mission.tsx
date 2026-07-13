@@ -147,6 +147,7 @@ function GlobalMission() {
           firstName={firstName}
           count={activeCount}
           canStart={todayCount > 0}
+          loadFailed={!!query.error && !data}
           onStart={() => {
             document.getElementById("morning-today")?.scrollIntoView({ behavior: "smooth" });
           }}
@@ -154,19 +155,13 @@ function GlobalMission() {
 
         <ReviewInboxTeaser />
 
-        {query.error && (
-          <div className="mt-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-            Kunne ikke laste morgenbrief.{" "}
-            {query.error instanceof Error ? query.error.message : "Ukjent feil"}
-          </div>
-        )}
-
         <div id="morning-today">
           <MorningMissionView
             data={displayData}
             loading={query.isLoading}
             refreshing={refreshing}
             busyItemId={busyItemId}
+            error={query.error}
             onRefresh={onRefresh}
             onAction={handleAction}
           />

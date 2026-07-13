@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import type { MorningMissionPayload } from "@/lib/morning-mission.types";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
+import { applyTrustRules } from "@/lib/morning-mission/morning-mission-trust.server";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -131,6 +132,7 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
 export async function generateMorningMissionAi(input: {
   signals: MissionSignal[];
   userName: string | null;
+  userEmail?: string | null;
 }): Promise<MorningMissionPayload> {
   if (input.signals.length === 0) {
     return {
@@ -145,7 +147,9 @@ export async function generateMorningMissionAi(input: {
   }
 
   const key = process.env.LOVABLE_API_KEY;
-  if (!key) return fallbackPayload(input.signals);
+  if (!key) {
+    return applyTrustRules(fallbackPayload(input.signals), input.signals, input.userEmail ?? null);
+  }
 
   const gateway = createLovableAiGatewayProvider(key);
   const model = gateway("google/gemini-3-flash-preview");
@@ -155,7 +159,15 @@ export async function generateMorningMissionAi(input: {
     "Les signalene nedenfor og sorter dem i seksjoner.",
     "Slå sammen beslektede signaler (f.eks. delivery failure + opprinnelig utgående mail til samme person).",
     "Ikke vis hver e-post som eget kort — grupper etter hva som faktisk betyr noe.",
-    "Autosvar og «takk, vi har mottatt» → waiting, ikke today.",
+    "",
+    "HARDE REGLER (må følges):",
+    "- tag delivery_failure → ALLTID today, priority high. Aldri waiting eller this_week.",
+    "  Forklar at mottaker sannsynligvis ikke har fått e-posten — brukeren kan tro de venter på svar uten grunn.",
+    "- tag auto_reply eller «takk, vi har mottatt» → waiting, priority low. Aldri today.",
+    "- tag unpaid_invoice eller finance_widget med ubetalte fakturaer → today, priority high.",
+    "- Brukerens egne test-e-poster (korte «hei»/«test») → noise, aldri today.",
+    "",
+    "MYKE REGLER:",
     "Avslag, fullførte saker, irrelevant historikk → closed.",
     "Reklame, nyhetsbrev, varsler uten handling → noise eller hygiene.",
     "Modul-alerts fra Finance/Work med mangler → today eller this_week etter alvor.",
@@ -184,11 +196,19 @@ export async function generateMorningMissionAi(input: {
       prompt: JSON.stringify({ signals: compact }),
       output: Output.object({ schema: PayloadSchema }),
     });
-    return enrichPayload(output, input.signals);
+    return applyTrustRules(
+      enrichPayload(output, input.signals),
+      input.signals,
+      input.userEmail ?? null,
+    );
   } catch (err) {
     if (NoObjectGeneratedError.isInstance(err)) {
       console.warn("[morning-mission] AI malformed, using fallback", err);
-      return fallbackPayload(input.signals);
+      return applyTrustRules(
+        fallbackPayload(input.signals),
+        input.signals,
+        input.userEmail ?? null,
+      );
     }
     throw err;
   }

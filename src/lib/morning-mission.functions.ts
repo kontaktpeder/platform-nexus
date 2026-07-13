@@ -86,6 +86,8 @@ async function loadWorkspacesForUser(supabase: DB, userId: string) {
         workspaceId: ws.id as string,
       }).catch(() => ({ alerts: {}, errors: {} }));
       return {
+        orgId: ws.org_id as string,
+        workspaceId: ws.id as string,
         orgSlug: (org?.slug as string) ?? "",
         orgName: (org?.name as string) ?? "",
         wsName: ws.name as string,
@@ -113,9 +115,16 @@ async function buildMorningMission(
   const allSignals = await gatherMorningSignals({ workspaces });
   const actionStates = await listMissionActionStates(supabase, userId);
   const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates });
-  const payload = await generateMorningMissionAi({ signals: forAi, userName });
+  const payload = await generateMorningMissionAi({ signals: forAi, userName, userEmail });
   const sourceSignalIds = forAi.map((s) => s.id);
   return { payload, sourceSignalIds };
+}
+
+async function resolveUserEmail(supabase: DB, claims: Record<string, unknown>): Promise<string | null> {
+  const fromClaims = (claims.email as string | undefined) ?? null;
+  if (fromClaims) return fromClaims;
+  const { data } = await supabase.auth.getUser();
+  return data.user?.email ?? null;
 }
 
 async function getCachedBrief(supabase: DB, userId: string, briefDate: string) {
@@ -142,7 +151,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
     const { supabase, userId, claims } = context;
     const briefDate = todayOsloISO();
     const claimsRec = claims as Record<string, unknown>;
-    const userEmail = (claimsRec.email as string | undefined) ?? null;
+    const userEmail = await resolveUserEmail(supabase, claimsRec);
     const userName =
       (claimsRec.given_name as string | undefined) ||
       (claimsRec.name as string | undefined) ||
@@ -175,7 +184,14 @@ export const getMorningMission = createServerFn({ method: "POST" })
       };
     }
 
-    const filtered = filterPayloadByStates(cached.payload, actionStates);
+    const { applyTrustRules } = await import("@/lib/morning-mission/morning-mission-trust.server");
+    const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
+    const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
+    const workspaces = await loadWorkspacesForUser(supabase, userId);
+    const allSignals = await gatherMorningSignals({ workspaces });
+    const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates });
+    const trusted = applyTrustRules(cached.payload, forAi, userEmail);
+    const filtered = filterPayloadByStates(trusted, actionStates);
 
     return {
       briefDate,

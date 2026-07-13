@@ -58,8 +58,11 @@ function detectTags(input: {
   if (
     fromLower.includes("mailer-daemon") ||
     fromLower.includes("mail delivery") ||
+    fromLower.includes("postmaster") ||
     subjectLower.includes("delivery failure") ||
-    subjectLower.includes("undelivered")
+    subjectLower.includes("delivery status notification") ||
+    subjectLower.includes("undelivered") ||
+    subjectLower.includes("returned mail")
   ) {
     tags.push("delivery_failure");
   }

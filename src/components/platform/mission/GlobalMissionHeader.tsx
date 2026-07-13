@@ -22,17 +22,22 @@ export function GlobalMissionHeader({
   count,
   onStart,
   canStart,
+  loadFailed = false,
 }: {
   firstName: string | null;
   count: number;
   onStart: () => void;
   canStart: boolean;
+  loadFailed?: boolean;
 }) {
   const hello = greeting(osloHour());
   const name = firstName ? firstName : "der";
-  const line1 = "Jeg tok meg av sorteringen.";
-  const line2 =
-    count === 0
+  const line1 = loadFailed
+    ? "Jeg klarte ikke å lese signalene ennå."
+    : "Jeg tok meg av sorteringen.";
+  const line2 = loadFailed
+    ? "Briefen lastet ikke — sjekk oppsettet under før du stoler på det som vises."
+    : count === 0
       ? "Ingenting trenger deg akkurat nå."
       : `${count} ${count === 1 ? "ting trenger" : "ting trenger"} deg i dag.`;
 
