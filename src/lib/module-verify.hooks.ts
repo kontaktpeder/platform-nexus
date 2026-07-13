@@ -11,8 +11,10 @@ export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
+      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+    },
   });
 }
 
@@ -21,8 +23,10 @@ export function useRetestModuleConnection(orgSlug: string, wsSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
+      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+    },
   });
 }
 
@@ -31,7 +35,9 @@ export function useSaveModuleInvoicesApiKey(orgSlug: string, wsSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
+      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+    },
   });
 }

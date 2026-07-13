@@ -149,13 +149,13 @@ function OrgSettings() {
         </section>
 
         <section className="surface-card p-5">
-          <h2 className="font-heading text-lg font-semibold">Integrasjoner</h2>
+          <h2 className="font-heading text-lg font-semibold">Koblinger</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Slack-kanaler Platform får lov å lese for denne organisasjonen.
+            Se hva som er koblet til Finance, Work, Gmail og Slack — og hva som mangler.
           </p>
           <div className="mt-3">
-            <Button asChild variant="outline" size="sm">
-              <a href={`/o/${orgSlug}/slack-channels`}>Slack-kanaler →</a>
+            <Button asChild variant="default" size="sm">
+              <a href={`/o/${orgSlug}/connections`}>Åpne koblingsoversikt →</a>
             </Button>
           </div>
         </section>

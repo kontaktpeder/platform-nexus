@@ -22,6 +22,7 @@ import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/ap
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
+import { Route as AuthenticatedOOrgSlugConnectionsRouteImport } from './routes/_authenticated/o.$orgSlug.connections'
 import { Route as AuthenticatedOOrgSlugWWsSlugRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug'
 import { Route as AuthenticatedOOrgSlugWWsSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.index'
 import { Route as AuthenticatedOOrgSlugWWsSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.settings'
@@ -94,6 +95,12 @@ const AuthenticatedOOrgSlugSettingsRoute =
     path: '/o/$orgSlug/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOOrgSlugConnectionsRoute =
+  AuthenticatedOOrgSlugConnectionsRouteImport.update({
+    id: '/o/$orgSlug/connections',
+    path: '/o/$orgSlug/connections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedOOrgSlugWWsSlugRoute =
   AuthenticatedOOrgSlugWWsSlugRouteImport.update({
     id: '/o/$orgSlug/w/$wsSlug',
@@ -129,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
@@ -147,6 +155,7 @@ export interface FileRoutesByTo {
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug': typeof AuthenticatedOOrgSlugIndexRoute
@@ -166,6 +175,7 @@ export interface FileRoutesById {
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/_authenticated/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/_authenticated/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/_authenticated/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug/'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug'
@@ -222,6 +234,7 @@ export interface FileRouteTypes {
     | '/_authenticated/review'
     | '/_authenticated/settings'
     | '/auth/update-password'
+    | '/_authenticated/o/$orgSlug/connections'
     | '/_authenticated/o/$orgSlug/settings'
     | '/_authenticated/o/$orgSlug/slack-channels'
     | '/_authenticated/o/$orgSlug/'
@@ -330,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgSlugSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/o/$orgSlug/connections': {
+      id: '/_authenticated/o/$orgSlug/connections'
+      path: '/o/$orgSlug/connections'
+      fullPath: '/o/$orgSlug/connections'
+      preLoaderRoute: typeof AuthenticatedOOrgSlugConnectionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/o/$orgSlug/w/$wsSlug': {
       id: '/_authenticated/o/$orgSlug/w/$wsSlug'
       path: '/o/$orgSlug/w/$wsSlug'
@@ -389,6 +409,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
   AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedOOrgSlugConnectionsRoute: typeof AuthenticatedOOrgSlugConnectionsRoute
   AuthenticatedOOrgSlugSettingsRoute: typeof AuthenticatedOOrgSlugSettingsRoute
   AuthenticatedOOrgSlugSlackChannelsRoute: typeof AuthenticatedOOrgSlugSlackChannelsRoute
   AuthenticatedOOrgSlugIndexRoute: typeof AuthenticatedOOrgSlugIndexRoute
@@ -402,6 +423,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,
   AuthenticatedReviewRoute: AuthenticatedReviewRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedOOrgSlugConnectionsRoute: AuthenticatedOOrgSlugConnectionsRoute,
   AuthenticatedOOrgSlugSettingsRoute: AuthenticatedOOrgSlugSettingsRoute,
   AuthenticatedOOrgSlugSlackChannelsRoute:
     AuthenticatedOOrgSlugSlackChannelsRoute,
