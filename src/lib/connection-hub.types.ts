@@ -47,6 +47,31 @@ export type ConnectionHubResponse = {
     externalOrgName: string | null;
     linkedWorkspaces: string[];
   }>;
+  matrix: ConnectionMatrixRow[];
+  gaps: ConnectionGap[];
+};
+
+export type ConnectionMatrixCell = {
+  status: HubStatus;
+  statusLabel: string;
+  externalOrgName: string | null;
+  externalOrgId: string | null;
+};
+
+export type ConnectionMatrixRow = {
+  label: string;
+  kind: "deployment" | "workspace";
+  workspaceSlug: string | null;
+  configureHref: string | null;
+  cells: Record<HubPlatformId, ConnectionMatrixCell | null>;
+};
+
+export type ConnectionGap = {
+  severity: "error" | "warning" | "info";
+  title: string;
+  description: string;
+  actionHref: string | null;
+  platform: HubPlatformId | null;
 };
 
 export const HUB_STATUS_LABELS: Record<HubStatus, string> = {

@@ -7,6 +7,10 @@ import type {
 import { HUB_STATUS_LABELS } from "@/lib/connection-hub.types";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
 import { isConnectableModule } from "@/lib/module-connections";
+import {
+  buildConnectionMatrix,
+  detectConnectionGaps,
+} from "@/lib/connection-hub-insights.server";
 
 type WorkspaceRow = { id: string; name: string; slug: string };
 type ModuleRow = {
@@ -245,11 +249,24 @@ export async function buildOrgConnectionHub(input: {
     }
   }
 
+  const matrix = buildConnectionMatrix({
+    orgSlug: input.org.slug,
+    deployment,
+    workspaces,
+  });
+  const gaps = detectConnectionGaps({
+    org: input.org,
+    deployment,
+    workspaces,
+  });
+
   return {
     org: input.org,
     summary,
     deployment,
     workspaces,
     externalOrgs: Array.from(externalMap.values()),
+    matrix,
+    gaps,
   };
 }
