@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ArrowRight, Blocks, Layers, Palette, Sparkles } from "lucide-react";
+import { isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
+import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +15,14 @@ function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (hasRecoveryLinkInUrl()) {
+      redirectRecoveryLinkToUpdatePassword();
+      return;
+    }
+    if (isPasswordRecoveryPending()) {
+      navigate({ to: "/auth/update-password", replace: true });
+      return;
+    }
     if (loading || !user) return;
     navigate({ to: "/mission", replace: true });
   }, [loading, user, navigate]);

@@ -362,6 +362,39 @@ export type Database = {
         }
         Relationships: []
       }
+      morning_mission_briefs: {
+        Row: {
+          brief_date: string
+          created_at: string
+          generated_at: string
+          id: string
+          payload: Json
+          source_signal_ids: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brief_date: string
+          created_at?: string
+          generated_at?: string
+          id?: string
+          payload: Json
+          source_signal_ids?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brief_date?: string
+          created_at?: string
+          generated_at?: string
+          id?: string
+          payload?: Json
+          source_signal_ids?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       module_connection_secrets: {
         Row: {
           api_key_ciphertext: string

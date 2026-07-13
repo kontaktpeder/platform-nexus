@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthUpdatePasswordRouteImport } from './routes/auth.update-password'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
@@ -39,6 +40,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthUpdatePasswordRoute = AuthUpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => AuthRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -115,13 +121,14 @@ const AuthenticatedOOrgSlugWWsSlugModulesRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
@@ -132,13 +139,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/o/$orgSlug': typeof AuthenticatedOOrgSlugIndexRoute
@@ -150,13 +158,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
   '/_authenticated/mission': typeof AuthenticatedMissionRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/_authenticated/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
   '/_authenticated/o/$orgSlug/': typeof AuthenticatedOOrgSlugIndexRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/review'
     | '/settings'
+    | '/auth/update-password'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug/'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/review'
     | '/settings'
+    | '/auth/update-password'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
     | '/o/$orgSlug'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/_authenticated/modules'
     | '/_authenticated/review'
     | '/_authenticated/settings'
+    | '/auth/update-password'
     | '/_authenticated/o/$orgSlug/settings'
     | '/_authenticated/o/$orgSlug/slack-channels'
     | '/_authenticated/o/$orgSlug/'
@@ -222,7 +234,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AuthRoute: typeof AuthRoute
+  AuthRoute: typeof AuthRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/auth/update-password': {
+      id: '/auth/update-password'
+      path: '/update-password'
+      fullPath: '/auth/update-password'
+      preLoaderRoute: typeof AuthUpdatePasswordRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -394,11 +413,31 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface AuthRouteChildren {
+  AuthUpdatePasswordRoute: typeof AuthUpdatePasswordRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthUpdatePasswordRoute: AuthUpdatePasswordRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AuthRoute: AuthRoute,
+  AuthRoute: AuthRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

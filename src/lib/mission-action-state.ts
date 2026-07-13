@@ -1,7 +1,11 @@
 // Client-safe types and pure helpers for mission action states.
 // DB access lives in mission-action-state.server.ts.
 
-export type MissionActionStatus = "dismissed" | "snoozed" | "handled_locally";
+export type MissionActionStatus =
+  | "dismissed"
+  | "snoozed"
+  | "handled_locally"
+  | "waiting";
 
 export type MissionActionState = {
   action_key: string;
