@@ -9,6 +9,7 @@ import { setLastWorkspace } from "@/lib/last-workspace";
 import { WorkspaceResumeCard } from "@/components/platform/WorkspaceResumeCard";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { useResolvedLastWorkspace } from "@/lib/last-workspace.hooks";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
