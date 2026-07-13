@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Layers, Loader2, Plus, Settings2 } from "lucide-react";
+import { Layers, Link2, Loader2, Plus, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { slugify } from "@/lib/slug";
 import { TopBar } from "@/components/platform/TopBar";
@@ -86,8 +86,16 @@ function WorkspacePicker() {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-heading text-xl font-semibold">Arbeidsflater</h2>
           <div className="flex items-center gap-2">
+            <Link to="/o/$orgSlug/connections" params={{ orgSlug }}>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Link2 className="h-4 w-4" />
+                Koblinger
+              </Button>
+            </Link>
             <Link to="/o/$orgSlug/settings" params={{ orgSlug }}>
-              <Button variant="ghost" size="icon" aria-label="Innstillinger"><Settings2 className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" aria-label="Innstillinger">
+                <Settings2 className="h-4 w-4" />
+              </Button>
             </Link>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild><Button size="sm" className="gap-2"><Plus className="h-4 w-4" /> Ny</Button></DialogTrigger>
