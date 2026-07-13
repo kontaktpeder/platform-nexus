@@ -227,7 +227,7 @@ export async function generateMorningMissionAi(input: {
     "  Kun Slack med tydelig hast (ASAP, i dag, haster) → today.",
     "  Ikke finn på Slack-meldinger — bruk KUN signaler med source slack i input.",
     input.slackStatus?.activity_this_week === 0
-      ? "Det finnes INGEN Slack-signaler denne uken — ikke lag this_week-elementer om Slack eller #drift."
+      ? "Det finnes INGEN Slack-signaler denne uken — ikke lag this_week-elementer om Slack, mentions eller DM-er."
       : "",
     "For viktige elementer: skriv hva som skjedde, hvorfor det betyr noe, og én konkret neste handling.",
     "Bruk source_ids fra input — ikke finn på nye ID-er.",

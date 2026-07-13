@@ -141,14 +141,8 @@ export async function gatherMorningSignals(input: {
   const moduleSignals: MissionSignal[] = [];
   const financeInvoiceSignals: MissionSignal[] = [];
 
-  const orgIds = [...new Set(input.workspaces.map((w) => w.orgId))];
-
   const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
-  const { signals: slackSignals, status: slackStatus } = await fetchSlackMissionSignals({
-    supabaseAdmin,
-    userId: input.userId,
-    orgIds,
-  });
+  const { signals: slackSignals, status: slackStatus } = await fetchSlackMissionSignals();
 
   for (const ws of input.workspaces) {
     moduleSignals.push(

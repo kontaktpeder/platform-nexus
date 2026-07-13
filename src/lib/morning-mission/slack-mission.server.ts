@@ -1,6 +1,4 @@
-// Slack signals for Morning Mission — current ISO week only (Europe/Oslo).
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+// Slack signals for Morning Mission — mentions + DMs, current ISO week only (Europe/Oslo).
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import { isSameOsloWeek, isSlackTsThisWeek, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
@@ -41,6 +39,7 @@ async function slackCall<T>(
 }
 
 type AuthTest = { user_id: string; url?: string };
+type Channel = { id: string; user?: string };
 type HistoryMsg = { text?: string; ts: string; thread_ts?: string; user?: string };
 
 function channelLabel(name: string | null | undefined): string {
@@ -57,15 +56,14 @@ function slackStatusBase(connected: boolean): SlackMissionStatus {
     message: connected ? "Leser Slack …" : "Slack er ikke koblet.",
     suggestion: connected
       ? null
-      : "Legg til SLACK_API_KEY i Lovable Cloud for å lese kanaler og mentions.",
+      : "Legg til SLACK_API_KEY i Lovable Cloud for å lese mentions og DM-er.",
   };
 }
 
-export async function fetchSlackMissionSignals(input: {
-  supabaseAdmin: SupabaseClient<Database>;
-  userId: string;
-  orgIds: string[];
-}): Promise<{ signals: MissionSignal[]; status: SlackMissionStatus }> {
+export async function fetchSlackMissionSignals(): Promise<{
+  signals: MissionSignal[];
+  status: SlackMissionStatus;
+}> {
   const apiKey = process.env.SLACK_API_KEY;
   const lovableKey = process.env.LOVABLE_API_KEY;
   const weekNumber = parseInt(
@@ -174,81 +172,77 @@ export async function fetchSlackMissionSignals(input: {
       errors.push(err instanceof Error ? err.message : "mention search failed");
     }
 
-    // Whitelisted org channels — messages since Monday
-    let ruleCount = 0;
-    if (input.orgIds.length > 0) {
-      const { data: rules } = await input.supabaseAdmin
-        .from("slack_channel_ingest_rules")
-        .select("slack_channel_id, slack_channel_name, organization_id")
-        .eq("enabled", true)
-        .in("organization_id", input.orgIds);
-
-      ruleCount = rules?.length ?? 0;
-
-      for (const rule of rules ?? []) {
+    // DMs — messages from others this week
+    try {
+      const dms = await slackCall<{ channels: Channel[] }>("conversations.list", {
+        ...shared,
+        query: "types=im&limit=50",
+      });
+      const seenDm = new Set<string>();
+      for (const channel of (dms.channels ?? []).slice(0, 20)) {
         try {
           const query = new URLSearchParams({
-            channel: rule.slack_channel_id,
-            limit: "50",
+            channel: channel.id,
+            limit: "20",
             oldest: String(weekStart),
           });
           const hist = await slackCall<{ messages: HistoryMsg[] }>("conversations.history", {
             ...shared,
             query: query.toString(),
           });
-          const ch = channelLabel(rule.slack_channel_name);
+          const senderName = channel.user ? await displayName(channel.user) : "DM";
           for (const m of hist.messages ?? []) {
             if (!m.ts || !isSlackTsThisWeek(m.ts)) continue;
+            if (m.user === me.user_id) continue;
             const text = (m.text ?? "").trim();
             if (!text) continue;
-            const sender = m.user ? await displayName(m.user) : "Ukjent";
+            const key = `${channel.id}:${m.ts}`;
+            if (seenDm.has(key)) continue;
+            seenDm.add(key);
             signals.push({
-              id: `slack:channel:${rule.slack_channel_id}:${m.ts}`,
+              id: `slack:dm:${channel.id}:${m.ts}`,
               source: "slack",
-              subject: `${ch}: ${sender}`,
-              from: `Slack · ${ch}`,
+              subject: `DM fra ${senderName}`,
+              from: "Slack · DM",
               snippet: text.slice(0, 200),
               occurred_at: slackTsToIso(m.ts),
-              href: `${teamHome}/archives/${rule.slack_channel_id}/p${m.ts.replace(".", "")}`,
-              tags: ["slack_channel", "slack_week"],
+              href: `${teamHome}/messages/${channel.id}`,
+              tags: ["slack_dm", "slack_week"],
               meta: {
-                channel_id: rule.slack_channel_id,
-                channel_name: rule.slack_channel_name,
+                channel_id: channel.id,
                 ts: m.ts,
-                kind: "channel",
+                kind: "dm",
               },
             });
           }
-        } catch (err) {
-          errors.push(
-            err instanceof Error ? err.message : `channel ${rule.slack_channel_name} failed`,
-          );
+        } catch {
+          // skip this DM channel
         }
       }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "dm list failed");
     }
 
     const activity = signals.length;
-    const channels = [
-      ...new Set(
-        signals
-          .map((s) => s.meta?.channel_name as string | null)
-          .filter(Boolean)
-          .map((n) => channelLabel(n)),
-      ),
-    ];
+    const mentionCount = signals.filter((s) => s.tags.includes("slack_mention")).length;
+    const dmCount = signals.filter((s) => s.tags.includes("slack_dm")).length;
 
     let message: string;
     let suggestion: string | null = null;
 
     if (activity === 0) {
-      message = "Slack: Ingen ny aktivitet denne uken.";
+      message = "Slack: Ingen mentions eller DM-er denne uken.";
       suggestion =
-        ruleCount > 0
-          ? "Du har kanskje ikke mottatt ukeplan fra organisasjonen ennå — eller kanalene har vært stille siden mandag."
-          : "Du har kanskje ikke mottatt ukeplan fra organisasjonen ennå. Legg til kanaler (f.eks. #drift) under Innstillinger → Slack-kanaler.";
+        "Du har kanskje ikke mottatt ukeplan fra organisasjonen ennå — ingen har nevnt deg eller sendt DM siden mandag.";
     } else {
-      const chPart = channels.length > 0 ? ` fra ${channels.slice(0, 3).join(", ")}` : "";
-      message = `Slack: ${activity} ${activity === 1 ? "melding" : "meldinger"} denne uken${chPart}.`;
+      const parts: string[] = [];
+      if (mentionCount > 0) {
+        parts.push(`${mentionCount} ${mentionCount === 1 ? "mention" : "mentions"}`);
+      }
+      if (dmCount > 0) {
+        parts.push(`${dmCount} ${dmCount === 1 ? "DM" : "DM-er"}`);
+      }
+      message = `Slack: ${parts.join(" og ")} denne uken.`;
     }
 
     if (errors.length > 0 && activity === 0) {
