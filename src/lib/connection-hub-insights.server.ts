@@ -141,7 +141,9 @@ export function detectConnectionGaps(input: {
       gaps.push({
         severity: "warning",
         title: `Finance delvis koblet i ${ws.name}`,
-        description: finance.detail ?? "Legg inn faktura-nøkkel for Mission.",
+        description:
+          finance.detail ??
+          "Verify-nøkkelen mangler invoices:read — oppdater nøkkelen og test på nytt.",
         actionHref: modulesHref,
         platform: "finance",
       });

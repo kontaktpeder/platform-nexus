@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWs } from "./o.$orgSlug.w.$wsSlug";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +12,8 @@ import { ModuleConnectionPanel } from "@/components/platform/ModuleConnectionPan
 import { isConnectableModule } from "@/lib/module-connections";
 import { parseModuleConfig } from "@/lib/module-registry";
 import { ConnectionHubSummaryBar } from "@/components/platform/ConnectionHubPanel";
-import { getOrgConnectionHub } from "@/lib/connection-hub.functions";
+import { ConnectionGapsPanel } from "@/components/platform/ConnectionMatrix";
+import { useOrgConnectionHub } from "@/lib/connection-hub.hooks";
 import { PLATFORM_META } from "@/lib/connection-hub.types";
 import { ConnectionStatusBadge } from "@/components/platform/ConnectionStatusBadge";
 
@@ -35,12 +35,7 @@ function ModulesPage() {
   const { org, ws, modules, role } = useWs();
   const qc = useQueryClient();
   const canEdit = role === "owner" || role === "admin";
-  const fetchHub = useServerFn(getOrgConnectionHub);
-  const hubQuery = useQuery({
-    queryKey: ["connection-hub", orgSlug],
-    queryFn: () => fetchHub({ data: { orgSlug } }),
-    staleTime: 30_000,
-  });
+  const hubQuery = useOrgConnectionHub(orgSlug);
 
   const toggle = useMutation({
     mutationFn: async ({ moduleId, enabled }: { moduleId: string; enabled: boolean }) => {
@@ -79,8 +74,9 @@ function ModulesPage() {
       </div>
 
       {hubQuery.data && (
-        <div className="mt-4 rounded-xl border border-border/60 bg-muted/30 p-4">
+        <div className="mt-4 space-y-4 rounded-xl border border-border/60 bg-muted/30 p-4">
           <ConnectionHubSummaryBar hub={hubQuery.data} />
+          <ConnectionGapsPanel hub={hubQuery.data} />
         </div>
       )}
 

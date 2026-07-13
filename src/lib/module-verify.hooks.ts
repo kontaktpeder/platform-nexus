@@ -11,10 +11,10 @@ export function useVerifyAndSaveModuleConnection(orgSlug: string, wsSlug: string
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
+    onSuccess: async () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
-      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
       void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
+      await qc.refetchQueries({ queryKey: ["connection-hub", orgSlug] });
     },
   });
 }
@@ -24,10 +24,10 @@ export function useRetestModuleConnection(orgSlug: string, wsSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
+    onSuccess: async () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
-      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
       void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
+      await qc.refetchQueries({ queryKey: ["connection-hub", orgSlug] });
     },
   });
 }
@@ -37,10 +37,10 @@ export function useSaveModuleInvoicesApiKey(orgSlug: string, wsSlug: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => {
+    onSuccess: async () => {
       void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
-      void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
       void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
+      await qc.refetchQueries({ queryKey: ["connection-hub", orgSlug] });
     },
   });
 }

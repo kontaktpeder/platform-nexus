@@ -71,8 +71,11 @@ export function ModuleConnectionPanel({
   const [verifyApiKey, setVerifyApiKey] = useState("");
   const [invoicesApiKey, setInvoicesApiKey] = useState("");
 
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ["workspace-context", orgSlug, wsSlug] });
+    void qc.invalidateQueries({ queryKey: ["connection-hub", orgSlug] });
+    void qc.invalidateQueries({ queryKey: ["finance-invoices-access"] });
+  };
 
   const verify = useVerifyAndSaveModuleConnection(orgSlug, wsSlug);
   const retest = useRetestModuleConnection(orgSlug, wsSlug);
@@ -85,7 +88,8 @@ export function ModuleConnectionPanel({
       fetchInvoicesAccess({
         data: { orgId, connectionId: connection!.id },
       }),
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const disconnect = useMutation({

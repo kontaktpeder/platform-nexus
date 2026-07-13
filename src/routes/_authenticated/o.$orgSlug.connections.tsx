@@ -1,10 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { ConnectionHubPanel } from "@/components/platform/ConnectionHubPanel";
-import { getOrgConnectionHub } from "@/lib/connection-hub.functions";
+import { useOrgConnectionHub } from "@/lib/connection-hub.hooks";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/connections")({
@@ -16,12 +14,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgSlug/connections")({
 
 function OrgConnectionsPage() {
   const { orgSlug } = Route.useParams();
-  const fetchHub = useServerFn(getOrgConnectionHub);
-  const query = useQuery({
-    queryKey: ["connection-hub", orgSlug],
-    queryFn: () => fetchHub({ data: { orgSlug } }),
-    staleTime: 30_000,
-  });
+  const query = useOrgConnectionHub(orgSlug);
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,10 +24,23 @@ function OrgConnectionsPage() {
         back={{ to: "/o/$orgSlug", params: { orgSlug } }}
       />
       <main className="mx-auto max-w-3xl px-4 py-6 pb-24">
-        <p className="text-sm text-muted-foreground">
-          Oversikt over hva som er koblet, delvis koblet eller mangler — på tvers av Finance, Work,
-          Gmail og Slack.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Oversikt over hva som er koblet, delvis koblet eller mangler — på tvers av Finance, Work,
+            Gmail og Slack. Oppdateres automatisk når du tester moduler på nytt.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-2"
+            disabled={query.isFetching}
+            onClick={() => void query.refetch()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? "animate-spin" : ""}`} />
+            Oppdater
+          </Button>
+        </div>
 
         {query.isLoading ? (
           <div className="grid place-items-center py-16">
