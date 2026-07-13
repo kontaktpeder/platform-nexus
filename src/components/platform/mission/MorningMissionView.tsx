@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Check,
+  Mail,
   Clock,
   EyeOff,
   Loader2,
@@ -29,6 +30,7 @@ import type {
   MorningBriefActionOptions,
 } from "@/lib/morning-mission.types";
 import { suggestHintForItem } from "@/lib/mission-hint-suggest";
+import { isInvoiceMissionItem, parseInvoiceFromMissionItem } from "@/lib/mission-invoice-action";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +48,7 @@ function MissionItemCard({
   item,
   busy,
   onAction,
+  onComposeInvoice,
 }: {
   item: MorningMissionItem;
   busy: boolean;
@@ -54,6 +57,7 @@ function MissionItemCard({
     action: MorningBriefItemAction,
     options?: MorningBriefActionOptions,
   ) => void;
+  onComposeInvoice?: (item: MorningMissionItem) => void;
 }) {
   const suggestion = suggestHintForItem(item);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -90,8 +94,19 @@ function MissionItemCard({
               <span className="font-medium">Neste: </span>
               {item.recommended_action}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {item.href && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {isInvoiceMissionItem(item) && onComposeInvoice && (
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={busy}
+                onClick={() => onComposeInvoice(item)}
+              >
+                <Mail className="mr-1 h-3 w-3" />
+                Send purring
+              </Button>
+            )}
+            {item.href && (
                 <a
                   href={item.href}
                   target="_blank"
@@ -238,6 +253,7 @@ export function MorningMissionView({
   error,
   onRefresh,
   onAction,
+  onComposeInvoice,
 }: {
   data: MorningMissionResponse | undefined;
   loading: boolean;
@@ -250,6 +266,7 @@ export function MorningMissionView({
     action: MorningBriefItemAction,
     options?: MorningBriefActionOptions,
   ) => void;
+  onComposeInvoice?: (item: MorningMissionItem) => void;
 }) {
   if (loading) {
     return (
@@ -354,6 +371,7 @@ export function MorningMissionView({
                     item={item}
                     busy={busyItemId === item.id}
                     onAction={onAction}
+                    onComposeInvoice={onComposeInvoice}
                   />
                 ))}
               </div>
@@ -367,6 +385,7 @@ export function MorningMissionView({
                 item={item}
                 busy={busyItemId === item.id}
                 onAction={onAction}
+                onComposeInvoice={onComposeInvoice}
               />
             ))}
           </CollapsibleSection>
@@ -378,6 +397,7 @@ export function MorningMissionView({
                 item={item}
                 busy={busyItemId === item.id}
                 onAction={onAction}
+                onComposeInvoice={onComposeInvoice}
               />
             ))}
           </CollapsibleSection>

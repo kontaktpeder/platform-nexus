@@ -289,6 +289,69 @@ export type SavedGmailDraft = {
   openUrl: string;
 };
 
+function buildMultipartRaw(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  attachment: { filename: string; mimeType: string; data: Uint8Array };
+}): string {
+  const boundary = `mission_${Date.now().toString(36)}`;
+  const textPart = [
+    `Content-Type: text/plain; charset="UTF-8"`,
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    opts.body,
+  ].join("\r\n");
+  const attachmentB64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(opts.attachment.data).toString("base64")
+      : btoa(String.fromCharCode(...opts.attachment.data));
+  const filePart = [
+    `Content-Type: ${opts.attachment.mimeType}; name="${opts.attachment.filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${opts.attachment.filename}"`,
+    "",
+    attachmentB64,
+  ].join("\r\n");
+
+  const mime = [
+    `To: ${opts.to}`,
+    `Subject: ${opts.subject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    textPart,
+    `--${boundary}`,
+    filePart,
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+  return base64UrlEncode(mime);
+}
+
+export type SentGmailMessage = {
+  messageId: string;
+  threadId: string;
+};
+
+export async function sendGmailWithAttachment(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  attachment: { filename: string; mimeType: string; data: Uint8Array };
+}): Promise<SentGmailMessage> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const raw = buildMultipartRaw(opts);
+  const sent = await gmailPost<{ id: string; threadId: string }>(
+    `/users/me/messages/send`,
+    apiKey,
+    lovableKey,
+    { raw },
+  );
+  return { messageId: sent.id, threadId: sent.threadId };
+}
+
 export async function createGmailReplyDraft(opts: {
   context: GmailReplyContext;
   body: string;

@@ -174,7 +174,7 @@ export async function generateMorningMissionAi(input: {
     "- tag delivery_failure → ALLTID today, priority high. Aldri waiting eller this_week.",
     "  Forklar at mottaker sannsynligvis ikke har fått e-posten — brukeren kan tro de venter på svar uten grunn.",
     "- tag auto_reply eller «takk, vi har mottatt» → waiting, priority low. Aldri today.",
-    "- tag unpaid_invoice eller finance_widget med ubetalte fakturaer → today, priority high.",
+    "- tag unpaid_invoice eller finance_invoice → today, priority high. Anbefal «Send purring» i Mission.",
     "- Brukerens egne test-e-poster (korte «hei»/«test») → noise, aldri today.",
     "",
     "MYKE REGLER:",

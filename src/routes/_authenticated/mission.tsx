@@ -14,7 +14,9 @@ import {
   actOnMorningItem,
   undoMorningItem,
 } from "@/lib/morning-mission.functions";
-import type { MorningBriefItemAction, MorningBriefActionOptions } from "@/lib/morning-mission.types";
+import type { MorningBriefItemAction, MorningBriefActionOptions, MorningMissionItem } from "@/lib/morning-mission.types";
+import { InvoiceComposeSheet } from "@/components/platform/mission/InvoiceComposeSheet";
+import { parseInvoiceFromMissionItem } from "@/lib/mission-invoice-action";
 import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/mission")({
@@ -60,6 +62,11 @@ function GlobalMission() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [composeTarget, setComposeTarget] = useState<{
+    invoiceId: string;
+    orgSlug: string;
+    briefItemId: string;
+  } | null>(null);
 
   const data = query.data;
   const payload = data?.payload;
@@ -181,8 +188,35 @@ function GlobalMission() {
             error={query.error}
             onRefresh={onRefresh}
             onAction={handleAction}
+            onComposeInvoice={(item: MorningMissionItem) => {
+              const parsed = parseInvoiceFromMissionItem(item);
+              if (!parsed) return;
+              setComposeTarget({
+                invoiceId: parsed.invoiceId,
+                orgSlug: parsed.orgSlug,
+                briefItemId: item.id,
+              });
+            }}
           />
         </div>
+
+        {composeTarget && (
+          <InvoiceComposeSheet
+            open={!!composeTarget}
+            onOpenChange={(open) => {
+              if (!open) setComposeTarget(null);
+            }}
+            invoiceId={composeTarget.invoiceId}
+            orgSlug={composeTarget.orgSlug}
+            briefItemId={composeTarget.briefItemId}
+            onSent={async () => {
+              setHiddenIds((prev) => new Set(prev).add(composeTarget.briefItemId));
+              setComposeTarget(null);
+              await fetchMorning({ data: { force: true } });
+              await queryClient.invalidateQueries({ queryKey: ["morning-mission"] });
+            }}
+          />
+        )}
       </main>
       <PlatformBottomNav />
     </div>

@@ -69,16 +69,19 @@ function buildDeliveryFailureItem(signal: MissionSignal): MorningMissionItem {
 }
 
 function buildUnpaidInvoiceItem(signal: MissionSignal): MorningMissionItem {
-  const count = Number(signal.meta?.count ?? 1);
-  const org = (signal.meta?.org_name as string) || signal.from;
+  const invNr = signal.meta?.invoice_number as string | null;
+  const customer = (signal.meta?.customer_name as string) || signal.from;
+  const total = Number(signal.meta?.total ?? 0);
+  const due = signal.meta?.due_date as string | null;
+  const invoiceId = signal.meta?.invoice_id as string;
   return {
-    id: `unpaid-invoices-${signal.meta?.org_slug ?? "finance"}`,
-    title: count === 1 ? "1 ubetalt faktura" : `${count} ubetalte fakturaer`,
-    explanation: `${org} har ${count === 1 ? "en sendt faktura" : `${count} sendte fakturaer`} som ikke er betalt ennå.`,
-    recommended_action: "Åpne Finance og følg opp betaling eller purring.",
+    id: `invoice-${invoiceId}`,
+    title: invNr ? `Ubetalt faktura ${invNr}` : signal.subject,
+    explanation: `${customer} skylder ${total > 0 ? `${Math.round(total).toLocaleString("nb-NO")} kr` : "ubetalt beløp"}${due ? ` (forfall ${new Date(due).toLocaleDateString("nb-NO")})` : ""}.`,
+    recommended_action: "Åpne purring i Mission — forslag og PDF er klart.",
     priority: "high",
     source_ids: [signal.id],
-    source_label: `Finance · ${org}`,
+    source_label: `Finance · ${signal.meta?.org_name ?? "Finance"}`,
     href: signal.href,
   };
 }
@@ -133,6 +136,10 @@ export function applyTrustRules(
 
   for (const sig of signals) {
     if (!sig.tags.includes("unpaid_invoice")) continue;
+    if (sig.tags.includes("invoice_action")) {
+      today = upsertTodayItem(today, buildUnpaidInvoiceItem(sig));
+      continue;
+    }
     const count = Number(sig.meta?.count ?? 0);
     if (count <= 0) continue;
     today = upsertTodayItem(today, buildUnpaidInvoiceItem(sig));

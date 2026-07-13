@@ -113,7 +113,7 @@ async function buildMorningMission(
   const { listMissionHints } = await import("@/lib/mission-hints.server");
 
   const workspaces = await loadWorkspacesForUser(supabase, userId);
-  const allSignals = await gatherMorningSignals({ workspaces });
+  const allSignals = await gatherMorningSignals({ workspaces, userId });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
   const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
@@ -197,7 +197,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
     const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
     const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
     const workspaces = await loadWorkspacesForUser(supabase, userId);
-    const allSignals = await gatherMorningSignals({ workspaces });
+    const allSignals = await gatherMorningSignals({ workspaces, userId });
     const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
     const trusted = applyTrustRules(cached.payload, forAi, userEmail);
     const filtered = filterPayloadByStates(trusted, actionStates);

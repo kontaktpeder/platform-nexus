@@ -5,7 +5,7 @@ import { gmailToSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { WorkspaceAlertsMap } from "@/lib/module-alerts.types";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
 import type { ModuleConnectionRow } from "@/lib/module-connections";
-import { parseModuleInfoSnapshot } from "@/lib/module-registry";
+import type { FinanceConnectionContext } from "@/lib/finance/finance-invoice.server";
 
 export type MorningWorkspaceInput = {
   orgId: string;
@@ -16,47 +16,46 @@ export type MorningWorkspaceInput = {
   moduleAlerts: WorkspaceAlertsMap;
 };
 
-function parseWidgetCount(display: string | undefined): number {
-  if (!display) return 0;
-  const m = display.replace(/\s/g, "").match(/\d+/);
-  return m ? Number(m[0]) : 0;
+function formatNok(amount: number): string {
+  return new Intl.NumberFormat("nb-NO", {
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount));
 }
 
-function unpaidInvoicesFromWidgets(input: {
+async function unpaidInvoiceSignals(input: {
   ws: MorningWorkspaceInput;
-  widgetData: Record<string, { display?: string; status?: string } | undefined>;
-  connections: ModuleConnectionRow[];
-}): MissionSignal | null {
-  const datum = input.widgetData["finance:unpaid_invoices"];
-  const count = parseWidgetCount(datum?.display);
-  if (count <= 0) return null;
+  fin: FinanceConnectionContext;
+}): Promise<MissionSignal[]> {
+  const { listUnpaidFinanceInvoices } = await import("@/lib/finance/finance-invoice.server");
+  const invoices = await listUnpaidFinanceInvoices(input.fin);
+  const home = resolveModuleOpenUrl(input.fin.connection);
 
-  const financeConn = input.connections.find((c) => c.module_slug === "finance");
-  const snapshot = financeConn
-    ? parseModuleInfoSnapshot(financeConn.module_info_snapshot)
-    : null;
-  const home = financeConn ? resolveModuleOpenUrl(financeConn) : null;
-  const invoicesHref =
-    snapshot && financeConn
-      ? `${home?.replace(/\/$/, "") ?? financeConn.external_base_url}/orgs/${financeConn.external_org_id}/invoices`
-      : home;
-
-  return {
-    id: `finance:${input.ws.orgSlug}:unpaid_invoices`,
-    source: "finance",
-    subject: count === 1 ? "1 ubetalt faktura" : `${count} ubetalte fakturaer`,
-    from: `Finance · ${input.ws.orgName}`,
-    snippet: `${count} sendte faktura${count === 1 ? "" : "er"} uten registrert betaling.`,
-    occurred_at: null,
-    href: invoicesHref,
-    tags: ["unpaid_invoice", "finance_widget", "warning"],
-    meta: {
-      count,
-      org_slug: input.ws.orgSlug,
-      org_name: input.ws.orgName,
-      widget_display: datum?.display ?? null,
-    },
-  };
+  return invoices.map((inv) => {
+    const nr = inv.invoice_number ? `#${inv.invoice_number}` : "uten nummer";
+    const due = inv.due_date
+      ? ` Forfall ${new Date(inv.due_date).toLocaleDateString("nb-NO")}.`
+      : "";
+    return {
+      id: `finance:${input.ws.orgSlug}:invoice:${inv.id}`,
+      source: "finance",
+      subject: `Ubetalt faktura ${nr} · ${inv.customer_name}`,
+      from: `Finance · ${input.ws.orgName}`,
+      snippet: `${formatNok(inv.total)} kr utestående.${due}`,
+      occurred_at: inv.issue_date,
+      href: home ? `${home.replace(/\/$/, "")}/invoices/${inv.id}` : null,
+      tags: ["unpaid_invoice", "finance_invoice", "invoice_action"],
+      meta: {
+        invoice_id: inv.id,
+        org_slug: input.ws.orgSlug,
+        org_name: input.ws.orgName,
+        customer_name: inv.customer_name,
+        customer_email: inv.customer_email,
+        invoice_number: inv.invoice_number,
+        total: inv.total,
+        due_date: inv.due_date,
+      },
+    };
+  });
 }
 
 export function moduleAlertsToSignals(input: {
@@ -88,14 +87,14 @@ export function moduleAlertsToSignals(input: {
 
 export async function gatherMorningSignals(input: {
   workspaces: MorningWorkspaceInput[];
+  userId: string;
 }): Promise<MissionSignal[]> {
   const gmail = (await fetchRecentGmailSignals({ hours: 72, max: 40 })).map(gmailToSignal);
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { fetchWorkspaceWidgetData } = await import("@/lib/widget-data.server");
 
   const moduleSignals: MissionSignal[] = [];
-  const financeWidgetSignals: MissionSignal[] = [];
+  const financeInvoiceSignals: MissionSignal[] = [];
 
   for (const ws of input.workspaces) {
     moduleSignals.push(
@@ -107,28 +106,18 @@ export async function gatherMorningSignals(input: {
       }),
     );
 
-    const { data: connections } = await supabaseAdmin
-      .from("module_connections")
-      .select(
-        "id, org_id, workspace_id, module_id, external_org_id, external_base_url, status, module_slug, module_info_snapshot, resolved_org_home_url, external_org_name",
-      )
-      .eq("workspace_id", ws.workspaceId)
-      .eq("org_id", ws.orgId)
-      .eq("status", "connected");
-
-    const widgetData = await fetchWorkspaceWidgetData({
+    const { resolveFinanceConnection } = await import("@/lib/finance/finance-invoice.server");
+    const fin = await resolveFinanceConnection({
       supabaseAdmin,
-      orgId: ws.orgId,
-      workspaceId: ws.workspaceId,
-    }).catch(() => ({}));
+      userId: input.userId,
+      orgSlug: ws.orgSlug,
+    }).catch(() => null);
 
-    const unpaid = unpaidInvoicesFromWidgets({
-      ws,
-      widgetData,
-      connections: (connections ?? []) as ModuleConnectionRow[],
-    });
-    if (unpaid) financeWidgetSignals.push(unpaid);
+    if (!fin) continue;
+
+    const unpaid = await unpaidInvoiceSignals({ ws, fin }).catch(() => []);
+    financeInvoiceSignals.push(...unpaid);
   }
 
-  return [...gmail, ...moduleSignals, ...financeWidgetSignals];
+  return [...gmail, ...moduleSignals, ...financeInvoiceSignals];
 }
