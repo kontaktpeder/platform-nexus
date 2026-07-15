@@ -2,6 +2,9 @@
 
 **Status:** Implemented. Additive on top of Knowledge v0/v1. Never auto-creates entities.
 
+> **v2.1:** Deterministic identities live in `known_identities` (see `KNOWN_IDENTITIES.v0.md`).
+> `entity_suggestions` is promotion-only — tied to `known_identity_id` when applicable.
+
 ## Goal
 
 Propose new Knowledge entities from repeated unlinked Mission signals so the

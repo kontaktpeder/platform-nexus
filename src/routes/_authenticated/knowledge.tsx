@@ -49,6 +49,12 @@ import {
   type EntitySuggestion,
 } from "@/lib/knowledge-suggestions.functions";
 import {
+  listKnownIdentities,
+  promoteIdentityToEntity,
+  ignoreKnownIdentity,
+} from "@/lib/known-identities.functions";
+import type { KnownIdentity } from "@/lib/knowledge/identity/types";
+import {
   scanCommitments,
   listCommitments,
   approveCommitment,
@@ -159,6 +165,8 @@ function KnowledgePage() {
         <ContextSection />
 
         <CommitmentsSection />
+
+        <IdentitiesSection />
 
         <SuggestionsSection />
 
@@ -636,7 +644,143 @@ function EntityDrawer({
   );
 }
 
-// ─── Knowledge suggestions (v2) ─────────────────────────────────────────────
+// ─── Known identities ───────────────────────────────────────────────────────
+
+const IDENTITY_TYPE_LABEL: Record<string, string> = {
+  email_address: "E-post",
+  email_domain: "Domene",
+  slack_user: "Slack-bruker",
+  slack_channel: "Slack-kanal",
+  external_account: "Konto",
+};
+
+function IdentitiesSection() {
+  const list = useServerFn(listKnownIdentities);
+  const q = useQuery({
+    queryKey: ["knowledge", "identities", "unlinked"],
+    queryFn: () =>
+      list({ data: { linked: false, limit: 30 } }) as Promise<KnownIdentity[]>,
+  });
+
+  const identities = q.data ?? [];
+
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Identiteter
+      </h2>
+      {q.isLoading ? (
+        <div className="rounded-2xl border border-border/60 bg-card p-6 text-center text-xs text-muted-foreground">
+          Laster…
+        </div>
+      ) : identities.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/60 bg-card p-6 text-center text-sm text-muted-foreground">
+          Ingen observerte identiteter ennå. Kjør Gmail/Slack-ingest for å samle kontakter.
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/60 rounded-2xl border border-border/60 bg-card">
+          {identities.map((ki) => (
+            <IdentityRow key={ki.id} identity={ki} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function IdentityRow({ identity }: { identity: KnownIdentity }) {
+  const qc = useQueryClient();
+  const promote = useServerFn(promoteIdentityToEntity);
+  const ignore = useServerFn(ignoreKnownIdentity);
+  const [busy, setBusy] = useState<"person" | "company" | "ignore" | null>(null);
+
+  const label =
+    identity.display_name ??
+    identity.email ??
+    identity.domain ??
+    identity.external_key;
+  const sub =
+    identity.email && identity.display_name
+      ? identity.email
+      : identity.external_key;
+
+  async function doPromote(type: "person" | "company") {
+    setBusy(type);
+    try {
+      const res = (await promote({
+        data: { identityId: identity.id, type },
+      })) as { entity: Entity; linkedSignalCount: number };
+      toast(
+        `Opprettet ${res.entity.name}${res.linkedSignalCount ? ` — koblet ${res.linkedSignalCount} signaler` : ""}`,
+      );
+      qc.invalidateQueries({ queryKey: ["knowledge"] });
+      qc.invalidateQueries({ queryKey: ["global-mission"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doIgnore() {
+    setBusy("ignore");
+    try {
+      await ignore({ data: { identityId: identity.id } });
+      toast("Ignorert");
+      qc.invalidateQueries({ queryKey: ["knowledge"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Feilet");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-medium">{label}</div>
+          <div className="truncate text-xs text-muted-foreground">{sub}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {IDENTITY_TYPE_LABEL[identity.identity_type] ?? identity.identity_type} · sett{" "}
+            {identity.seen_count} ganger
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={!!busy}
+            onClick={() => doPromote("person")}
+          >
+            {busy === "person" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Person"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={!!busy}
+            onClick={() => doPromote("company")}
+          >
+            {busy === "company" ? <Loader2 className="h-3 w-3 animate-spin" /> : "Selskap"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs"
+            disabled={!!busy}
+            onClick={doIgnore}
+          >
+            Ignorer
+          </Button>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+// ─── Knowledge suggestions (promotion) ──────────────────────────────────────
 
 function SuggestionsSection() {
   const qc = useQueryClient();
@@ -669,7 +813,7 @@ function SuggestionsSection() {
     <section className="mb-6">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Forslag
+          Til vurdering
         </h2>
         <Button
           size="sm"
@@ -787,7 +931,12 @@ function SuggestionCard({ suggestion }: { suggestion: EntitySuggestion }) {
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{suggestion.reason}</p>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            {suggestion.example_count} signaler · {kindLabel}
+            {suggestion.example_count} signaler
+            {suggestion.suggestion_reason
+              ? ` · ${suggestion.suggestion_reason.replace(/_/g, " ")}`
+              : kind
+                ? ` · ${kindLabel}`
+                : ""}
           </div>
         </div>
       </div>

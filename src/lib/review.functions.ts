@@ -236,6 +236,20 @@ export const acceptEntitySuggestionV2 = createServerFn({ method: "POST" })
       .single();
     if (insErr) throw insErr;
 
+    if (row.known_identity_id) {
+      const { setIdentityEntityLink } = await import(
+        "@/lib/knowledge/identity/identity.server"
+      );
+      await setIdentityEntityLink(
+        supabase,
+        userId,
+        row.known_identity_id as string,
+        entity.id as string,
+      ).catch((err) => {
+        console.warn("[accept-suggestion-v2] identity link failed", err);
+      });
+    }
+
     // Promote any pending relation_suggestions that reference this suggestion.
     await supabase
       .from("relation_suggestions")
@@ -264,6 +278,28 @@ export const mergeEntitySuggestion = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+
+    const { data: row } = await supabase
+      .from("entity_suggestions")
+      .select("known_identity_id")
+      .eq("id", data.suggestionId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (row?.known_identity_id) {
+      const { setIdentityEntityLink } = await import(
+        "@/lib/knowledge/identity/identity.server"
+      );
+      await setIdentityEntityLink(
+        supabase,
+        userId,
+        row.known_identity_id as string,
+        data.targetEntityId,
+      ).catch((err) => {
+        console.warn("[merge-suggestion] identity link failed", err);
+      });
+    }
+
     // Rewire relation suggestions that pointed to this suggestion.
     await supabase
       .from("relation_suggestions")

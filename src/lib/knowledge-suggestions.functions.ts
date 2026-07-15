@@ -19,6 +19,8 @@ export type EntitySuggestion = {
   example_count: number;
   status: "pending" | "ignored" | "snoozed" | "accepted";
   snoozed_until: string | null;
+  known_identity_id: string | null;
+  suggestion_reason: string | null;
   metadata: {
     cluster_kind?: ClusterKind;
     example_refs?: string[];
@@ -41,6 +43,13 @@ export const suggestKnowledgeEntities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
+
+    const { syncPromotionSuggestions } = await import(
+      "@/lib/knowledge/identity/identity.server"
+    );
+    await syncPromotionSuggestions(supabase, userId).catch((err) => {
+      console.warn("[knowledge-suggestions] identity promotion sync failed", err);
+    });
 
     const { buildMissionSignalDescriptors } = await import(
       "@/lib/mission-signals.server"
@@ -191,6 +200,20 @@ export const acceptEntitySuggestion = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (insErr) throw insErr;
+
+    if (row.known_identity_id) {
+      const { setIdentityEntityLink } = await import(
+        "@/lib/knowledge/identity/identity.server"
+      );
+      await setIdentityEntityLink(
+        supabase,
+        userId,
+        row.known_identity_id as string,
+        entity.id as string,
+      ).catch((err) => {
+        console.warn("[accept-suggestion] identity link failed", err);
+      });
+    }
 
     // Link the example signals via a fresh auto-link pass over descriptors.
     let linkedCount = 0;

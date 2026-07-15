@@ -244,6 +244,7 @@ export type Database = {
           created_at: string
           example_count: number
           id: string
+          known_identity_id: string | null
           metadata: Json
           owner_context: Database["public"]["Enums"]["owner_context"] | null
           proposed_name: string
@@ -253,6 +254,7 @@ export type Database = {
           snoozed_until: string | null
           status: string
           suggestion_key: string
+          suggestion_reason: string | null
           updated_at: string
           user_id: string
         }
@@ -261,6 +263,7 @@ export type Database = {
           created_at?: string
           example_count?: number
           id?: string
+          known_identity_id?: string | null
           metadata?: Json
           owner_context?: Database["public"]["Enums"]["owner_context"] | null
           proposed_name: string
@@ -270,6 +273,7 @@ export type Database = {
           snoozed_until?: string | null
           status?: string
           suggestion_key: string
+          suggestion_reason?: string | null
           updated_at?: string
           user_id: string
         }
@@ -278,6 +282,7 @@ export type Database = {
           created_at?: string
           example_count?: number
           id?: string
+          known_identity_id?: string | null
           metadata?: Json
           owner_context?: Database["public"]["Enums"]["owner_context"] | null
           proposed_name?: string
@@ -287,15 +292,91 @@ export type Database = {
           snoozed_until?: string | null
           status?: string
           suggestion_key?: string
+          suggestion_reason?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "entity_suggestions_known_identity_id_fkey"
+            columns: ["known_identity_id"]
+            isOneToOne: false
+            referencedRelation: "known_identities"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "entity_suggestions_raw_signal_id_fkey"
             columns: ["raw_signal_id"]
             isOneToOne: false
             referencedRelation: "raw_signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      known_identities: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          domain: string | null
+          email: string | null
+          entity_id: string | null
+          external_key: string
+          first_seen_at: string
+          handle: string | null
+          id: string
+          identity_type: string
+          ignored_at: string | null
+          last_seen_at: string
+          metadata: Json
+          provider: string
+          seen_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          domain?: string | null
+          email?: string | null
+          entity_id?: string | null
+          external_key: string
+          first_seen_at?: string
+          handle?: string | null
+          id?: string
+          identity_type: string
+          ignored_at?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          provider: string
+          seen_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          domain?: string | null
+          email?: string | null
+          entity_id?: string | null
+          external_key?: string
+          first_seen_at?: string
+          handle?: string | null
+          id?: string
+          identity_type?: string
+          ignored_at?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          provider?: string
+          seen_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "known_identities_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
             referencedColumns: ["id"]
           },
         ]
@@ -637,6 +718,48 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      signal_identities: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          id: string
+          identity_id: string
+          identity_role: string
+          signal_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          identity_id: string
+          identity_role: string
+          signal_id: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          id?: string
+          identity_id?: string
+          identity_role?: string
+          signal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_identities_identity_id_fkey"
+            columns: ["identity_id"]
+            isOneToOne: false
+            referencedRelation: "known_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_identities_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "raw_signals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       raw_signals: {
         Row: {

@@ -421,6 +421,32 @@ async function upsertSignals(opts: {
         result.inserted += 1;
       }
     }
+
+    // Deterministic identity layer — runs for every row in batch (new + existing).
+    const { data: signalRows } = await supabase
+      .from("raw_signals")
+      .select("id, source, external_id, occurred_at, summary, metadata")
+      .eq("user_id", userId)
+      .in("source", sources)
+      .in("external_id", externalIds);
+
+    if (signalRows && signalRows.length > 0) {
+      const { processBatchSignalIdentities } = await import(
+        "@/lib/knowledge/identity/identity.server"
+      );
+      await processBatchSignalIdentities(
+        supabase,
+        userId,
+        signalRows.map((row) => ({
+          id: row.id as string,
+          source: row.source as string,
+          external_id: row.external_id as string | null,
+          occurred_at: row.occurred_at as string | null,
+          summary: row.summary as string | null,
+          metadata: (row.metadata ?? {}) as Record<string, unknown>,
+        })),
+      );
+    }
   } catch (err) {
     result.errors.push(err instanceof Error ? err.message : "upsert failed");
   }

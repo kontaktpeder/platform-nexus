@@ -7,8 +7,10 @@ import type { Entity } from "./types";
 import type { EntityLink } from "@/lib/global-mission.functions";
 import {
   matchEntityForSignal,
+  normalizeChannelName,
   type MatchInput,
 } from "./entity-matcher";
+import { loadLinkedIdentityLookups } from "./identity/identity.server";
 
 type DB = SupabaseClient<Database>;
 
@@ -26,6 +28,45 @@ function signalTypeFor(source: MatchInput["source"], externalRef: string): strin
     return "message.received";
   }
   return "workspace.action";
+}
+
+function resolveViaKnownIdentity(
+  s: MissionSignalDescriptor,
+  lookups: Awaited<ReturnType<typeof loadLinkedIdentityLookups>>,
+  entityById: Map<string, Entity>,
+): EntityLink | null {
+  if (s.source === "gmail" && s.senderEmail) {
+    const ki = lookups.byEmail.get(s.senderEmail.toLowerCase());
+    if (ki?.entity_id) {
+      const e = entityById.get(ki.entity_id);
+      if (e) {
+        return {
+          entityId: e.id,
+          entityName: e.name,
+          entitySlug: e.slug,
+          linkSource: "auto",
+        };
+      }
+    }
+  }
+
+  if (s.source === "slack" && s.channelName) {
+    const ch = normalizeChannelName(s.channelName);
+    const ki = ch ? lookups.bySlackChannelName.get(ch) : undefined;
+    if (ki?.entity_id) {
+      const e = entityById.get(ki.entity_id);
+      if (e) {
+        return {
+          entityId: e.id,
+          entityName: e.name,
+          entitySlug: e.slug,
+          linkSource: "auto",
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function autoLinkMissionSignals(
@@ -61,6 +102,7 @@ export async function autoLinkMissionSignals(
     .eq("user_id", userId);
   const entities = (entRows ?? []) as Entity[];
   const entityById = new Map(entities.map((e) => [e.id, e]));
+  const identityLookups = await loadLinkedIdentityLookups(supabase, userId);
 
   // 3. Seed map with existing links (manual + auto).
   for (const [ref, row] of existing) {
@@ -88,6 +130,23 @@ export async function autoLinkMissionSignals(
 
   for (const s of signals) {
     if (existing.has(s.externalRef)) continue; // never overwrite
+
+    const viaIdentity = resolveViaKnownIdentity(s, identityLookups, entityById);
+    if (viaIdentity) {
+      map[s.externalRef] = viaIdentity;
+      toUpsert.push({
+        user_id: userId,
+        entity_id: viaIdentity.entityId,
+        source: s.source,
+        signal_type: s.signalType || signalTypeFor(s.source, s.externalRef),
+        external_ref: s.externalRef.slice(0, 300),
+        occurred_at: s.occurredAt ?? null,
+        snippet: s.snippet ? s.snippet.slice(0, 160) : null,
+        link_source: "auto",
+      });
+      continue;
+    }
+
     const result = matchEntityForSignal(s, entities);
     if (!result.entity) continue;
     const e = entityById.get(result.entity.entityId);
