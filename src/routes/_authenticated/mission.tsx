@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getReviewCount } from "@/lib/review.functions";
-import { MapPin, Sparkles } from "lucide-react";
+import { Building2, MapPin, Sparkles } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -178,6 +178,7 @@ function GlobalMission() {
         />
 
         <ReviewInboxTeaser />
+        <KunderTeaser />
         <FieldTeaser />
 
         <div id="morning-today">
@@ -246,6 +247,26 @@ function ReviewInboxTeaser() {
         <div>
           <p className="font-medium">AI trenger gjennomgang</p>
           <p className="text-xs text-muted-foreground">{total} forslag venter i Innboks</p>
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground">Åpne →</span>
+    </Link>
+  );
+}
+
+function KunderTeaser() {
+  return (
+    <Link
+      to="/kunder"
+      className="mt-3 flex items-center justify-between rounded-2xl border border-border/60 bg-card p-4 text-sm shadow-sm transition hover:border-border"
+    >
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
+          <Building2 className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="font-medium">Kunder</p>
+          <p className="text-xs text-muted-foreground">Se entities, tidslinje og koblinger</p>
         </div>
       </div>
       <span className="text-xs text-muted-foreground">Åpne →</span>

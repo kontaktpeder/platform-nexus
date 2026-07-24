@@ -19,6 +19,8 @@ import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/field'
+import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
+import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
@@ -76,6 +78,16 @@ const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
 const AuthenticatedFieldRoute = AuthenticatedFieldRouteImport.update({
   id: '/field',
   path: '/field',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
+  id: '/kunder',
+  path: '/kunder',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKunderEntityIdRoute = AuthenticatedKunderEntityIdRouteImport.update({
+  id: '/kunder/$entityId',
+  path: '/kunder/$entityId',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
@@ -137,6 +149,8 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
+  '/kunder': typeof AuthenticatedKunderRoute
+  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
@@ -157,6 +171,8 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
+  '/kunder': typeof AuthenticatedKunderRoute
+  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
@@ -178,6 +194,8 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRoute
   '/_authenticated/field': typeof AuthenticatedFieldRoute
+  '/_authenticated/kunder': typeof AuthenticatedKunderRoute
+  '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
   '/_authenticated/mission': typeof AuthenticatedMissionRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
@@ -200,6 +218,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/field'
+    | '/kunder'
+    | '/kunder/$entityId'
     | '/knowledge'
     | '/mission'
     | '/modules'
@@ -220,6 +240,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/field'
+    | '/kunder'
+    | '/kunder/$entityId'
     | '/knowledge'
     | '/mission'
     | '/modules'
@@ -240,6 +262,8 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/app'
     | '/_authenticated/field'
+    | '/_authenticated/kunder'
+    | '/_authenticated/kunder/$entityId'
     | '/_authenticated/knowledge'
     | '/_authenticated/mission'
     | '/_authenticated/modules'
@@ -334,6 +358,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFieldRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/kunder': {
+      id: '/_authenticated/kunder'
+      path: '/kunder'
+      fullPath: '/kunder'
+      preLoaderRoute: typeof AuthenticatedKunderRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/kunder/$entityId': {
+      id: '/_authenticated/kunder/$entityId'
+      path: '/kunder/$entityId'
+      fullPath: '/kunder/$entityId'
+      preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/app': {
       id: '/_authenticated/app'
       path: '/app'
@@ -424,6 +462,8 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
   AuthenticatedFieldRoute: typeof AuthenticatedFieldRoute
+  AuthenticatedKunderRoute: typeof AuthenticatedKunderRoute
+  AuthenticatedKunderEntityIdRoute: typeof AuthenticatedKunderEntityIdRoute
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
   AuthenticatedMissionRoute: typeof AuthenticatedMissionRoute
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
@@ -439,6 +479,8 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
   AuthenticatedFieldRoute: AuthenticatedFieldRoute,
+  AuthenticatedKunderRoute: AuthenticatedKunderRoute,
+  AuthenticatedKunderEntityIdRoute: AuthenticatedKunderEntityIdRoute,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
   AuthenticatedMissionRoute: AuthenticatedMissionRoute,
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,

@@ -1,10 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, Sparkles, Inbox, User, MapPin } from "lucide-react";
+import { Home, Sparkles, Inbox, User, Building2 } from "lucide-react";
 import { useReviewInboxCount } from "@/lib/review.hooks";
 
 const ITEMS = [
   { to: "/app" as const, label: "Hjem", icon: Home, exact: false },
-  { to: "/field" as const, label: "Felt", icon: MapPin, exact: false },
+  { to: "/kunder" as const, label: "Kunder", icon: Building2, exact: false },
   { to: "/mission" as const, label: "Plan", icon: Sparkles, exact: true },
   { to: "/review" as const, label: "Innboks", icon: Inbox, exact: false, showBadge: true },
   { to: "/settings" as const, label: "Meg", icon: User, exact: false },
@@ -20,7 +20,12 @@ export function PlatformBottomNav() {
       <div className="mx-auto grid max-w-3xl grid-cols-5">
         {ITEMS.map((item) => {
           const { to, label, icon: Icon, exact } = item;
-          const active = exact ? pathname === to : pathname.startsWith(to);
+          const active =
+            to === "/kunder"
+              ? pathname.startsWith("/kunder")
+              : exact
+                ? pathname === to
+                : pathname.startsWith(to);
           const showBadge = "showBadge" in item && item.showBadge;
           const badge = showBadge && inboxTotal > 0 ? inboxTotal : 0;
           return (
