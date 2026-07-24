@@ -1,10 +1,12 @@
 // Client-only: establish a Supabase session from password-recovery email links.
-// Handles PKCE (?code=) and legacy hash (#access_token=&type=recovery).
+// Handles PKCE (?code= on /auth/update-password) and legacy hash (#type=recovery).
 
 import {
   clearPasswordRecoveryPending,
   isPasswordRecoveryPending,
   markPasswordRecoveryPending,
+  urlHasExplicitRecoveryMarkers,
+  urlHasUpdatePasswordRecoveryParams,
 } from "@/lib/auth-recovery-early";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -12,19 +14,16 @@ export type RecoveryBootstrapResult =
   | { ok: true; userId: string; via: "pkce" | "hash" | "session" }
   | { ok: false; reason: "no_link" | "exchange_failed" | "no_session"; message: string };
 
-function hasRecoveryParams(url: URL): boolean {
-  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
-  return (
-    url.searchParams.has("code") ||
-    url.searchParams.get("type") === "recovery" ||
-    hash.get("type") === "recovery" ||
-    hash.has("access_token")
-  );
-}
-
+/**
+ * True when the URL is a password-recovery landing — not a Google OAuth callback.
+ * Bare ?code= on / or /auth is OAuth; ?code= on /auth/update-password is recovery.
+ */
 export function hasRecoveryLinkInUrl(href: string = window.location.href): boolean {
   try {
-    return hasRecoveryParams(new URL(href));
+    const url = new URL(href);
+    if (urlHasExplicitRecoveryMarkers(url)) return true;
+    if (urlHasUpdatePasswordRecoveryParams(url)) return true;
+    return false;
   } catch {
     return false;
   }
@@ -53,13 +52,20 @@ export async function bootstrapPasswordRecoverySession(): Promise<RecoveryBootst
   }
 
   const url = new URL(window.location.href);
+  const onUpdatePassword = url.pathname === "/auth/update-password";
   const code = url.searchParams.get("code");
 
-  if (code || hasRecoveryParams(url)) {
+  const isRecoveryContext =
+    onUpdatePassword ||
+    urlHasExplicitRecoveryMarkers(url) ||
+    isPasswordRecoveryPending();
+
+  if (isRecoveryContext && (code || urlHasExplicitRecoveryMarkers(url) || urlHasUpdatePasswordRecoveryParams(url))) {
     markPasswordRecoveryPending();
   }
 
-  if (code) {
+  // Exchange PKCE code only in recovery context (update-password page).
+  if (code && onUpdatePassword) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     cleanRecoveryParamsFromUrl();
     if (error) {
@@ -77,10 +83,11 @@ export async function bootstrapPasswordRecoverySession(): Promise<RecoveryBootst
         message: "Lenken virket, men ingen session ble opprettet. Be om ny lenke.",
       };
     }
+    markPasswordRecoveryPending();
     return { ok: true, userId, via: "pkce" };
   }
 
-  if (hasRecoveryParams(url)) {
+  if (urlHasExplicitRecoveryMarkers(url) || (onUpdatePassword && hashHasAccessToken(url))) {
     await new Promise((r) => setTimeout(r, 150));
     const { data, error } = await supabase.auth.getSession();
     cleanRecoveryParamsFromUrl();
@@ -89,6 +96,7 @@ export async function bootstrapPasswordRecoverySession(): Promise<RecoveryBootst
     }
     const userId = data.session?.user?.id;
     if (userId) {
+      markPasswordRecoveryPending();
       return { ok: true, userId, via: "hash" };
     }
     return {
@@ -113,11 +121,16 @@ export async function bootstrapPasswordRecoverySession(): Promise<RecoveryBootst
   };
 }
 
+function hashHasAccessToken(url: URL): boolean {
+  return new URLSearchParams(url.hash.replace(/^#/, "")).has("access_token");
+}
+
 export function redirectRecoveryLinkToUpdatePassword(): boolean {
   if (typeof window === "undefined") return false;
   const path = window.location.pathname;
   if (path === "/auth/update-password") return false;
-  if (!hasRecoveryLinkInUrl()) return false;
+  // Never redirect bare OAuth codes — only explicit recovery markers.
+  if (!urlHasExplicitRecoveryMarkers(new URL(window.location.href))) return false;
 
   markPasswordRecoveryPending();
   const url = new URL(window.location.href);

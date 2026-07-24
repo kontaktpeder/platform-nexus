@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   clearPasswordRecoveryPending,
   redirectRecoveryLinkToUpdatePassword,
 } from "@/lib/auth-recovery";
+import { markPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,11 @@ export const Route = createFileRoute("/auth/update-password")({
 });
 
 type BootState = "loading" | "ready" | "error";
+
+function goToLoginCleared(navigate: ReturnType<typeof useNavigate>) {
+  clearPasswordRecoveryPending();
+  navigate({ to: "/auth", replace: true });
+}
 
 function UpdatePasswordPage() {
   const { user, loading: authLoading } = useAuth();
@@ -34,6 +40,8 @@ function UpdatePasswordPage() {
 
   useEffect(() => {
     if (redirectRecoveryLinkToUpdatePassword()) return;
+
+    markPasswordRecoveryPending();
 
     const stored = sessionStorage.getItem("platform:auth:userIdBefore");
     if (stored) setUserIdBefore(stored);
@@ -127,7 +135,7 @@ function UpdatePasswordPage() {
       }
 
       toast.success("Passord er satt", {
-        description: `user.id: ${afterId ?? "ukjent"} · providers: ${providers}`,
+        description: `Du kan nå logge inn med e-post og passord. user.id: ${afterId ?? "ukjent"} · ${providers}`,
         duration: 10000,
       });
 
@@ -147,17 +155,21 @@ function UpdatePasswordPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
       <div className="w-full max-w-md">
-        <Link to="/auth" className="mb-8 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => goToLoginCleared(navigate)}
+          className="mb-8 flex w-full items-center justify-center gap-2"
+        >
           <div className="grid h-9 w-9 place-items-center rounded-xl gradient-primary text-primary-foreground">
             <Layers className="h-5 w-5" />
           </div>
           <span className="font-heading text-lg font-semibold">Platform Core</span>
-        </Link>
+        </button>
 
         <div className="surface-card p-6 md:p-8">
           <h1 className="font-heading text-2xl font-semibold">Sett nytt passord</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Legg til passord på din eksisterende konto (samme bruker-ID som Google-innlogging).
+            Fra «Glemt passord»-e-posten, eller for å legge passord på Google-kontoen din.
           </p>
 
           {userIdBefore && (
@@ -174,19 +186,20 @@ function UpdatePasswordPage() {
           )}
 
           {!isLoading && bootState === "error" && (
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900">
+            <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900">
               <p>{bootError}</p>
-              <p className="mt-2 text-xs">
-                Tips: Be om ny lenke via{" "}
-                <Link to="/auth" className="underline">
-                  Glemt passord
-                </Link>
-                , eller sett passord under{" "}
-                <Link to="/settings" className="underline">
-                  Innstillinger
-                </Link>{" "}
-                mens du er logget inn med Google.
+              <p className="text-xs">
+                Be om ny lenke via Glemt passord, eller logg inn med Google og sett passord under
+                Innstillinger.
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => goToLoginCleared(navigate)}
+              >
+                Tilbake til innlogging
+              </Button>
             </div>
           )}
 
@@ -220,17 +233,16 @@ function UpdatePasswordPage() {
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Lagre passord
             </Button>
-            {!canSubmit && !isLoading && (
-              <p className="text-center text-xs text-muted-foreground">
-                Skjemaet kan brukes selv om lenken feilet — du får en tydelig feilmelding ved lagring.
-              </p>
-            )}
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            <Link to="/auth" className="font-medium text-primary hover:underline">
+            <button
+              type="button"
+              className="font-medium text-primary hover:underline"
+              onClick={() => goToLoginCleared(navigate)}
+            >
               Tilbake til innlogging
-            </Link>
+            </button>
           </p>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/hooks/useAuth";
 import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
-import { isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
+import { isPasswordRecoveryPending, clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { listAuthProviders } from "@/lib/auth-helpers";
 import { Button } from "@/components/ui/button";
@@ -50,9 +50,9 @@ function AuthPage() {
       return;
     }
     if (!authLoading && user) {
+      // Stale recovery lock must not trap normal logins (esp. Google OAuth).
       if (isPasswordRecoveryPending()) {
-        navigate({ to: "/auth/update-password", replace: true });
-        return;
+        clearPasswordRecoveryPending();
       }
       redirectAfterAuth(user);
     }
@@ -63,21 +63,24 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: authRedirectUrl("/auth/update-password"),
         });
         if (error) throw error;
         toast.success("Sjekk e-posten din", {
           description:
-            "Vi har sendt en lenke for å sette passord. Bruk samme e-post som Google-kontoen din — da beholder du samme bruker-ID.",
-          duration: 10000,
+            "Åpne lenken i e-posten for å sette nytt passord. Bruk samme adresse som Google-kontoen din.",
+          duration: 12000,
         });
         setMode("signin");
         return;
       }
 
       if (mode === "signin") {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
         if (error) {
           if (error.message.toLowerCase().includes("invalid login credentials")) {
             throw new Error(
@@ -86,6 +89,7 @@ function AuthPage() {
           }
           throw error;
         }
+        clearPasswordRecoveryPending();
         const providers = listAuthProviders(data.user).join(", ");
         toast.success("Velkommen tilbake", {
           description: `user.id: ${data.user?.id ?? "—"} · ${providers}`,
@@ -96,7 +100,7 @@ function AuthPage() {
       }
 
       const { error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
           emailRedirectTo: authRedirectUrl("/auth"),
@@ -114,6 +118,7 @@ function AuthPage() {
 
   async function handleGoogle() {
     setBusy(true);
+    clearPasswordRecoveryPending();
     if (user?.id) {
       sessionStorage.setItem("platform:auth:userIdBefore", user.id);
     }
@@ -128,6 +133,7 @@ function AuthPage() {
     if (result.redirected) return;
 
     const { data } = await supabase.auth.getUser();
+    clearPasswordRecoveryPending();
     if (data.user?.id) {
       sessionStorage.setItem("platform:auth:userIdBefore", data.user.id);
       toast.success("Logget inn med Google", {
