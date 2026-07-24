@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,13 +32,32 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const [redirectStuck, setRedirectStuck] = useState(false);
+  const redirectedRef = useRef(false);
 
   const goHome = useCallback(
     async (signedInUser?: { id: string; email?: string | null }) => {
+      if (redirectedRef.current) return;
+      redirectedRef.current = true;
+      setRedirecting(true);
+      setRedirectStuck(false);
       if (signedInUser?.id) {
         sessionStorage.setItem("platform:auth:userIdBefore", signedInUser.id);
       }
-      await redirectAfterLogin((opts) => navigate(opts as never));
+      try {
+        await redirectAfterLogin((opts) => navigate(opts as never));
+      } catch {
+        redirectedRef.current = false;
+        setRedirectStuck(true);
+      }
+      // If soft navigate left us on /auth, surface a manual escape hatch.
+      window.setTimeout(() => {
+        if (window.location.pathname.startsWith("/auth")) {
+          setRedirectStuck(true);
+          redirectedRef.current = false;
+        }
+      }, 1500);
     },
     [navigate],
   );
@@ -152,12 +171,40 @@ function AuthPage() {
         ? "Fortsett til dine arbeidsflater."
         : "Har du allerede Google-konto? Bruk «Glemt passord» i stedet — ikke opprett ny konto.";
 
-  if (authLoading || user) {
+  if (redirectStuck) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
+        <div className="flex w-full max-w-sm flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">Redirect tok for lang tid.</p>
+          <Button
+            className="w-full"
+            onClick={() => {
+              redirectedRef.current = true;
+              void navigate({ to: "/app", replace: true });
+            }}
+          >
+            Gå til Hjem
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              window.location.assign("/app");
+            }}
+          >
+            Åpne Hjem (hard refresh)
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (authLoading || redirecting || user) {
     return (
       <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
         <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
-          {user ? "Sender deg videre…" : "Sjekker innlogging…"}
+          <p>{user || redirecting ? "Sender deg videre…" : "Sjekker innlogging…"}</p>
         </div>
       </main>
     );

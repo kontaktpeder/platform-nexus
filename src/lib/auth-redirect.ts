@@ -1,8 +1,34 @@
 import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 
-/** Hard navigation — reliable in Lovable preview / iframes where soft navigate can stall. */
-export function assignAuthenticatedHome(): void {
+type NavigateFn = (opts: {
+  to: "/app" | "/mission" | "/o/$orgSlug/w/$wsSlug";
+  params?: { orgSlug: string; wsSlug: string };
+  replace?: boolean;
+}) => unknown | Promise<unknown>;
+
+/**
+ * After login always land on Hjem (/app).
+ * Blind last-workspace redirects caused loops when the org/ws no longer exists
+ * or Lovable preview blocked hard location.assign.
+ */
+export async function redirectAfterLogin(navigate?: NavigateFn): Promise<void> {
+  clearPasswordRecoveryPending();
+
+  if (navigate) {
+    try {
+      await Promise.resolve(navigate({ to: "/app", replace: true }));
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  window.location.assign("/app");
+}
+
+/** Optional: resume last workspace only when caller has validated it. */
+export function assignLastWorkspaceOrApp(): void {
   clearPasswordRecoveryPending();
   const target = getAuthenticatedHomeTarget();
   if (target.to === "/app") {
@@ -10,18 +36,4 @@ export function assignAuthenticatedHome(): void {
     return;
   }
   window.location.assign(`/o/${target.params.orgSlug}/w/${target.params.wsSlug}`);
-}
-
-/**
- * After login: always hard-redirect. Soft TanStack navigate was leaving users on /auth
- * in the Lovable preview.
- */
-export async function redirectAfterLogin(
-  _navigate?: (opts: {
-    to: "/app" | "/o/$orgSlug/w/$wsSlug" | "/mission";
-    params?: { orgSlug: string; wsSlug: string };
-    replace?: boolean;
-  }) => unknown,
-): Promise<void> {
-  assignAuthenticatedHome();
 }
