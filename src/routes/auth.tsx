@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
+import { listAuthProviders } from "@/lib/auth-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

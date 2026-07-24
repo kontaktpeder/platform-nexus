@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { ArrowRight, Blocks, Layers, Palette, Sparkles } from "lucide-react";
 import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
+import { isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
