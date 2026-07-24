@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/hooks/useAuth";
-import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
+import { redirectAfterLogin } from "@/lib/auth-redirect";
 import { isPasswordRecoveryPending, clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { listAuthProviders } from "@/lib/auth-helpers";
@@ -33,13 +33,12 @@ function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const redirectAfterAuth = useCallback(
-    (signedInUser?: { id: string; email?: string | null }) => {
+  const goHome = useCallback(
+    async (signedInUser?: { id: string; email?: string | null }) => {
       if (signedInUser?.id) {
         sessionStorage.setItem("platform:auth:userIdBefore", signedInUser.id);
       }
-      const target = getAuthenticatedHomeTarget();
-      navigate({ to: target.to, params: target.params, replace: true });
+      await redirectAfterLogin((opts) => navigate(opts as never));
     },
     [navigate],
   );
@@ -50,13 +49,12 @@ function AuthPage() {
       return;
     }
     if (!authLoading && user) {
-      // Stale recovery lock must not trap normal logins (esp. Google OAuth).
       if (isPasswordRecoveryPending()) {
         clearPasswordRecoveryPending();
       }
-      redirectAfterAuth(user);
+      void goHome(user);
     }
-  }, [authLoading, user, redirectAfterAuth, navigate]);
+  }, [authLoading, user, goHome]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,7 +93,7 @@ function AuthPage() {
           description: `user.id: ${data.user?.id ?? "—"} · ${providers}`,
           duration: 8000,
         });
-        redirectAfterAuth(data.user ?? undefined);
+        await goHome(data.user ?? undefined);
         return;
       }
 
@@ -122,8 +120,9 @@ function AuthPage() {
     if (user?.id) {
       sessionStorage.setItem("platform:auth:userIdBefore", user.id);
     }
+    // Land back on /auth so session + redirect run in one place (not bare /).
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      redirect_uri: authRedirectUrl("/auth"),
     });
     if (result.error) {
       toast.error(result.error instanceof Error ? result.error.message : "Google-innlogging feilet");
@@ -141,7 +140,7 @@ function AuthPage() {
         duration: 8000,
       });
     }
-    redirectAfterAuth(data.user ?? undefined);
+    await goHome(data.user ?? undefined);
   }
 
   const title =
@@ -152,6 +151,17 @@ function AuthPage() {
       : mode === "signin"
         ? "Fortsett til dine arbeidsflater."
         : "Har du allerede Google-konto? Bruk «Glemt passord» i stedet — ikke opprett ny konto.";
+
+  if (authLoading || user) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
+        <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          {user ? "Sender deg videre…" : "Sjekker innlogging…"}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4 py-10">

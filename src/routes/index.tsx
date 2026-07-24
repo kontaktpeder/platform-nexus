@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ArrowRight, Blocks, Layers, Palette, Sparkles } from "lucide-react";
-import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { clearPasswordRecoveryPending, isPasswordRecoveryPending } from "@/lib/auth-recovery-early";
+import { redirectAfterLogin } from "@/lib/auth-redirect";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
@@ -20,13 +20,11 @@ function Landing() {
       redirectRecoveryLinkToUpdatePassword();
       return;
     }
-    // Clear stale recovery lock so Google/password logins are not trapped.
     if (isPasswordRecoveryPending()) {
       clearPasswordRecoveryPending();
     }
     if (loading || !user) return;
-    const target = getAuthenticatedHomeTarget();
-    navigate({ to: target.to, params: target.params, replace: true });
+    void redirectAfterLogin((opts) => navigate(opts as never));
   }, [loading, user, navigate]);
 
 
