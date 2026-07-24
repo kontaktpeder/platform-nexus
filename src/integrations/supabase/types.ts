@@ -238,6 +238,101 @@ export type Database = {
           },
         ]
       }
+      field_activities: {
+        Row: {
+          created_at: string
+          entity_id: string
+          id: string
+          next_action: string | null
+          note: string | null
+          occurred_at: string
+          result: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          id?: string
+          next_action?: string | null
+          note?: string | null
+          occurred_at?: string
+          result: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          id?: string
+          next_action?: string | null
+          note?: string | null
+          occurred_at?: string
+          result?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_activities_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_follow_ups: {
+        Row: {
+          action: string
+          condition_type: string
+          created_at: string
+          due_at: string
+          entity_id: string
+          id: string
+          related_activity_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          condition_type?: string
+          created_at?: string
+          due_at: string
+          entity_id: string
+          id?: string
+          related_activity_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          condition_type?: string
+          created_at?: string
+          due_at?: string
+          entity_id?: string
+          id?: string
+          related_activity_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_follow_ups_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_follow_ups_related_activity_id_fkey"
+            columns: ["related_activity_id"]
+            isOneToOne: false
+            referencedRelation: "field_activities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entity_suggestions: {
         Row: {
           confidence: string

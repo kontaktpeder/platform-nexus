@@ -1,10 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, Sparkles, Inbox, User } from "lucide-react";
+import { Home, Sparkles, Inbox, User, MapPin } from "lucide-react";
 import { useReviewInboxCount } from "@/lib/review.hooks";
 
 const ITEMS = [
   { to: "/app" as const, label: "Hjem", icon: Home, exact: false },
-  { to: "/mission" as const, label: "Dagens plan", icon: Sparkles, exact: true },
+  { to: "/field" as const, label: "Felt", icon: MapPin, exact: false },
+  { to: "/mission" as const, label: "Plan", icon: Sparkles, exact: true },
   { to: "/review" as const, label: "Innboks", icon: Inbox, exact: false, showBadge: true },
   { to: "/settings" as const, label: "Meg", icon: User, exact: false },
 ] as const;
@@ -16,15 +17,17 @@ export function PlatformBottomNav() {
 
   return (
     <nav className="sticky bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto grid max-w-3xl grid-cols-4">
-        {ITEMS.map(({ to, label, icon: Icon, exact, showBadge }) => {
+      <div className="mx-auto grid max-w-3xl grid-cols-5">
+        {ITEMS.map((item) => {
+          const { to, label, icon: Icon, exact } = item;
           const active = exact ? pathname === to : pathname.startsWith(to);
+          const showBadge = "showBadge" in item && item.showBadge;
           const badge = showBadge && inboxTotal > 0 ? inboxTotal : 0;
           return (
             <Link
               key={to}
               to={to}
-              className={`relative flex flex-col items-center gap-1 py-3 text-xs transition-colors ${
+              className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] transition-colors sm:text-xs ${
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
