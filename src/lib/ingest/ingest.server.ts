@@ -431,9 +431,10 @@ async function upsertSignals(opts: {
       .in("external_id", externalIds);
 
     if (signalRows && signalRows.length > 0) {
-      const { processBatchSignalIdentities } = await import(
-        "@/lib/knowledge/identity/identity.server"
-      );
+      const {
+        processBatchSignalIdentities,
+        autoPromoteEligibleIdentities,
+      } = await import("@/lib/knowledge/identity/identity.server");
       await processBatchSignalIdentities(
         supabase,
         userId,
@@ -446,6 +447,15 @@ async function upsertSignals(opts: {
           metadata: (row.metadata ?? {}) as Record<string, unknown>,
         })),
       );
+      // Auto-create entities for frequent contacts — correction happens later.
+      try {
+        await autoPromoteEligibleIdentities(supabase, userId);
+      } catch (err) {
+        console.warn(
+          "[identity] auto-promote failed",
+          err instanceof Error ? err.message : err,
+        );
+      }
     }
   } catch (err) {
     result.errors.push(err instanceof Error ? err.message : "upsert failed");

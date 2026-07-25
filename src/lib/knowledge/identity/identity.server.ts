@@ -305,6 +305,359 @@ export async function loadLinkedIdentityLookups(
 
 export const PROMOTION_MIN_SEEN_COUNT = 2;
 
+/** Auto-promote after this many observations (same bar as suggestions). */
+export const AUTO_PROMOTE_MIN_SEEN_COUNT = PROMOTION_MIN_SEEN_COUNT;
+
+const NOISY_LOCAL_RE =
+  /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|mailerdaemon|notifications?|newsletter|news|updates?|bounce|postmaster|daemon)$/i;
+
+function isNoisyEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const local = email.split("@")[0] ?? "";
+  if (NOISY_LOCAL_RE.test(local)) return true;
+  if (local.includes("noreply") || local.includes("no-reply")) return true;
+  return false;
+}
+
+function proposedTypeForIdentity(ki: KnownIdentity): "person" | "company" {
+  if (ki.identity_type === "email_domain" || ki.identity_type === "slack_channel") {
+    return "company";
+  }
+  return "person";
+}
+
+function proposedNameForIdentity(ki: KnownIdentity): string | null {
+  const name =
+    ki.display_name ?? ki.email ?? ki.domain ?? ki.external_key;
+  const trimmed = name?.trim() ?? "";
+  return trimmed || null;
+}
+
+function shouldAutoPromoteIdentity(ki: KnownIdentity): boolean {
+  if (ki.entity_id || ki.ignored_at) return false;
+  if (ki.seen_count < AUTO_PROMOTE_MIN_SEEN_COUNT) return false;
+  // Skip noisy channels and system mailboxes.
+  if (ki.identity_type === "slack_channel") return false;
+  if (ki.identity_type === "slack_user" && !ki.display_name) return false;
+  if (ki.identity_type === "email_address" && isNoisyEmail(ki.email ?? ki.external_key)) {
+    return false;
+  }
+  if (ki.identity_type === "external_account") return false;
+  return !!proposedNameForIdentity(ki);
+}
+
+async function findExistingEntityForIdentity(
+  supabase: DB,
+  userId: string,
+  ki: KnownIdentity,
+): Promise<{ id: string; owner_context: string | null } | null> {
+  if (ki.identity_type === "email_address" && ki.email) {
+    const { data } = await supabase
+      .from("entities")
+      .select("id, owner_context, metadata")
+      .eq("user_id", userId)
+      .contains("metadata", { email: ki.email } as never)
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) {
+      return { id: data.id as string, owner_context: (data.owner_context as string) ?? null };
+    }
+  }
+
+  const domain = ki.domain ?? (ki.identity_type === "email_domain" ? ki.external_key : null);
+  if (domain) {
+    const { data: byDomain } = await supabase
+      .from("entities")
+      .select("id, owner_context, metadata, type")
+      .eq("user_id", userId)
+      .eq("type", "company")
+      .contains("metadata", { email_domain: domain } as never)
+      .limit(1)
+      .maybeSingle();
+    if (byDomain?.id) {
+      return {
+        id: byDomain.id as string,
+        owner_context: (byDomain.owner_context as string) ?? null,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function findCompanyForDomain(
+  supabase: DB,
+  userId: string,
+  domain: string,
+): Promise<{ id: string; owner_context: string | null } | null> {
+  const { data } = await supabase
+    .from("entities")
+    .select("id, owner_context")
+    .eq("user_id", userId)
+    .eq("type", "company")
+    .contains("metadata", { email_domain: domain } as never)
+    .limit(1)
+    .maybeSingle();
+  if (data?.id) {
+    return { id: data.id as string, owner_context: (data.owner_context as string) ?? null };
+  }
+  return null;
+}
+
+export type PromoteIdentityResult = {
+  entityId: string;
+  created: boolean;
+  linkedSignalCount: number;
+  name: string;
+};
+
+/** Create or link an entity for a known identity. Shared by manual + auto promote. */
+export async function promoteKnownIdentityToEntity(
+  supabase: DB,
+  userId: string,
+  identityId: string,
+  opts?: {
+    type?: "person" | "company";
+    name?: string;
+    importance?: number;
+    source?: "manual" | "auto";
+  },
+): Promise<PromoteIdentityResult> {
+  const { data: identity, error: idErr } = await supabase
+    .from("known_identities")
+    .select("*")
+    .eq("id", identityId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (idErr) throw idErr;
+  if (!identity) throw new Error("Identitet finnes ikke");
+  if (identity.entity_id) {
+    return {
+      entityId: identity.entity_id as string,
+      created: false,
+      linkedSignalCount: 0,
+      name: "",
+    };
+  }
+
+  const ki = identity as KnownIdentity;
+  const type = opts?.type ?? proposedTypeForIdentity(ki);
+  const name = (opts?.name ?? proposedNameForIdentity(ki))?.trim();
+  if (!name) throw new Error("Navn mangler");
+
+  // Prefer linking to an existing entity when email/domain already matches.
+  const existing = await findExistingEntityForIdentity(supabase, userId, ki);
+  if (existing) {
+    const linkResult = await setIdentityEntityLink(
+      supabase,
+      userId,
+      identityId,
+      existing.id,
+    );
+    await supabase
+      .from("entity_suggestions")
+      .update({ status: "accepted" })
+      .eq("user_id", userId)
+      .eq("known_identity_id", identityId)
+      .eq("status", "pending");
+    return {
+      entityId: existing.id,
+      created: false,
+      linkedSignalCount: linkResult.linkedSignalCount,
+      name,
+    };
+  }
+
+  const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
+  const slug = await slugifyEntityName(supabase, userId, name);
+  const metadata: Record<string, unknown> = {
+    created_via: opts?.source === "auto" ? "identity_auto" : "identity_manual",
+  };
+  if (ki.email) metadata.email = ki.email;
+  if (ki.domain) metadata.email_domain = ki.domain;
+  if (ki.identity_type === "slack_user") {
+    metadata.slack_user_id = ki.external_key;
+  }
+  if (ki.identity_type === "slack_channel") {
+    metadata.slack_channel_id = ki.external_key;
+  }
+
+  let ownerContext: string | null = null;
+  if (type === "person" && ki.domain) {
+    const company = await findCompanyForDomain(supabase, userId, ki.domain);
+    if (company?.owner_context) ownerContext = company.owner_context;
+  }
+
+  const { data: entity, error: insErr } = await supabase
+    .from("entities")
+    .insert({
+      user_id: userId,
+      type,
+      name,
+      slug,
+      importance: opts?.importance ?? (opts?.source === "auto" ? 45 : 50),
+      summary: null,
+      owner_context: (ownerContext ?? "unknown") as never,
+      metadata: metadata as never,
+      last_seen_at: ki.last_seen_at ?? new Date().toISOString(),
+    })
+    .select("id, name")
+    .single();
+  if (insErr) throw insErr;
+
+  const entityId = entity.id as string;
+  const linkResult = await setIdentityEntityLink(
+    supabase,
+    userId,
+    identityId,
+    entityId,
+  );
+
+  // Person → company link when domain company already exists.
+  if (type === "person" && ki.domain) {
+    const company = await findCompanyForDomain(supabase, userId, ki.domain);
+    if (company) {
+      const { error: relErr } = await supabase.from("entity_relationships").upsert(
+        {
+          user_id: userId,
+          from_entity_id: entityId,
+          to_entity_id: company.id,
+          kind: "member_of",
+        } as never,
+        { onConflict: "user_id,from_entity_id,to_entity_id,kind" },
+      );
+      if (relErr) {
+        console.warn("[identity] member_of link failed", relErr.message);
+      }
+      if (company.owner_context && company.owner_context !== "unknown") {
+        await supabase
+          .from("entities")
+          .update({ owner_context: company.owner_context as never })
+          .eq("id", entityId)
+          .eq("user_id", userId);
+      }
+    }
+  }
+
+  await supabase
+    .from("entity_suggestions")
+    .update({ status: "accepted" })
+    .eq("user_id", userId)
+    .eq("known_identity_id", identityId)
+    .eq("status", "pending");
+
+  return {
+    entityId,
+    created: true,
+    linkedSignalCount: linkResult.linkedSignalCount,
+    name: entity.name as string,
+  };
+}
+
+export type AutoPromoteResult = {
+  promoted: number;
+  linked: number;
+  skipped: number;
+  errors: string[];
+};
+
+/** Auto-create/link entities for frequent contacts. Idempotent. */
+export async function autoPromoteEligibleIdentities(
+  supabase: DB,
+  userId: string,
+): Promise<AutoPromoteResult> {
+  const result: AutoPromoteResult = { promoted: 0, linked: 0, skipped: 0, errors: [] };
+
+  const { data: candidates, error } = await supabase
+    .from("known_identities")
+    .select("*")
+    .eq("user_id", userId)
+    .is("entity_id", null)
+    .is("ignored_at", null)
+    .gte("seen_count", AUTO_PROMOTE_MIN_SEEN_COUNT)
+    .order("seen_count", { ascending: false })
+    .limit(40);
+
+  if (error) {
+    result.errors.push(error.message);
+    return result;
+  }
+
+  // Promote companies (domains) first so person→company links can attach.
+  const rows = ((candidates ?? []) as KnownIdentity[]).filter(shouldAutoPromoteIdentity);
+  rows.sort((a, b) => {
+    const aCo = a.identity_type === "email_domain" ? 0 : 1;
+    const bCo = b.identity_type === "email_domain" ? 0 : 1;
+    if (aCo !== bCo) return aCo - bCo;
+    return b.seen_count - a.seen_count;
+  });
+
+  for (const ki of rows) {
+    try {
+      const res = await promoteKnownIdentityToEntity(supabase, userId, ki.id, {
+        source: "auto",
+      });
+      if (res.created) result.promoted += 1;
+      else result.linked += 1;
+    } catch (err) {
+      result.skipped += 1;
+      result.errors.push(
+        `${ki.external_key}: ${err instanceof Error ? err.message : "failed"}`,
+      );
+    }
+  }
+
+  return result;
+}
+
+/** Mark identity as wrong and remove the auto-created entity so it won't come back. */
+export async function rejectWrongEntity(
+  supabase: DB,
+  userId: string,
+  entityId: string,
+): Promise<{ ok: true; ignoredIdentities: number }> {
+  const { data: entity, error } = await supabase
+    .from("entities")
+    .select("id, metadata")
+    .eq("id", entityId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!entity) throw new Error("Entity finnes ikke");
+
+  const { data: identities } = await supabase
+    .from("known_identities")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("entity_id", entityId);
+
+  const now = new Date().toISOString();
+  const ids = (identities ?? []).map((i) => i.id as string);
+  if (ids.length) {
+    await supabase
+      .from("known_identities")
+      .update({ ignored_at: now, entity_id: null })
+      .eq("user_id", userId)
+      .in("id", ids);
+
+    await supabase
+      .from("entity_suggestions")
+      .update({ status: "ignored" })
+      .eq("user_id", userId)
+      .in("known_identity_id", ids)
+      .eq("status", "pending");
+  }
+
+  const { error: delErr } = await supabase
+    .from("entities")
+    .delete()
+    .eq("id", entityId)
+    .eq("user_id", userId);
+  if (delErr) throw delErr;
+
+  return { ok: true, ignoredIdentities: ids.length };
+}
+
 export async function syncPromotionSuggestions(
   supabase: DB,
   userId: string,
@@ -321,16 +674,13 @@ export async function syncPromotionSuggestions(
 
   let upserted = 0;
   for (const ki of (candidates ?? []) as KnownIdentity[]) {
+    // Auto-eligible identities are promoted elsewhere — skip pending inbox noise.
+    if (shouldAutoPromoteIdentity(ki)) continue;
+
     const suggestionKey = `identity:${ki.id}`;
-    const proposedType =
-      ki.identity_type === "email_domain" || ki.identity_type === "slack_channel"
-        ? "company"
-        : "person";
-    const proposedName =
-      ki.display_name ??
-      ki.email ??
-      ki.domain ??
-      ki.external_key;
+    const proposedType = proposedTypeForIdentity(ki);
+    const proposedName = proposedNameForIdentity(ki);
+    if (!proposedName) continue;
 
     const { data: existing } = await supabase
       .from("entity_suggestions")

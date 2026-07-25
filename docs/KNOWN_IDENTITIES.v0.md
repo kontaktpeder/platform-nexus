@@ -49,7 +49,7 @@ After `raw_signals` upsert (Gmail/Slack ingest):
 3. Insert `signal_identities`
 4. If `known_identities.entity_id` is set → link signal via `entity_signals` (`raw_signal_id`)
 
-No entity is created during ingest.
+No entity is created during identity upsert itself; `autoPromoteEligibleIdentities` runs immediately after and may create/link entities.
 
 ## Promotion
 
@@ -96,10 +96,24 @@ Mission does not require entities. Identities enrich display when linked.
 - Adds `known_identity_id`, `suggestion_reason` to `entity_suggestions`
 - Backfills identities from legacy `suggestion_key` patterns
 
-## Non-goals (v0)
+## Auto-create (v1)
+
+After Gmail/Slack ingest upserts identities, `autoPromoteEligibleIdentities` runs:
+
+- Eligible: `seen_count >= 2`, not ignored, not linked
+- Types: `email_address` (person), `email_domain` (company), `slack_user` (person)
+- Skips: `noreply@…`, Slack channels, `external_account`
+- Prefers linking to an existing entity when email / `email_domain` already matches
+- Person with known company domain → `member_of` relationship + inherit `owner_context`
+- Tag: `metadata.created_via = "identity_auto"`
+
+Correction: `rejectWrongEntity` ignores linked identities and deletes the entity so it will not be recreated.
+
+Pending `entity_suggestions` are only created for identities that are **not** auto-eligible (edge cases).
+
+## Non-goals (v0 leftovers)
 
 - No AI identity extraction
-- No automatic entity creation
 - No merging email + domain into one identity row (kept separate)
 - Slack DM identity resolution in Mission auto-link (needs user id in descriptors — future)
 

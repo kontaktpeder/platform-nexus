@@ -23,6 +23,7 @@ import {
   type CustomerDetail,
   type CustomerWarmth,
 } from "@/lib/customers.functions";
+import { rejectWrongEntity } from "@/lib/known-identities.functions";
 import { RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
 
 const OWNER_OPTIONS: OwnerContext[] = [
@@ -63,6 +64,7 @@ function KundeDetailPage() {
   const fetchDetail = useServerFn(getCustomerDetail);
   const runWarmth = useServerFn(setCustomerWarmth);
   const runOwner = useServerFn(setCustomerOwnerContext);
+  const runReject = useServerFn(rejectWrongEntity);
   const runEnsureField = useServerFn(ensureFieldPlace);
 
   const detailQ = useQuery({
@@ -88,6 +90,16 @@ function KundeDetailPage() {
       toast.success("Org oppdatert");
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: () => runReject({ data: { entityId } }),
+    onSuccess: async () => {
+      toast.success("Fjernet — kommer ikke tilbake");
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+      window.location.assign("/kunder");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -190,6 +202,27 @@ function KundeDetailPage() {
                 </div>
               </div>
             </header>
+
+            <Button
+              variant="ghost"
+              className="mb-5 h-10 w-full text-sm text-muted-foreground"
+              disabled={rejectMut.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Fjern denne kunden og ignorer tilknyttede e-poster/domener? Den opprettes ikke på nytt automatisk.",
+                  )
+                ) {
+                  rejectMut.mutate();
+                }
+              }}
+            >
+              {rejectMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Dette stemmer ikke"
+              )}
+            </Button>
 
             {d.followUp && (
               <section className="mb-5 rounded-2xl border border-border bg-muted/40 p-4">

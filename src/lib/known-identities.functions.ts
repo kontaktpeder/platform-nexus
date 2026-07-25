@@ -80,66 +80,35 @@ export const promoteIdentityToEntity = createServerFn({ method: "POST" })
     }) => input,
   )
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: identity, error: idErr } = await supabase
-      .from("known_identities")
-      .select("*")
-      .eq("id", data.identityId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (idErr) throw idErr;
-    if (!identity) throw new Error("Identitet finnes ikke");
-    if (identity.entity_id) throw new Error("Identitet er allerede koblet");
-
-    const name =
-      (data.name ?? identity.display_name ?? identity.email ?? identity.external_key)?.trim();
-    if (!name) throw new Error("Navn mangler");
-
-    const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
-    const { setIdentityEntityLink } = await import(
+    const { promoteKnownIdentityToEntity } = await import(
       "@/lib/knowledge/identity/identity.server"
     );
-    const slug = await slugifyEntityName(supabase, userId, name);
-    const metadata: Record<string, unknown> = {};
-    if (identity.email) metadata.email = identity.email;
-    if (identity.domain) metadata.email_domain = identity.domain;
-    if (identity.identity_type === "slack_user") {
-      metadata.slack_user_id = identity.external_key;
-    }
-    if (identity.identity_type === "slack_channel") {
-      metadata.slack_channel_id = identity.external_key;
-    }
-
-    const { data: entity, error: insErr } = await supabase
-      .from("entities")
-      .insert({
-        user_id: userId,
-        type: data.type,
-        name,
-        slug,
-        importance: data.importance ?? 50,
-        summary: null,
-        metadata: metadata as never,
-      })
-      .select("*")
-      .single();
-    if (insErr) throw insErr;
-
-    const linkResult = await setIdentityEntityLink(
-      supabase,
-      userId,
+    const type =
+      data.type === "person" || data.type === "company" ? data.type : "person";
+    const result = await promoteKnownIdentityToEntity(
+      context.supabase,
+      context.userId,
       data.identityId,
-      entity.id as string,
+      {
+        type,
+        name: data.name,
+        importance: data.importance,
+        source: "manual",
+      },
     );
 
-    await supabase
-      .from("entity_suggestions")
-      .update({ status: "accepted" })
-      .eq("user_id", userId)
-      .eq("known_identity_id", data.identityId)
-      .eq("status", "pending");
+    const { data: entity } = await context.supabase
+      .from("entities")
+      .select("*")
+      .eq("id", result.entityId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
 
-    return normalize({ entity, linkedSignalCount: linkResult.linkedSignalCount });
+    return normalize({
+      entity,
+      linkedSignalCount: result.linkedSignalCount,
+      created: result.created,
+    });
   });
 
 export const ignoreKnownIdentity = createServerFn({ method: "POST" })
@@ -165,12 +134,38 @@ export const ignoreKnownIdentity = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** «Dette stemmer ikke» — ignore linked identities and delete the entity. */
+export const rejectWrongEntity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { entityId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { rejectWrongEntity: run } = await import(
+      "@/lib/knowledge/identity/identity.server"
+    );
+    return run(context.supabase, context.userId, data.entityId);
+  });
+
 export const syncIdentityPromotions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { syncPromotionSuggestions } = await import(
+    const { syncPromotionSuggestions, autoPromoteEligibleIdentities } =
+      await import("@/lib/knowledge/identity/identity.server");
+    const promoted = await autoPromoteEligibleIdentities(
+      context.supabase,
+      context.userId,
+    );
+    const synced = await syncPromotionSuggestions(
+      context.supabase,
+      context.userId,
+    );
+    return { synced, ...promoted };
+  });
+
+export const runAutoPromoteIdentities = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { autoPromoteEligibleIdentities } = await import(
       "@/lib/knowledge/identity/identity.server"
     );
-    const count = await syncPromotionSuggestions(context.supabase, context.userId);
-    return { synced: count };
+    return autoPromoteEligibleIdentities(context.supabase, context.userId);
   });

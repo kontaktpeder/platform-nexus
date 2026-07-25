@@ -675,7 +675,8 @@ function IdentitiesSection() {
         </div>
       ) : identities.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/60 bg-card p-6 text-center text-sm text-muted-foreground">
-          Ingen observerte identiteter ennå. Kjør Gmail/Slack-ingest for å samle kontakter.
+          Ingen ulinkede identiteter. Kontakter opprettes automatisk når Gmail/Slack
+          ser dem flere ganger — bruk «Dette stemmer ikke» på kunden hvis noe er feil.
         </div>
       ) : (
         <ul className="divide-y divide-border/60 rounded-2xl border border-border/60 bg-card">

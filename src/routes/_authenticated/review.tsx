@@ -22,6 +22,7 @@ import {
 import { OWNER_CONTEXT_LABEL, ENTITY_TYPE_LABEL, RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
 import { parseNewRawSignals } from "@/lib/parse-signals.functions";
 import { ingestRecentSignals } from "@/lib/ingest.functions";
+import { runAutoPromoteIdentities } from "@/lib/known-identities.functions";
 
 export const Route = createFileRoute("/_authenticated/review")({
   component: ReviewPage,
@@ -43,6 +44,7 @@ function ReviewPage() {
 
   const runIngest = useServerFn(ingestRecentSignals);
   const runParse = useServerFn(parseNewRawSignals);
+  const runAutoPromote = useServerFn(runAutoPromoteIdentities);
   const [runningPipeline, setRunningPipeline] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState<string | null>(null);
 
@@ -51,14 +53,16 @@ function ReviewPage() {
     setPipelineMsg(null);
     try {
       const ing = await runIngest({ data: {} });
+      const auto = await runAutoPromote();
       const parse = await runParse({ data: { limit: 20 } });
       const g = (ing as { gmail?: { inserted?: number } }).gmail?.inserted ?? 0;
       const s = (ing as { slack?: { inserted?: number } }).slack?.inserted ?? 0;
       setPipelineMsg(
-        `Hentet ${g + s} nye signaler · Parsed ${parse.parsed}/${parse.scanned} · ${parse.entitySuggestions} entity-forslag · ${parse.relationSuggestions} relasjons-forslag`,
+        `Hentet ${g + s} signaler · Auto-opprettet ${auto.promoted} · koblet ${auto.linked} · Parsed ${parse.parsed}/${parse.scanned}`,
       );
       await qc.invalidateQueries({ queryKey: ["review-feed"] });
       await qc.invalidateQueries({ queryKey: ["review-count"] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
     } catch (err) {
       setPipelineMsg(err instanceof Error ? err.message : "Feil ved pipeline");
     } finally {
@@ -72,7 +76,7 @@ function ReviewPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <GlobalTopBar title="Innboks" subtitle="AI-forslag — ingenting skrives før du godkjenner" />
+      <GlobalTopBar title="Innboks" subtitle="Korriger feil — kontakter opprettes automatisk fra Gmail/Slack" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6 pb-28 sm:px-8">
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="gap-1"><Sparkles className="h-3 w-3" />{counts.total} åpne</Badge>
