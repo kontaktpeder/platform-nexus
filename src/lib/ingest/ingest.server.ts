@@ -462,10 +462,9 @@ async function upsertSignals(opts: {
     if (selErr) throw selErr;
 
     if (signalRows && signalRows.length > 0) {
-      const {
-        processBatchSignalIdentities,
-        autoPromoteEligibleIdentities,
-      } = await import("@/lib/knowledge/identity/identity.server");
+      const { processBatchSignalIdentities } = await import(
+        "@/lib/knowledge/identity/identity.server"
+      );
       await processBatchSignalIdentities(
         supabase,
         userId,
@@ -478,11 +477,8 @@ async function upsertSignals(opts: {
           metadata: (row.metadata ?? {}) as Record<string, unknown>,
         })),
       );
-      try {
-        await autoPromoteEligibleIdentities(supabase, userId);
-      } catch (err) {
-        console.warn("[identity] auto-promote failed", errMessage(err));
-      }
+      // Auto-promote is called by the Innboks/Mission pipeline after ingest
+      // so status counts stay accurate (one promote pass).
     }
   } catch (err) {
     result.errors.push(errMessage(err));

@@ -65,6 +65,7 @@ function ReviewPage() {
           linked: auto.linked,
           parsed: parse.parsed,
           scanned: parse.scanned,
+          autoErrors: auto.errors,
         }),
       );
       await qc.invalidateQueries({ queryKey: ["review-feed"] });

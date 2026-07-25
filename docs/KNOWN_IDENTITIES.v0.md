@@ -98,13 +98,13 @@ Mission does not require entities. Identities enrich display when linked.
 
 ## Auto-create (v1)
 
-After Gmail/Slack ingest upserts identities, `autoPromoteEligibleIdentities` runs:
+After Gmail/Slack ingest upserts identities, callers run `autoPromoteEligibleIdentities`:
 
-- Eligible: `seen_count >= 2`, not ignored, not linked
-- Types: `email_address` (person), `email_domain` (company), `slack_user` (person)
-- Skips: `noreply@…`, Slack channels, `external_account`
-- Prefers linking to an existing entity when email / `email_domain` already matches
-- Person with known company domain → `member_of` relationship + inherit `owner_context`
+- **email_domain → company** at `seen_count >= 1` (fills Kunder)
+- Prefers **linking** to existing Felt/note companies when domain root matches name (e.g. `parkteateret.no` → Parkteateret) and stamps `metadata.email_domain`
+- New domain companies default `owner_context: gold-of-sicily`
+- **email_address → person**: business domains at ≥1, consumer mail at ≥3; skips noreply
+- Person with known company domain → `member_of` + inherit org
 - Tag: `metadata.created_via = "identity_auto"`
 
 Correction: `rejectWrongEntity` ignores linked identities and deletes the entity so it will not be recreated.

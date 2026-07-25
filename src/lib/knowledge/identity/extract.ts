@@ -25,6 +25,11 @@ const DOMAIN_BLOCKLIST = new Set([
   "protonmail.com",
 ]);
 
+export function isConsumerEmailDomain(domain: string | null | undefined): boolean {
+  if (!domain) return false;
+  return DOMAIN_BLOCKLIST.has(domain.toLowerCase().trim());
+}
+
 function parseDisplayName(fromHeader: string, email: string): string | null {
   const withoutEmail = fromHeader
     .replace(new RegExp(`<?\\s*${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*>?`, "i"), "")

@@ -45,7 +45,13 @@ export type IngestRecentResult = {
 /** Human-readable ingest status — shows fetched/new/known + errors (not just inserts). */
 export function formatIngestStatus(
   ing: IngestRecentResult,
-  extra?: { promoted?: number; linked?: number; parsed?: number; scanned?: number },
+  extra?: {
+    promoted?: number;
+    linked?: number;
+    parsed?: number;
+    scanned?: number;
+    autoErrors?: string[];
+  },
 ): string {
   const g = ing.gmail;
   const s = ing.slack;
@@ -57,6 +63,9 @@ export function formatIngestStatus(
     parts.push(
       `Auto-opprettet ${extra.promoted ?? 0} · koblet ${extra.linked ?? 0}`,
     );
+  }
+  if (extra?.autoErrors?.length) {
+    parts.push(`Auto-feil: ${extra.autoErrors.slice(0, 2).join("; ")}`);
   }
   if (extra?.parsed != null && extra?.scanned != null) {
     parts.push(`Parsed ${extra.parsed}/${extra.scanned}`);

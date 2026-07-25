@@ -3,8 +3,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { NormalizedSignal } from "@/lib/ingest/normalize";
-import { extractIdentitiesFromSignal } from "./extract";
+import { extractIdentitiesFromSignal, isConsumerEmailDomain } from "./extract";
 import type { ExtractedIdentity, KnownIdentity } from "./types";
+import { normalizeName } from "@/lib/knowledge/entity-matcher";
 
 type DB = SupabaseClient<Database>;
 
@@ -305,8 +306,8 @@ export async function loadLinkedIdentityLookups(
 
 export const PROMOTION_MIN_SEEN_COUNT = 2;
 
-/** Auto-promote after this many observations (same bar as suggestions). */
-export const AUTO_PROMOTE_MIN_SEEN_COUNT = PROMOTION_MIN_SEEN_COUNT;
+/** Auto-promote thresholds — domains fill Kunder on first sighting. */
+export const AUTO_PROMOTE_MIN_SEEN_COUNT = 1;
 
 const NOISY_LOCAL_RE =
   /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|mailerdaemon|notifications?|newsletter|news|updates?|bounce|postmaster|daemon)$/i;
@@ -319,6 +320,22 @@ function isNoisyEmail(email: string | null | undefined): boolean {
   return false;
 }
 
+function domainRoot(domain: string): string {
+  const parts = domain
+    .toLowerCase()
+    .trim()
+    .split(".")
+    .filter((p) => p && p !== "www");
+  if (parts.length >= 2) return parts[parts.length - 2]!;
+  return parts[0] ?? domain;
+}
+
+function humanizeDomainName(domain: string): string {
+  const root = domainRoot(domain);
+  if (!root) return domain;
+  return root.charAt(0).toUpperCase() + root.slice(1);
+}
+
 function proposedTypeForIdentity(ki: KnownIdentity): "person" | "company" {
   if (ki.identity_type === "email_domain" || ki.identity_type === "slack_channel") {
     return "company";
@@ -327,23 +344,95 @@ function proposedTypeForIdentity(ki: KnownIdentity): "person" | "company" {
 }
 
 function proposedNameForIdentity(ki: KnownIdentity): string | null {
+  if (ki.identity_type === "email_domain") {
+    const domain = ki.domain ?? ki.external_key;
+    return domain ? humanizeDomainName(domain) : null;
+  }
   const name =
     ki.display_name ?? ki.email ?? ki.domain ?? ki.external_key;
   const trimmed = name?.trim() ?? "";
   return trimmed || null;
 }
 
+function minSeenForAutoPromote(ki: KnownIdentity): number {
+  if (ki.identity_type === "email_domain") return 1;
+  if (ki.identity_type === "email_address") {
+    // Business-domain senders → person sooner; consumer mail stays stricter.
+    if (ki.domain && !isConsumerEmailDomain(ki.domain)) return 1;
+    return 3;
+  }
+  if (ki.identity_type === "slack_user") return 2;
+  return 99;
+}
+
 function shouldAutoPromoteIdentity(ki: KnownIdentity): boolean {
   if (ki.entity_id || ki.ignored_at) return false;
-  if (ki.seen_count < AUTO_PROMOTE_MIN_SEEN_COUNT) return false;
-  // Skip noisy channels and system mailboxes.
   if (ki.identity_type === "slack_channel") return false;
+  if (ki.identity_type === "external_account") return false;
   if (ki.identity_type === "slack_user" && !ki.display_name) return false;
   if (ki.identity_type === "email_address" && isNoisyEmail(ki.email ?? ki.external_key)) {
     return false;
   }
-  if (ki.identity_type === "external_account") return false;
+  if (ki.seen_count < minSeenForAutoPromote(ki)) return false;
   return !!proposedNameForIdentity(ki);
+}
+
+async function findCompanyMatchForDomain(
+  supabase: DB,
+  userId: string,
+  domain: string,
+): Promise<{ id: string; owner_context: string | null; name: string } | null> {
+  const { data: byDomain } = await supabase
+    .from("entities")
+    .select("id, owner_context, name")
+    .eq("user_id", userId)
+    .eq("type", "company")
+    .contains("metadata", { email_domain: domain } as never)
+    .limit(1)
+    .maybeSingle();
+  if (byDomain?.id) {
+    return {
+      id: byDomain.id as string,
+      owner_context: (byDomain.owner_context as string) ?? null,
+      name: byDomain.name as string,
+    };
+  }
+
+  const root = domainRoot(domain);
+  const rootNorm = normalizeName(root);
+  if (rootNorm.length < 3) return null;
+
+  const { data: companies } = await supabase
+    .from("entities")
+    .select("id, owner_context, name, slug, metadata")
+    .eq("user_id", userId)
+    .eq("type", "company")
+    .limit(500);
+
+  for (const c of companies ?? []) {
+    const nameNorm = normalizeName(c.name as string);
+    const slugNorm = normalizeName((c.slug as string) ?? "");
+    if (!nameNorm) continue;
+    // Exact root match: parkteateret.no ↔ Parkteateret
+    if (nameNorm === rootNorm || slugNorm === rootNorm) {
+      return {
+        id: c.id as string,
+        owner_context: (c.owner_context as string) ?? null,
+        name: c.name as string,
+      };
+    }
+    // Soft: place name contained in domain root or vice versa (min 4 chars)
+    if (rootNorm.length >= 4 && nameNorm.length >= 4) {
+      if (rootNorm.includes(nameNorm) || nameNorm.includes(rootNorm)) {
+        return {
+          id: c.id as string,
+          owner_context: (c.owner_context as string) ?? null,
+          name: c.name as string,
+        };
+      }
+    }
+  }
+  return null;
 }
 
 async function findExistingEntityForIdentity(
@@ -366,19 +455,25 @@ async function findExistingEntityForIdentity(
 
   const domain = ki.domain ?? (ki.identity_type === "email_domain" ? ki.external_key : null);
   if (domain) {
-    const { data: byDomain } = await supabase
-      .from("entities")
-      .select("id, owner_context, metadata, type")
-      .eq("user_id", userId)
-      .eq("type", "company")
-      .contains("metadata", { email_domain: domain } as never)
-      .limit(1)
-      .maybeSingle();
-    if (byDomain?.id) {
-      return {
-        id: byDomain.id as string,
-        owner_context: (byDomain.owner_context as string) ?? null,
+    const match = await findCompanyMatchForDomain(supabase, userId, domain);
+    if (match) {
+      // Stamp email_domain on field places so later links stick.
+      const { data: row } = await supabase
+        .from("entities")
+        .select("metadata")
+        .eq("id", match.id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const meta = {
+        ...((row?.metadata ?? {}) as Record<string, unknown>),
+        email_domain: domain,
       };
+      await supabase
+        .from("entities")
+        .update({ metadata: meta as never })
+        .eq("id", match.id)
+        .eq("user_id", userId);
+      return { id: match.id, owner_context: match.owner_context };
     }
   }
 
@@ -390,18 +485,9 @@ async function findCompanyForDomain(
   userId: string,
   domain: string,
 ): Promise<{ id: string; owner_context: string | null } | null> {
-  const { data } = await supabase
-    .from("entities")
-    .select("id, owner_context")
-    .eq("user_id", userId)
-    .eq("type", "company")
-    .contains("metadata", { email_domain: domain } as never)
-    .limit(1)
-    .maybeSingle();
-  if (data?.id) {
-    return { id: data.id as string, owner_context: (data.owner_context as string) ?? null };
-  }
-  return null;
+  const match = await findCompanyMatchForDomain(supabase, userId, domain);
+  if (!match) return null;
+  return { id: match.id, owner_context: match.owner_context };
 }
 
 export type PromoteIdentityResult = {
@@ -475,6 +561,9 @@ export async function promoteKnownIdentityToEntity(
   };
   if (ki.email) metadata.email = ki.email;
   if (ki.domain) metadata.email_domain = ki.domain;
+  if (ki.identity_type === "email_domain") {
+    metadata.email_domain = ki.external_key;
+  }
   if (ki.identity_type === "slack_user") {
     metadata.slack_user_id = ki.external_key;
   }
@@ -486,6 +575,10 @@ export async function promoteKnownIdentityToEntity(
   if (type === "person" && ki.domain) {
     const company = await findCompanyForDomain(supabase, userId, ki.domain);
     if (company?.owner_context) ownerContext = company.owner_context;
+  }
+  // New companies from Gmail domains default to Gold of Sicily (sales field context).
+  if (type === "company" && opts?.source === "auto" && !ownerContext) {
+    ownerContext = "gold-of-sicily";
   }
 
   const { data: entity, error: insErr } = await supabase
@@ -576,7 +669,7 @@ export async function autoPromoteEligibleIdentities(
     .is("ignored_at", null)
     .gte("seen_count", AUTO_PROMOTE_MIN_SEEN_COUNT)
     .order("seen_count", { ascending: false })
-    .limit(40);
+    .limit(80);
 
   if (error) {
     result.errors.push(error.message);
