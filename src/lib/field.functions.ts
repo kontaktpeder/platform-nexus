@@ -2,7 +2,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { ANCHOR_SLUG_SET } from "@/lib/knowledge/types";
+import { ANCHOR_SLUG_SET, type OwnerContext } from "@/lib/knowledge/types";
 import {
   FIELD_RESULTS,
   FOLLOW_UP_PRESETS,
@@ -233,7 +233,13 @@ export const getFieldBoard = createServerFn({ method: "POST" })
 
 export const createFieldPlace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { name: string; note?: string | null }) => input)
+  .inputValidator(
+    (input: {
+      name: string;
+      note?: string | null;
+      ownerContext?: OwnerContext;
+    }) => input,
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const name = String(data.name ?? "").trim().slice(0, 200);
@@ -246,6 +252,11 @@ export const createFieldPlace = createServerFn({ method: "POST" })
     }
 
     const summary = data.note ? String(data.note).trim().slice(0, 500) : null;
+    // Field places default to Gold of Sicily (sales) unless caller specifies.
+    const ownerContext =
+      data.ownerContext && data.ownerContext !== "unknown"
+        ? data.ownerContext
+        : "gold-of-sicily";
 
     const { data: row, error } = await supabase
       .from("entities")
@@ -256,10 +267,14 @@ export const createFieldPlace = createServerFn({ method: "POST" })
         slug,
         importance: 60,
         summary,
-        metadata: { field_place: true } as never,
+        owner_context: ownerContext as never,
+        metadata: {
+          field_place: true,
+          platform_org_slug: ownerContext,
+        } as never,
         last_seen_at: new Date().toISOString(),
       })
-      .select("id, name, slug")
+      .select("id, name, slug, owner_context")
       .single();
     if (error) throw error;
     return normalize(row);
@@ -476,7 +491,7 @@ export const seedFieldPlacesFromNotes = createServerFn({ method: "POST" })
 
     const { data: existing } = await supabase
       .from("entities")
-      .select("id, name, metadata")
+      .select("id, name, metadata, owner_context")
       .eq("user_id", userId)
       .eq("type", "company");
 
@@ -491,13 +506,19 @@ export const seedFieldPlacesFromNotes = createServerFn({ method: "POST" })
       const key = name.toLowerCase();
       const found = byName.get(key);
       if (found) {
+        const prev = (found.metadata ?? {}) as Record<string, unknown>;
         const meta = {
-          ...((found.metadata ?? {}) as Record<string, unknown>),
+          ...prev,
           field_place: true,
+          platform_org_slug: prev.platform_org_slug ?? "gold-of-sicily",
         };
+        const patch: Record<string, unknown> = { metadata: meta };
+        if (!found.owner_context || found.owner_context === "unknown") {
+          patch.owner_context = "gold-of-sicily";
+        }
         await supabase
           .from("entities")
-          .update({ metadata: meta as never })
+          .update(patch as never)
           .eq("id", found.id)
           .eq("user_id", userId);
         tagged += 1;
@@ -512,7 +533,11 @@ export const seedFieldPlacesFromNotes = createServerFn({ method: "POST" })
         name,
         slug,
         importance: 55,
-        metadata: { field_place: true } as never,
+        owner_context: "gold-of-sicily" as never,
+        metadata: {
+          field_place: true,
+          platform_org_slug: "gold-of-sicily",
+        } as never,
       });
       if (!error) created += 1;
     }

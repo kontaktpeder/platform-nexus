@@ -14,14 +14,23 @@ import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
 import {
+  CUSTOMER_ORG_FILTER_LABEL,
   CUSTOMER_WARMTH_LABEL,
   ensureFieldPlace,
   getCustomerDetail,
+  setCustomerOwnerContext,
   setCustomerWarmth,
   type CustomerDetail,
   type CustomerWarmth,
 } from "@/lib/customers.functions";
-import { RELATIONSHIP_LABEL } from "@/lib/knowledge/types";
+import { RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
+
+const OWNER_OPTIONS: OwnerContext[] = [
+  "gold-of-sicily",
+  "peder-enk",
+  "personal",
+  "unknown",
+];
 
 export const Route = createFileRoute("/_authenticated/kunder/$entityId")({
   head: () => ({ meta: [{ title: "Kunde — Mission" }] }),
@@ -53,6 +62,7 @@ function KundeDetailPage() {
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getCustomerDetail);
   const runWarmth = useServerFn(setCustomerWarmth);
+  const runOwner = useServerFn(setCustomerOwnerContext);
   const runEnsureField = useServerFn(ensureFieldPlace);
 
   const detailQ = useQuery({
@@ -65,6 +75,17 @@ function KundeDetailPage() {
     mutationFn: (warmth: CustomerWarmth) =>
       runWarmth({ data: { entityId, warmth } }),
     onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["customer", entityId] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const ownerMut = useMutation({
+    mutationFn: (ownerContext: OwnerContext) =>
+      runOwner({ data: { entityId, ownerContext } }),
+    onSuccess: async () => {
+      toast.success("Org oppdatert");
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
     },
@@ -144,6 +165,29 @@ function KundeDetailPage() {
                     {CUSTOMER_WARMTH_LABEL[w]}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Org
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {OWNER_OPTIONS.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      disabled={ownerMut.isPending}
+                      onClick={() => ownerMut.mutate(o)}
+                      className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
+                        d.ownerContext === o
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      {CUSTOMER_ORG_FILTER_LABEL[o]}
+                    </button>
+                  ))}
+                </div>
               </div>
             </header>
 
@@ -269,6 +313,8 @@ function KundeDetailPage() {
               entity_id: {d.entityId}
               <br />
               slug: {d.slug}
+              <br />
+              owner_context: {d.ownerContext}
               {typeof d.metadata.email_domain === "string" && (
                 <>
                   <br />

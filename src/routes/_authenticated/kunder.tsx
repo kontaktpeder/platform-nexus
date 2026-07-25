@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -9,12 +9,20 @@ import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  CUSTOMER_ORG_FILTERS,
+  CUSTOMER_ORG_FILTER_LABEL,
   CUSTOMER_WARMTH_LABEL,
   listCustomers,
+  ownerContextFromOrgSlug,
   type CustomerListItem,
+  type CustomerOrgFilter,
   type CustomerWarmth,
 } from "@/lib/customers.functions";
 import { createFieldPlace } from "@/lib/field.functions";
+import { useResolvedLastWorkspace } from "@/lib/last-workspace.hooks";
+import type { OwnerContext } from "@/lib/knowledge/types";
+
+const ORG_FILTER_KEY = "mission:kunderOrgFilter";
 
 export const Route = createFileRoute("/_authenticated/kunder")({
   head: () => ({ meta: [{ title: "Kunder — Mission" }] }),
@@ -34,32 +42,83 @@ function warmthClass(w: CustomerWarmth): string {
   }
 }
 
+function readStoredOrgFilter(): CustomerOrgFilter | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = window.localStorage.getItem(ORG_FILTER_KEY);
+    if (v && (CUSTOMER_ORG_FILTERS as readonly string[]).includes(v)) {
+      return v as CustomerOrgFilter;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function writeStoredOrgFilter(filter: CustomerOrgFilter) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ORG_FILTER_KEY, filter);
+  } catch {
+    /* ignore */
+  }
+}
+
 function KunderPage() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listCustomers);
   const runCreate = useServerFn(createFieldPlace);
+  const lastWs = useResolvedLastWorkspace();
   const [q, setQ] = useState("");
+  const [orgFilter, setOrgFilter] = useState<CustomerOrgFilter>("all");
+  const [filterReady, setFilterReady] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
 
+  useEffect(() => {
+    const stored = readStoredOrgFilter();
+    if (stored) {
+      setOrgFilter(stored);
+      setFilterReady(true);
+      return;
+    }
+    if (lastWs.isFetched) {
+      const fromWs = ownerContextFromOrgSlug(lastWs.data?.orgSlug);
+      if (fromWs) setOrgFilter(fromWs);
+      setFilterReady(true);
+    }
+  }, [lastWs.isFetched, lastWs.data?.orgSlug]);
+
   const listQ = useQuery({
     queryKey: ["customers"],
-    queryFn: () => fetchList() as Promise<{ items: CustomerListItem[] }>,
+    queryFn: () =>
+      fetchList() as Promise<{
+        items: CustomerListItem[];
+        countsByOrg: Record<CustomerOrgFilter, number>;
+      }>,
   });
 
   const items = listQ.data?.items ?? [];
+  const counts = listQ.data?.countsByOrg;
+
   const filtered = useMemo(() => {
+    const byOrg =
+      orgFilter === "all" ? items : items.filter((i) => i.ownerContext === orgFilter);
     const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter(
+    if (!needle) return byOrg;
+    return byOrg.filter(
       (i) =>
         i.name.toLowerCase().includes(needle) ||
         (i.summary ?? "").toLowerCase().includes(needle),
     );
-  }, [items, q]);
+  }, [items, orgFilter, q]);
+
+  const createOwnerContext: OwnerContext =
+    orgFilter !== "all" && orgFilter !== "unknown" ? orgFilter : "gold-of-sicily";
 
   const createMut = useMutation({
-    mutationFn: (name: string) => runCreate({ data: { name } }),
+    mutationFn: (name: string) =>
+      runCreate({ data: { name, ownerContext: createOwnerContext } }),
     onSuccess: async (row) => {
       toast.success(`${row.name} lagt til`);
       setAddOpen(false);
@@ -70,13 +129,20 @@ function KunderPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  function selectOrg(next: CustomerOrgFilter) {
+    setOrgFilter(next);
+    writeStoredOrgFilter(next);
+  }
+
+  const subtitleCount = orgFilter === "all" ? items.length : (counts?.[orgFilter] ?? filtered.length);
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <GlobalTopBar
         title="Kunder"
         subtitle={
           items.length
-            ? `${items.length} virksomheter i Knowledge`
+            ? `${subtitleCount} i ${CUSTOMER_ORG_FILTER_LABEL[orgFilter]}`
             : "Company-entities fra Mission"
         }
       />
@@ -101,6 +167,30 @@ function KunderPage() {
           </Button>
         </div>
 
+        {filterReady && (
+          <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            {CUSTOMER_ORG_FILTERS.map((f) => {
+              const n = counts?.[f];
+              const active = orgFilter === f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => selectOrg(f)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground"
+                  }`}
+                >
+                  {CUSTOMER_ORG_FILTER_LABEL[f]}
+                  {typeof n === "number" ? ` · ${n}` : ""}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {addOpen && (
           <div className="mb-4 rounded-2xl border border-border bg-card p-3">
             <Input
@@ -113,6 +203,9 @@ function KunderPage() {
                 if (e.key === "Enter" && newName.trim()) createMut.mutate(newName.trim());
               }}
             />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Opprettes under {CUSTOMER_ORG_FILTER_LABEL[createOwnerContext as CustomerOrgFilter] ?? "Gold of Sicily"}
+            </p>
             <Button
               className="mt-2 h-12 w-full text-base"
               disabled={!newName.trim() || createMut.isPending}
@@ -128,7 +221,7 @@ function KunderPage() {
         )}
 
         <p className="mb-3 text-xs text-muted-foreground">
-          Trykk på en kunde for tidslinje, personer og oppfølging — det du har bygget i Mission.
+          Filtrer per org — kunder blandes ikke. Trykk for tidslinje og oppfølging.
         </p>
 
         {listQ.isLoading && (
@@ -144,12 +237,21 @@ function KunderPage() {
         {!listQ.isLoading && filtered.length === 0 && (
           <div className="mt-8 rounded-2xl border border-dashed border-border px-5 py-10 text-center">
             <Building2 className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">Ingen virksomheter ennå</p>
+            <p className="font-medium">
+              {items.length === 0 ? "Ingen virksomheter ennå" : "Ingen i denne org"}
+            </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Opprett her, importer i Felt, eller godkjenn forslag i Innboks.
+              {items.length === 0
+                ? "Opprett her, importer i Felt, eller godkjenn forslag i Innboks."
+                : "Bytt filter, eller opprett ny under aktiv org."}
             </p>
             <div className="mt-4 flex flex-col gap-2">
               <Button onClick={() => setAddOpen(true)}>Ny virksomhet</Button>
+              {items.length > 0 && orgFilter !== "all" && (
+                <Button variant="outline" onClick={() => selectOrg("all")}>
+                  Vis alle
+                </Button>
+              )}
               <Button variant="outline" asChild>
                 <Link to="/field">Åpne Felt</Link>
               </Button>
@@ -173,6 +275,11 @@ function KunderPage() {
                     >
                       {CUSTOMER_WARMTH_LABEL[c.warmth]}
                     </span>
+                    {orgFilter === "all" && c.ownerContext !== "unknown" && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {CUSTOMER_ORG_FILTER_LABEL[c.ownerContext]}
+                      </span>
+                    )}
                   </div>
                   {c.followUp ? (
                     <p

@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { FIELD_RESULT_LABEL, type FieldResult } from "@/lib/field/field.types";
 import { formatOsloActivityDate, formatOsloDayLabel, osloDateKey } from "@/lib/field/field-dates";
-import { ANCHOR_SLUG_SET } from "@/lib/knowledge/types";
+import { ANCHOR_SLUG_SET, OWNER_CONTEXT_LABEL, type OwnerContext } from "@/lib/knowledge/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalize(v: unknown): any {
@@ -20,12 +20,59 @@ export const CUSTOMER_WARMTH_LABEL: Record<CustomerWarmth, string> = {
   unknown: "Ukjent",
 };
 
+export const CUSTOMER_ORG_FILTERS = [
+  "all",
+  "gold-of-sicily",
+  "peder-enk",
+  "personal",
+  "unknown",
+] as const;
+
+export type CustomerOrgFilter = (typeof CUSTOMER_ORG_FILTERS)[number];
+
+export const CUSTOMER_ORG_FILTER_LABEL: Record<CustomerOrgFilter, string> = {
+  all: "Alle",
+  "gold-of-sicily": OWNER_CONTEXT_LABEL["gold-of-sicily"],
+  "peder-enk": OWNER_CONTEXT_LABEL["peder-enk"],
+  personal: OWNER_CONTEXT_LABEL.personal,
+  unknown: "Uten org",
+};
+
+/** Map Platform org slug → Knowledge owner_context. Conservative — no guessing. */
+export function ownerContextFromOrgSlug(orgSlug: string | null | undefined): OwnerContext | null {
+  if (!orgSlug) return null;
+  const s = orgSlug.toLowerCase().trim();
+  if (s === "gold-of-sicily" || s.includes("sicily") || s.includes("gold-of")) {
+    return "gold-of-sicily";
+  }
+  if (s === "peder-enk" || s.includes("peder-enk") || s === "enk") {
+    return "peder-enk";
+  }
+  if (s === "personal" || s === "personlig") {
+    return "personal";
+  }
+  return null;
+}
+
+export function normalizeOwnerContext(value: unknown): OwnerContext {
+  if (
+    value === "personal" ||
+    value === "peder-enk" ||
+    value === "gold-of-sicily" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return "unknown";
+}
+
 export type CustomerListItem = {
   entityId: string;
   name: string;
   slug: string;
   summary: string | null;
   warmth: CustomerWarmth;
+  ownerContext: OwnerContext;
   isFieldPlace: boolean;
   lastSeenAt: string | null;
   lastSeenLabel: string | null;
@@ -63,6 +110,7 @@ export type CustomerDetail = {
   slug: string;
   summary: string | null;
   warmth: CustomerWarmth;
+  ownerContext: OwnerContext;
   isFieldPlace: boolean;
   metadata: Record<string, unknown>;
   lastSeenAt: string | null;
@@ -99,7 +147,7 @@ export const listCustomers = createServerFn({ method: "POST" })
     const [companiesRes, followRes, actRes, relRes, sigRes] = await Promise.all([
       supabase
         .from("entities")
-        .select("id, name, slug, summary, metadata, last_seen_at, type")
+        .select("id, name, slug, summary, metadata, last_seen_at, type, owner_context")
         .eq("user_id", userId)
         .eq("type", "company")
         .order("name"),
@@ -201,12 +249,17 @@ export const listCustomers = createServerFn({ method: "POST" })
         followUp,
         recentActivity.has(c.id),
       );
+      const fromMeta = ownerContextFromOrgSlug(
+        typeof meta.platform_org_slug === "string" ? meta.platform_org_slug : null,
+      );
+      const ownerContext = normalizeOwnerContext(c.owner_context ?? fromMeta ?? "unknown");
       return {
         entityId: c.id,
         name: c.name,
         slug: c.slug,
         summary: c.summary,
         warmth,
+        ownerContext,
         isFieldPlace: meta.field_place === true,
         lastSeenAt: c.last_seen_at,
         lastSeenLabel: c.last_seen_at ? formatOsloActivityDate(c.last_seen_at) : null,
@@ -233,7 +286,18 @@ export const listCustomers = createServerFn({ method: "POST" })
       return a.name.localeCompare(b.name, "nb");
     });
 
-    return normalize({ items, todayKey });
+    const countsByOrg: Record<CustomerOrgFilter, number> = {
+      all: items.length,
+      "gold-of-sicily": 0,
+      "peder-enk": 0,
+      personal: 0,
+      unknown: 0,
+    };
+    for (const i of items) {
+      countsByOrg[i.ownerContext] = (countsByOrg[i.ownerContext] ?? 0) + 1;
+    }
+
+    return normalize({ items, todayKey, countsByOrg });
   });
 
 export const getCustomerDetail = createServerFn({ method: "POST" })
@@ -246,7 +310,7 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
 
     const { data: company, error } = await supabase
       .from("entities")
-      .select("id, name, slug, summary, metadata, last_seen_at, type")
+      .select("id, name, slug, summary, metadata, last_seen_at, type, owner_context")
       .eq("user_id", userId)
       .eq("id", data.entityId)
       .maybeSingle();
@@ -368,12 +432,16 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
       : null;
 
     const latestAct = actsRes.data?.[0] ?? null;
+    const fromMeta = ownerContextFromOrgSlug(
+      typeof meta.platform_org_slug === "string" ? meta.platform_org_slug : null,
+    );
     const detail: CustomerDetail = {
       entityId: company.id,
       name: company.name,
       slug: company.slug,
       summary: company.summary,
       warmth: warmthFromMetaAndFollowUp(meta, followUp, !!latestAct),
+      ownerContext: normalizeOwnerContext(company.owner_context ?? fromMeta ?? "unknown"),
       isFieldPlace: meta.field_place === true,
       metadata: meta,
       lastSeenAt: company.last_seen_at,
@@ -442,4 +510,38 @@ export const ensureFieldPlace = createServerFn({ method: "POST" })
       .eq("id", data.entityId)
       .eq("user_id", userId);
     return { ok: true };
+  });
+
+export const setCustomerOwnerContext = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { entityId: string; ownerContext: OwnerContext }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const ownerContext = normalizeOwnerContext(data.ownerContext);
+    const { data: row, error } = await supabase
+      .from("entities")
+      .select("metadata")
+      .eq("id", data.entityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Ikke funnet");
+
+    const meta = {
+      ...((row.metadata ?? {}) as Record<string, unknown>),
+    };
+    if (ownerContext !== "unknown") {
+      meta.platform_org_slug = ownerContext;
+    }
+
+    const { error: upErr } = await supabase
+      .from("entities")
+      .update({
+        owner_context: ownerContext as never,
+        metadata: meta as never,
+      })
+      .eq("id", data.entityId)
+      .eq("user_id", userId);
+    if (upErr) throw upErr;
+    return { ok: true, ownerContext };
   });
