@@ -8,23 +8,22 @@ type NavigateFn = (opts: {
 }) => unknown | Promise<unknown>;
 
 /**
- * After login always land on Hjem (/app).
- * Blind last-workspace redirects caused loops when the org/ws no longer exists
- * or Lovable preview blocked hard location.assign.
+ * After login always land on Mission (/mission).
+ * Mission is the personal control layer; organization management remains under Mer.
  */
 export async function redirectAfterLogin(navigate?: NavigateFn): Promise<void> {
   clearPasswordRecoveryPending();
 
   if (navigate) {
     try {
-      await Promise.resolve(navigate({ to: "/app", replace: true }));
+      await Promise.resolve(navigate({ to: "/mission", replace: true }));
       return;
     } catch {
       /* fall through */
     }
   }
 
-  window.location.assign("/app");
+  window.location.assign("/mission");
 }
 
 /** Optional: resume last workspace only when caller has validated it. */
