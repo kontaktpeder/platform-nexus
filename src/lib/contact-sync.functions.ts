@@ -4,7 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { ingestGmail, ingestSlack, type IngestResult } from "@/lib/ingest/ingest.server";
+import type { IngestResult } from "@/lib/ingest/ingest.server";
 import type { AutoPromoteResult } from "@/lib/knowledge/identity/identity.server";
 
 export type ContactSyncResult = {
@@ -52,6 +52,8 @@ export const syncPlatformContacts = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const max = data?.max ?? 400;
     const syncedAt = new Date().toISOString();
+
+    const { ingestGmail, ingestSlack } = await import("@/lib/ingest/ingest.server");
 
     const [gmail, slack] = await Promise.all([
       ingestGmail({ supabase, userId, max }).catch((err) =>

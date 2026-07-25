@@ -26,17 +26,22 @@ export function setLastContactSyncAt(ts: number = Date.now()) {
 }
 
 /**
- * Fire-and-forget contact sync when Mission mounts, if last sync is stale.
- * Does not block the brief UI.
+ * Fire-and-forget contact sync after Mission brief is ready (if last sync is stale).
+ * Waits for `ready` so we don't compete with getMorningMission on the worker.
  */
-export function useMissionContactSync(opts?: { enabled?: boolean }) {
+export function useMissionContactSync(opts?: {
+  enabled?: boolean;
+  /** Set true once morning brief has loaded (or failed) so sync can start. */
+  ready?: boolean;
+}) {
   const enabled = opts?.enabled !== false;
+  const ready = opts?.ready === true;
   const qc = useQueryClient();
   const runSync = useServerFn(syncPlatformContacts);
   const started = useRef(false);
 
   useEffect(() => {
-    if (!enabled || started.current) return;
+    if (!enabled || !ready || started.current) return;
     started.current = true;
 
     const last = getLastContactSyncAt();
@@ -52,5 +57,5 @@ export function useMissionContactSync(opts?: { enabled?: boolean }) {
         console.warn("[mission] contact sync failed", err);
       }
     })();
-  }, [enabled, runSync, qc]);
+  }, [enabled, ready, runSync, qc]);
 }

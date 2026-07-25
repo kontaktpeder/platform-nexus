@@ -54,9 +54,6 @@ function GlobalMission() {
   const firstName = firstNameFrom(user);
   const queryClient = useQueryClient();
 
-  // Background: Gmail/Slack → contacts when Mission opens (if stale).
-  useMissionContactSync({ enabled: !!user });
-
   const fetchMorning = useServerFn(getMorningMission);
   const runContactSync = useServerFn(syncPlatformContacts);
   const query = useQuery({
@@ -64,6 +61,12 @@ function GlobalMission() {
     queryFn: () => fetchMorning({ data: {} }),
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
+  });
+
+  // After brief settles: Gmail/Slack → contacts (if stale). Don't race the brief.
+  useMissionContactSync({
+    enabled: !!user,
+    ready: query.isFetched,
   });
 
   const runAct = useServerFn(actOnMorningItem);

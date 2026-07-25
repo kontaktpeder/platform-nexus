@@ -1,5 +1,5 @@
 // Morning Mission v0 — one AI call to prioritize all signals.
-import { generateText, Output, NoObjectGeneratedError } from "ai";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import type { MorningMissionPayload } from "@/lib/morning-mission.types";
@@ -264,14 +264,12 @@ export async function generateMorningMissionAi(input: {
       input.userEmail ?? null,
     );
   } catch (err) {
-    if (NoObjectGeneratedError.isInstance(err)) {
-      console.warn("[morning-mission] AI malformed, using fallback", err);
-      return applyTrustRules(
-        finalizePayload(fallbackPayload(input.signals), input.signals),
-        input.signals,
-        input.userEmail ?? null,
-      );
-    }
-    throw err;
+    // Never fail the whole Mission UI on gateway/auth/rate-limit (e.g. "Forbidden").
+    console.warn("[morning-mission] AI failed, using fallback", err);
+    return applyTrustRules(
+      finalizePayload(fallbackPayload(input.signals), input.signals),
+      input.signals,
+      input.userEmail ?? null,
+    );
   }
 }
