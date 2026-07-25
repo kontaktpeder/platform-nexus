@@ -6,6 +6,8 @@ export function useResolvedLastWorkspace() {
   return useQuery({
     queryKey: ["last-workspace-resolved"],
     queryFn: () => resolveLastWorkspace(supabase),
-    staleTime: 60_000,
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
   });
 }
