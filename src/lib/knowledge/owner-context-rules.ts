@@ -4,6 +4,7 @@
 
 import type { OwnerContext } from "@/lib/knowledge/types";
 import { extractEmailAddress } from "@/lib/knowledge/entity-matcher";
+import { isConsumerEmailDomain } from "@/lib/knowledge/identity/extract";
 
 export type OwnerContextEvidence = {
   to?: string | null;
