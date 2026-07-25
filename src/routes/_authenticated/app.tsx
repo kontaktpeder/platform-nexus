@@ -2,16 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import {
-  Building2,
-  ChevronRight,
-  Inbox,
-  Loader2,
-  MapPin,
-  Plus,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { Building2, ChevronRight, Loader2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { createOrganization } from "@/lib/organization.functions";
 import { setLastWorkspace } from "@/lib/last-workspace";
@@ -34,36 +25,9 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/app")({
-  head: () => ({ meta: [{ title: "Hjem — Platform Core" }] }),
+  head: () => ({ meta: [{ title: "Organisasjoner — Platform Core" }] }),
   component: OrgPicker,
 });
-
-const QUICK_ACTIONS = [
-  {
-    to: "/mission" as const,
-    label: "Dagens plan",
-    description: "Prioriter neste handling",
-    icon: Sparkles,
-  },
-  {
-    to: "/kunder" as const,
-    label: "Kunder",
-    description: "Følg opp relasjoner",
-    icon: Users,
-  },
-  {
-    to: "/review" as const,
-    label: "Innboks",
-    description: "Avklar AI-forslag",
-    icon: Inbox,
-  },
-  {
-    to: "/field" as const,
-    label: "Felt",
-    description: "Logg besøk raskt",
-    icon: MapPin,
-  },
-] as const;
 
 function OrgPicker() {
   const qc = useQueryClient();
@@ -111,42 +75,9 @@ function OrgPicker() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <GlobalTopBar title="Hjem" subtitle="Din operative arbeidsflate" />
+      <GlobalTopBar title="Organisasjoner" subtitle="Arbeidsområder og moduler" />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:py-6 sm:pb-28">
-        <section aria-labelledby="hurtigvalg" className="mb-5">
-          <div className="mb-3 flex items-end justify-between gap-3 px-1">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
-                Kom raskt videre
-              </p>
-              <h1 id="hurtigvalg" className="mt-0.5 text-xl font-semibold sm:text-2xl">
-                Hva vil du gjøre?
-              </h1>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            {QUICK_ACTIONS.map(({ to, label, description, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className="surface-card flex min-h-24 flex-col justify-between gap-3 p-3.5 transition-colors hover:border-primary/35 active:bg-muted"
-              >
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-primary">
-                  <Icon aria-hidden="true" className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{label}</p>
-                  <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground">
-                    {description}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-
         {lastWs.data && <WorkspaceResumeCard workspace={lastWs.data} />}
 
         <section aria-labelledby="organisasjoner">
