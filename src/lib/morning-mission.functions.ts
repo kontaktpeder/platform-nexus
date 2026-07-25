@@ -177,27 +177,8 @@ export const getMorningMission = createServerFn({ method: "POST" })
     const fromCache = !!cached;
 
     if (!cached) {
-      // Sync Gmail/Slack → raw_signals → auto entities before rebuilding the brief.
-      try {
-        const { ingestGmail, ingestSlack } = await import("@/lib/ingest/ingest.server");
-        const { autoPromoteEligibleIdentities } = await import(
-          "@/lib/knowledge/identity/identity.server"
-        );
-        await Promise.all([
-          ingestGmail({ supabase, userId, max: 800 }).catch((err) => {
-            console.warn("[morning-mission] gmail ingest", err);
-            return null;
-          }),
-          ingestSlack({ supabase, userId }).catch((err) => {
-            console.warn("[morning-mission] slack ingest", err);
-            return null;
-          }),
-        ]);
-        await autoPromoteEligibleIdentities(supabase, userId);
-      } catch (err) {
-        console.warn("[morning-mission] signal sync failed", err);
-      }
-
+      // Contacts are synced separately on Mission open / Oppdater (syncPlatformContacts).
+      // Brief rebuild stays focused on AI + live Gmail/Slack action cards.
       const built = await buildMorningMission(supabase, userId, userEmail, userName);
       const { error } = await supabase.from("morning_mission_briefs").upsert(
         {

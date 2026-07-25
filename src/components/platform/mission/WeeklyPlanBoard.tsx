@@ -122,8 +122,7 @@ export function WeeklyPlanBoard({
           ) : null}
 
           <p className="mt-4 border-t border-dashed border-foreground/10 pt-3 text-[11px] text-muted-foreground">
-            Oppdater synker Gmail/Slack til Knowledge og bygger brief på nytt. Avkryssing kommer
-            senere.
+            Kontakter synkes i bakgrunnen når du åpner Mission. Oppdater bygger brief på nytt.
           </p>
         </div>
       </div>
