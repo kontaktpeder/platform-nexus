@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getReviewCount } from "@/lib/review.functions";
-import { Building2, MapPin, Sparkles } from "lucide-react";
+import { ArrowRight, Clock, Sparkles } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -23,9 +23,10 @@ import {
   setLastContactSyncAt,
   useMissionContactSync,
 } from "@/lib/mission-contact-sync.hooks";
+import { listCustomers, type CustomerListItem } from "@/lib/customers.functions";
 
 export const Route = createFileRoute("/_authenticated/mission")({
-  head: () => ({ meta: [{ title: "Mission Control — Platform Core" }] }),
+  head: () => ({ meta: [{ title: "I dag — Platform Core" }] }),
   component: GlobalMission,
 });
 
@@ -181,7 +182,7 @@ function GlobalMission() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <GlobalTopBar title="Dagens plan" subtitle="AI-morgenbrief på tvers av alt" />
+      <GlobalTopBar title="Dagens plan" subtitle="Neste handling på tvers av alt" />
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
         <GlobalMissionHeader
           firstName={firstName}
@@ -193,9 +194,8 @@ function GlobalMission() {
           }}
         />
 
+        <CustomerFollowUps />
         <ReviewInboxTeaser />
-        <KunderTeaser />
-        <FieldTeaser />
 
         <div id="morning-today">
           <MorningMissionView
@@ -270,42 +270,117 @@ function ReviewInboxTeaser() {
   );
 }
 
-function KunderTeaser() {
-  return (
-    <Link
-      to="/kunder"
-      className="mt-3 flex items-center justify-between rounded-2xl border border-border/60 bg-card p-4 text-sm shadow-sm transition hover:border-border"
-    >
-      <div className="flex items-center gap-3">
-        <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
-          <Building2 className="h-4 w-4" />
-        </div>
-        <div>
-          <p className="font-medium">Kunder</p>
-          <p className="text-xs text-muted-foreground">Se entities, tidslinje og koblinger</p>
-        </div>
-      </div>
-      <span className="text-xs text-muted-foreground">Åpne →</span>
-    </Link>
-  );
-}
+function CustomerFollowUps() {
+  const fetchCustomers = useServerFn(listCustomers);
+  const query = useQuery({
+    queryKey: ["customers"],
+    queryFn: () =>
+      fetchCustomers() as Promise<{
+        items: CustomerListItem[];
+      }>,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-function FieldTeaser() {
+  const followUps = (query.data?.items ?? [])
+    .filter((customer) => customer.followUp)
+    .sort((a, b) =>
+      (a.followUp?.dueAt ?? "").localeCompare(b.followUp?.dueAt ?? ""),
+    )
+    .slice(0, 4);
+
   return (
-    <Link
-      to="/field"
-      className="mt-3 flex items-center justify-between rounded-2xl border border-border/60 bg-card p-4 text-sm shadow-sm transition hover:border-border"
-    >
-      <div className="flex items-center gap-3">
-        <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
-          <MapPin className="h-4 w-4" />
-        </div>
+    <section aria-labelledby="customer-follow-ups" className="mt-5">
+      <div className="mb-2 flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium">Felt</p>
-          <p className="text-xs text-muted-foreground">Logg besøk og neste oppfølging</p>
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
+            Inntektsnært
+          </p>
+          <h2 id="customer-follow-ups" className="text-lg font-semibold">
+            Følg opp nå
+          </h2>
         </div>
+        <Link
+          to="/kunder"
+          className="inline-flex min-h-10 items-center gap-1 rounded-xl px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          Alle kunder <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
-      <span className="text-xs text-muted-foreground">Åpne →</span>
-    </Link>
+
+      {query.isLoading && (
+        <div className="grid gap-2" aria-label="Laster oppfølginger">
+          {[0, 1].map((item) => (
+            <div key={item} className="h-20 animate-pulse rounded-2xl bg-muted" />
+          ))}
+        </div>
+      )}
+
+      {query.isError && (
+        <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+          Kunne ikke hente kundeoppfølginger akkurat nå.
+        </div>
+      )}
+
+      {!query.isLoading && !query.isError && followUps.length === 0 && (
+        <Link
+          to="/field"
+          className="flex min-h-20 items-center gap-3 rounded-2xl border border-dashed border-border bg-card p-4 transition-colors active:bg-muted"
+        >
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Clock className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Ingen planlagte oppfølginger</p>
+            <p className="text-sm text-muted-foreground">
+              Legg inn neste steg etter et besøk.
+            </p>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </Link>
+      )}
+
+      {followUps.length > 0 && (
+        <ul className="grid gap-2 md:grid-cols-2">
+          {followUps.map((customer) => {
+            const followUp = customer.followUp;
+            if (!followUp) return null;
+            return (
+              <li key={followUp.id}>
+                <Link
+                  to="/kunder/$entityId"
+                  params={{ entityId: customer.entityId }}
+                  className="flex min-h-24 items-start gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/35 active:bg-muted"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-semibold">{customer.name}</p>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                          followUp.overdue
+                            ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {followUp.overdue ? "Nå" : followUp.dueLabel}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm text-foreground/90">
+                      {followUp.action || "Ta kontakt og avklar neste steg"}
+                    </p>
+                    {customer.lastSeenLabel && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Sist kontakt: {customer.lastSeenLabel}
+                      </p>
+                    )}
+                  </div>
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

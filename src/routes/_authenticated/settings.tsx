@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Network, ChevronRight, Copy, KeyRound } from "lucide-react";
+import { Building2, ChevronRight, Copy, KeyRound, LogOut, Network } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — Platform Core" }] }),
+  head: () => ({ meta: [{ title: "Mer — Platform Core" }] }),
   component: SettingsPage,
 });
 
@@ -89,9 +89,27 @@ function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <GlobalTopBar title="Meg" subtitle="Konto og innstillinger" />
+      <GlobalTopBar title="Mer" subtitle="Organisasjoner, konto og innstillinger" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
-        <section className="surface-card p-5">
+        <Link
+          to="/app"
+          className="surface-card flex items-center justify-between gap-3 p-5 transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Building2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-heading text-base font-semibold">Organisasjoner</h2>
+              <p className="text-sm text-muted-foreground">
+                Velg arbeidsområde og administrer modulene.
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </Link>
+
+        <section className="surface-card mt-4 p-5">
           <h2 className="font-heading text-base font-semibold">Konto</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Innlogget som{" "}
