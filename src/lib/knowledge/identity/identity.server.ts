@@ -6,6 +6,11 @@ import type { NormalizedSignal } from "@/lib/ingest/normalize";
 import { extractIdentitiesFromSignal, isConsumerEmailDomain } from "./extract";
 import type { ExtractedIdentity, KnownIdentity } from "./types";
 import { normalizeName } from "@/lib/knowledge/entity-matcher";
+import {
+  voteOwnerContext,
+  type OwnerContextEvidence,
+} from "@/lib/knowledge/owner-context-rules";
+import type { OwnerContext } from "@/lib/knowledge/types";
 
 type DB = SupabaseClient<Database>;
 
@@ -490,6 +495,43 @@ async function findCompanyForDomain(
   return { id: match.id, owner_context: match.owner_context };
 }
 
+async function evidencesForIdentity(
+  supabase: DB,
+  userId: string,
+  identityId: string,
+): Promise<OwnerContextEvidence[]> {
+  const { data: links } = await supabase
+    .from("signal_identities")
+    .select("signal_id")
+    .eq("identity_id", identityId)
+    .limit(30);
+  const signalIds = (links ?? []).map((l) => l.signal_id as string);
+  if (!signalIds.length) return [];
+
+  const { data: signals } = await supabase
+    .from("raw_signals")
+    .select("metadata, summary")
+    .eq("user_id", userId)
+    .in("id", signalIds)
+    .limit(30);
+
+  return (signals ?? []).map((s) => {
+    const meta = (s.metadata ?? {}) as Record<string, unknown>;
+    return {
+      to: typeof meta.to === "string" ? meta.to : null,
+      from: typeof meta.from === "string" ? meta.from : null,
+      cc: typeof meta.cc === "string" ? meta.cc : null,
+      subject: typeof meta.subject === "string" ? meta.subject : null,
+      snippet:
+        typeof meta.snippet === "string"
+          ? meta.snippet
+          : typeof s.summary === "string"
+            ? s.summary
+            : null,
+    };
+  });
+}
+
 export type PromoteIdentityResult = {
   entityId: string;
   created: boolean;
@@ -574,11 +616,21 @@ export async function promoteKnownIdentityToEntity(
   let ownerContext: string | null = null;
   if (type === "person" && ki.domain) {
     const company = await findCompanyForDomain(supabase, userId, ki.domain);
-    if (company?.owner_context) ownerContext = company.owner_context;
+    if (company?.owner_context && company.owner_context !== "unknown") {
+      ownerContext = company.owner_context;
+    }
   }
-  // New companies from Gmail domains default to Gold of Sicily (sales field context).
-  if (type === "company" && opts?.source === "auto" && !ownerContext) {
-    ownerContext = "gold-of-sicily";
+
+  if (!ownerContext || ownerContext === "unknown") {
+    const evidences = await evidencesForIdentity(supabase, userId, identityId);
+    const voted = voteOwnerContext(evidences);
+    if (voted) ownerContext = voted;
+  }
+
+  // Prefer unknown over wrong org — never hardcode gold-of-sicily.
+  const resolvedOwner = (ownerContext ?? "unknown") as OwnerContext;
+  if (resolvedOwner !== "unknown") {
+    metadata.platform_org_slug = resolvedOwner;
   }
 
   const { data: entity, error: insErr } = await supabase
@@ -590,7 +642,7 @@ export async function promoteKnownIdentityToEntity(
       slug,
       importance: opts?.importance ?? (opts?.source === "auto" ? 45 : 50),
       summary: null,
-      owner_context: (ownerContext ?? "unknown") as never,
+      owner_context: resolvedOwner as never,
       metadata: metadata as never,
       last_seen_at: ki.last_seen_at ?? new Date().toISOString(),
     })

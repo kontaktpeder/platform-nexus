@@ -56,7 +56,7 @@ function ReviewPage() {
     setRunningPipeline(true);
     setPipelineMsg(null);
     try {
-      const ing = (await runIngest({ data: { max: 50 } })) as IngestRecentResult;
+      const ing = (await runIngest({ data: { max: 500 } })) as IngestRecentResult;
       const auto = await runAutoPromote();
       const parse = await runParse({ data: { limit: 20 } });
       setPipelineMsg(

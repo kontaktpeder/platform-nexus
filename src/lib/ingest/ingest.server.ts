@@ -14,7 +14,10 @@ export type IngestResult = {
   errors: string[];
 };
 
-type GmailListResp = { messages?: { id: string; threadId: string }[] };
+type GmailListResp = {
+  messages?: { id: string; threadId: string }[];
+  nextPageToken?: string;
+};
 type GmailHeader = { name: string; value: string };
 type GmailMeta = {
   id: string;
@@ -40,6 +43,55 @@ async function gmailGet<T>(path: string, apiKey: string, lovableKey: string): Pr
   return (await res.json()) as T;
 }
 
+/** List all message IDs for a query, paging until hardCap. */
+async function listGmailMessageIds(opts: {
+  apiKey: string;
+  lovableKey: string;
+  query: string;
+  hardCap: number;
+}): Promise<{ ids: string[]; errors: string[] }> {
+  const ids: string[] = [];
+  const errors: string[] = [];
+  let pageToken: string | undefined;
+  const pageSize = 100; // Gmail API max per page
+  const q = encodeURIComponent(opts.query);
+
+  for (let page = 0; page < 50 && ids.length < opts.hardCap; page += 1) {
+    const tokenQs = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+    try {
+      const list = await gmailGet<GmailListResp>(
+        `/users/me/messages?maxResults=${pageSize}&q=${q}${tokenQs}`,
+        opts.apiKey,
+        opts.lovableKey,
+      );
+      for (const m of list.messages ?? []) {
+        ids.push(m.id);
+        if (ids.length >= opts.hardCap) break;
+      }
+      pageToken = list.nextPageToken;
+      if (!pageToken || !(list.messages?.length)) break;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "gmail list failed");
+      break;
+    }
+  }
+  return { ids, errors };
+}
+
+async function mapInChunks<T, R>(
+  items: T[],
+  chunkSize: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    const part = await Promise.all(chunk.map(fn));
+    out.push(...part);
+  }
+  return out;
+}
+
 export async function ingestGmail(opts: {
   supabase: SupabaseClient<Database>;
   userId: string;
@@ -53,35 +105,29 @@ export async function ingestGmail(opts: {
     return { fetched: 0, inserted: 0, skipped: 0, errors: ["gmail not connected"] };
   }
   const result: IngestResult = { fetched: 0, inserted: 0, skipped: 0, errors: [] };
-  const max = Math.min(opts.max ?? 50, 100);
-  // Align with Mission: include unread + recent inbox (not only unread).
-  const q = encodeURIComponent(opts.query ?? "in:inbox newer_than:30d");
-  let list: GmailListResp;
-  try {
-    list = await gmailGet<GmailListResp>(
-      `/users/me/messages?maxResults=${max}&q=${q}`,
-      apiKey,
-      lovableKey,
-    );
-  } catch (err) {
-    result.errors.push(err instanceof Error ? err.message : "gmail list failed");
-    return result;
-  }
-  const ids = (list.messages ?? []).map((m) => m.id);
+  // Full last-30d inbox by default (paged). Cap avoids runaway runs.
+  const hardCap = Math.min(Math.max(opts.max ?? 500, 1), 1000);
+  const query = opts.query ?? "in:inbox newer_than:30d";
+
+  const { ids, errors: listErrors } = await listGmailMessageIds({
+    apiKey,
+    lovableKey,
+    query,
+    hardCap,
+  });
+  result.errors.push(...listErrors);
   result.fetched = ids.length;
   if (ids.length === 0) return result;
 
-  const metas = await Promise.all(
-    ids.map((id) =>
-      gmailGet<GmailMeta>(
-        `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To`,
-        apiKey,
-        lovableKey,
-      ).catch((err) => {
-        result.errors.push(err instanceof Error ? err.message : `gmail meta ${id} failed`);
-        return null;
-      }),
-    ),
+  const metas = await mapInChunks(ids, 20, (id) =>
+    gmailGet<GmailMeta>(
+      `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc`,
+      apiKey,
+      lovableKey,
+    ).catch((err) => {
+      result.errors.push(err instanceof Error ? err.message : `gmail meta ${id} failed`);
+      return null;
+    }),
   );
 
   const rows = metas
@@ -96,6 +142,7 @@ export async function ingestGmail(opts: {
         subject: gmailHeader(m.payload?.headers, "Subject"),
         from: gmailHeader(m.payload?.headers, "From"),
         to: gmailHeader(m.payload?.headers, "To"),
+        cc: gmailHeader(m.payload?.headers, "Cc"),
       }),
     );
 

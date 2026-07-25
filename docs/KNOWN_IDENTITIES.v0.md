@@ -102,7 +102,7 @@ After Gmail/Slack ingest upserts identities, callers run `autoPromoteEligibleIde
 
 - **email_domain → company** at `seen_count >= 1` (fills Kunder)
 - Prefers **linking** to existing Felt/note companies when domain root matches name (e.g. `parkteateret.no` → Parkteateret) and stamps `metadata.email_domain`
-- New domain companies default `owner_context: gold-of-sicily`
+- New companies use To/From/keyword rules for `owner_context`; default `unknown` when unsure
 - **email_address → person**: business domains at ≥1, consumer mail at ≥3; skips noreply
 - Person with known company domain → `member_of` + inherit org
 - Tag: `metadata.created_via = "identity_auto"`

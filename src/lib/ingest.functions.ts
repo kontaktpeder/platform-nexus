@@ -8,7 +8,7 @@ import { ingestGmail, ingestSlack, type IngestResult } from "./ingest/ingest.ser
 const optsSchema = z
   .object({
     workspaceId: z.string().uuid().nullish(),
-    max: z.number().int().min(1).max(100).optional(),
+    max: z.number().int().min(1).max(1000).optional(),
     query: z.string().max(500).optional(),
   })
   .default({});

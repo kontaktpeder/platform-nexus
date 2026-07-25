@@ -24,6 +24,7 @@ export type GmailNormalizeInput = {
   subject?: string;
   from?: string;
   to?: string;
+  cc?: string;
 };
 
 export function normalizeGmailMessage(msg: GmailNormalizeInput): NormalizedSignal {
@@ -34,6 +35,7 @@ export function normalizeGmailMessage(msg: GmailNormalizeInput): NormalizedSigna
     subject ? `Subject: ${subject}` : null,
     from ? `From: ${from}` : null,
     msg.to ? `To: ${msg.to.trim()}` : null,
+    msg.cc ? `Cc: ${msg.cc.trim()}` : null,
     snippet ? `\n${snippet}` : null,
   ].filter(Boolean);
   const raw_text = rawParts.join("\n").slice(0, 8000) || "(empty gmail message)";
@@ -52,6 +54,7 @@ export function normalizeGmailMessage(msg: GmailNormalizeInput): NormalizedSigna
       subject: subject || null,
       from: from || null,
       to: msg.to ?? null,
+      cc: msg.cc ?? null,
       snippet: snippet || null,
       label_ids: msg.labelIds ?? [],
     },
