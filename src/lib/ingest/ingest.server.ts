@@ -359,6 +359,22 @@ async function ingestSlackWhitelistedChannels(opts: {
 
 // ── Upsert ───────────────────────────────────────────────────────────────
 
+function errMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    const e = err as {
+      message?: unknown;
+      code?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts = [e.message, e.code, e.details, e.hint]
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
+    if (parts.length) return parts.join(" — ");
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 async function upsertSignals(opts: {
   supabase: SupabaseClient<Database>;
   userId: string;
@@ -391,45 +407,59 @@ async function upsertSignals(opts: {
     if (error) throw error;
     existing = new Set((data ?? []).map((row) => `${row.source}:${row.external_id}`));
   } catch (err) {
-    result.errors.push(err instanceof Error ? err.message : "existing lookup failed");
+    result.errors.push(errMessage(err));
   }
 
-  const payload = deduped.map((r) => ({
-    user_id: userId,
-    workspace_id: workspaceId,
-    source: r.source,
-    external_id: r.external_id,
-    external_thread_id: r.external_thread_id,
-    raw_text: r.raw_text,
-    summary: r.summary,
-    status: "new" as const,
-    occurred_at: r.occurred_at,
-    metadata: r.metadata as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["raw_signals"]["Insert"]["metadata"],
-  }));
+  const toInsert = deduped.filter((r) => !existing.has(`${r.source}:${r.external_id}`));
+  const alreadyKnown = deduped.length - toInsert.length;
+  result.skipped += alreadyKnown;
 
-  try {
-    const { error } = await supabase
-      .from("raw_signals")
-      .upsert(payload, {
-        onConflict: "user_id,source,external_id",
-        ignoreDuplicates: true,
-      });
-    if (error) throw error;
-    for (const r of deduped) {
-      if (existing.has(`${r.source}:${r.external_id}`)) {
-        result.skipped += 1;
+  if (toInsert.length > 0) {
+    const payload = toInsert.map((r) => ({
+      user_id: userId,
+      workspace_id: workspaceId,
+      source: r.source,
+      external_id: r.external_id,
+      external_thread_id: r.external_thread_id,
+      raw_text: r.raw_text,
+      summary: r.summary,
+      status: "new" as const,
+      occurred_at: r.occurred_at,
+      metadata: r.metadata as unknown as import("@/integrations/supabase/types").Database["public"]["Tables"]["raw_signals"]["Insert"]["metadata"],
+    }));
+
+    // Insert-only (no onConflict) — works even before unique-constraint migration.
+    // Race duplicates surface as 23505 and are counted as skipped.
+    const { error } = await supabase.from("raw_signals").insert(payload);
+    if (error) {
+      const msg = errMessage(error);
+      const isDup =
+        (typeof error === "object" &&
+          error &&
+          "code" in error &&
+          (error as { code?: string }).code === "23505") ||
+        /duplicate|unique/i.test(msg);
+      if (isDup) {
+        // Concurrent insert — treat as known; identity layer still runs below.
+        result.skipped += toInsert.length;
       } else {
-        result.inserted += 1;
+        result.errors.push(msg);
+        // Still try identity on any rows that already exist in DB.
       }
+    } else {
+      result.inserted += toInsert.length;
     }
+  }
 
-    // Deterministic identity layer — runs for every row in batch (new + existing).
-    const { data: signalRows } = await supabase
+  // Deterministic identity layer — runs for every row in batch (new + existing).
+  try {
+    const { data: signalRows, error: selErr } = await supabase
       .from("raw_signals")
       .select("id, source, external_id, occurred_at, summary, metadata")
       .eq("user_id", userId)
       .in("source", sources)
       .in("external_id", externalIds);
+    if (selErr) throw selErr;
 
     if (signalRows && signalRows.length > 0) {
       const {
@@ -448,18 +478,14 @@ async function upsertSignals(opts: {
           metadata: (row.metadata ?? {}) as Record<string, unknown>,
         })),
       );
-      // Auto-create entities for frequent contacts — correction happens later.
       try {
         await autoPromoteEligibleIdentities(supabase, userId);
       } catch (err) {
-        console.warn(
-          "[identity] auto-promote failed",
-          err instanceof Error ? err.message : err,
-        );
+        console.warn("[identity] auto-promote failed", errMessage(err));
       }
     }
   } catch (err) {
-    result.errors.push(err instanceof Error ? err.message : "upsert failed");
+    result.errors.push(errMessage(err));
   }
   return result;
 }

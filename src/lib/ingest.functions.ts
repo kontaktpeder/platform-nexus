@@ -70,6 +70,23 @@ export function formatIngestStatus(
   return parts.join(" · ");
 }
 
+function catchIngestError(label: string, err: unknown): IngestResult {
+  const message =
+    err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
+      ? [
+          (err as { message: string }).message,
+          "code" in err && typeof (err as { code: unknown }).code === "string"
+            ? (err as { code: string }).code
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" — ")
+      : err instanceof Error
+        ? err.message
+        : `${label} failed`;
+  return { fetched: 0, inserted: 0, skipped: 0, errors: [message] };
+}
+
 export const ingestRecentSignals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => optsSchema.parse(input ?? {}))
@@ -80,22 +97,10 @@ export const ingestRecentSignals = createServerFn({ method: "POST" })
       workspaceId: data.workspaceId ?? null,
     };
     const [gmail, slack] = await Promise.all([
-      ingestGmail({ ...shared, max: data.max, query: data.query }).catch(
-        (err): IngestResult => ({
-          fetched: 0,
-          inserted: 0,
-          skipped: 0,
-          errors: [err instanceof Error ? err.message : "gmail ingest failed"],
-        }),
+      ingestGmail({ ...shared, max: data.max, query: data.query }).catch((err) =>
+        catchIngestError("gmail", err),
       ),
-      ingestSlack(shared).catch(
-        (err): IngestResult => ({
-          fetched: 0,
-          inserted: 0,
-          skipped: 0,
-          errors: [err instanceof Error ? err.message : "slack ingest failed"],
-        }),
-      ),
+      ingestSlack(shared).catch((err) => catchIngestError("slack", err)),
     ]);
     return { gmail, slack };
   });
