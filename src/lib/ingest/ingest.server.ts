@@ -105,9 +105,10 @@ export async function ingestGmail(opts: {
     return { fetched: 0, inserted: 0, skipped: 0, errors: ["gmail not connected"] };
   }
   const result: IngestResult = { fetched: 0, inserted: 0, skipped: 0, errors: [] };
-  // Full last-30d inbox by default (paged). Cap avoids runaway runs.
-  const hardCap = Math.min(Math.max(opts.max ?? 500, 1), 1000);
-  const query = opts.query ?? "in:inbox newer_than:30d";
+  // Inbox + sent last 30d (paged). Cap avoids runaway runs.
+  const hardCap = Math.min(Math.max(opts.max ?? 800, 1), 1000);
+  // Sent is critical for who you actively work with (To = contact, From = mailbox/org).
+  const query = opts.query ?? "(in:inbox OR in:sent) newer_than:30d";
 
   const { ids, errors: listErrors } = await listGmailMessageIds({
     apiKey,

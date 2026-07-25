@@ -184,7 +184,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
           "@/lib/knowledge/identity/identity.server"
         );
         await Promise.all([
-          ingestGmail({ supabase, userId, max: 500 }).catch((err) => {
+          ingestGmail({ supabase, userId, max: 800 }).catch((err) => {
             console.warn("[morning-mission] gmail ingest", err);
             return null;
           }),
