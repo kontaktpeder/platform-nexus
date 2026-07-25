@@ -53,7 +53,8 @@ export async function ingestGmail(opts: {
     return { fetched: 0, inserted: 0, skipped: 0, errors: ["gmail not connected"] };
   }
   const result: IngestResult = { fetched: 0, inserted: 0, skipped: 0, errors: [] };
-  const max = Math.min(opts.max ?? 25, 100);
+  const max = Math.min(opts.max ?? 50, 100);
+  // Align with Mission: include unread + recent inbox (not only unread).
   const q = encodeURIComponent(opts.query ?? "in:inbox newer_than:30d");
   let list: GmailListResp;
   try {

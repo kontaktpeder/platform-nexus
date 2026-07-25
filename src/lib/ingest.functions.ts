@@ -42,6 +42,34 @@ export type IngestRecentResult = {
   slack: IngestResult;
 };
 
+/** Human-readable ingest status — shows fetched/new/known + errors (not just inserts). */
+export function formatIngestStatus(
+  ing: IngestRecentResult,
+  extra?: { promoted?: number; linked?: number; parsed?: number; scanned?: number },
+): string {
+  const g = ing.gmail;
+  const s = ing.slack;
+  const parts = [
+    `Gmail ${g.inserted} nye / ${g.skipped} kjente (hentet ${g.fetched})`,
+    `Slack ${s.inserted} nye / ${s.skipped} kjente (hentet ${s.fetched})`,
+  ];
+  if (extra?.promoted != null || extra?.linked != null) {
+    parts.push(
+      `Auto-opprettet ${extra.promoted ?? 0} · koblet ${extra.linked ?? 0}`,
+    );
+  }
+  if (extra?.parsed != null && extra?.scanned != null) {
+    parts.push(`Parsed ${extra.parsed}/${extra.scanned}`);
+  }
+  const errors = [...(g.errors ?? []), ...(s.errors ?? [])].filter(Boolean);
+  if (errors.length) {
+    parts.push(`Feil: ${errors.slice(0, 3).join("; ")}`);
+  } else if (g.fetched === 0 && s.fetched === 0) {
+    parts.push("Ingen treff fra connector (tom innboks eller API-svar uten meldinger)");
+  }
+  return parts.join(" · ");
+}
+
 export const ingestRecentSignals = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => optsSchema.parse(input ?? {}))

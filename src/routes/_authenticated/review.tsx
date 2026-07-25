@@ -21,7 +21,11 @@ import {
 } from "@/lib/review.functions";
 import { OWNER_CONTEXT_LABEL, ENTITY_TYPE_LABEL, RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
 import { parseNewRawSignals } from "@/lib/parse-signals.functions";
-import { ingestRecentSignals } from "@/lib/ingest.functions";
+import {
+  formatIngestStatus,
+  ingestRecentSignals,
+  type IngestRecentResult,
+} from "@/lib/ingest.functions";
 import { runAutoPromoteIdentities } from "@/lib/known-identities.functions";
 
 export const Route = createFileRoute("/_authenticated/review")({
@@ -52,13 +56,16 @@ function ReviewPage() {
     setRunningPipeline(true);
     setPipelineMsg(null);
     try {
-      const ing = await runIngest({ data: {} });
+      const ing = (await runIngest({ data: { max: 50 } })) as IngestRecentResult;
       const auto = await runAutoPromote();
       const parse = await runParse({ data: { limit: 20 } });
-      const g = (ing as { gmail?: { inserted?: number } }).gmail?.inserted ?? 0;
-      const s = (ing as { slack?: { inserted?: number } }).slack?.inserted ?? 0;
       setPipelineMsg(
-        `Hentet ${g + s} signaler · Auto-opprettet ${auto.promoted} · koblet ${auto.linked} · Parsed ${parse.parsed}/${parse.scanned}`,
+        formatIngestStatus(ing, {
+          promoted: auto.promoted,
+          linked: auto.linked,
+          parsed: parse.parsed,
+          scanned: parse.scanned,
+        }),
       );
       await qc.invalidateQueries({ queryKey: ["review-feed"] });
       await qc.invalidateQueries({ queryKey: ["review-count"] });
@@ -101,7 +108,13 @@ function ReviewPage() {
           </div>
         </div>
         {pipelineMsg && (
-          <div className="mb-4 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <div
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
+              pipelineMsg.includes("Feil:")
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-border/60 bg-muted/40 text-muted-foreground"
+            }`}
+          >
             {pipelineMsg}
           </div>
         )}
@@ -141,9 +154,10 @@ function EmptyReview({ onRun, running }: { onRun: () => void; running: boolean }
   return (
     <div className="rounded-2xl border border-dashed border-border/60 bg-card/40 p-10 text-center">
       <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-      <p className="text-sm font-medium">Alt er gjennomgått.</p>
+      <p className="text-sm font-medium">Ingenting å korrigere</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Kjør inntak + parse for å oppdage nye entiteter og relasjoner fra Gmail og Slack.
+        Kontakter opprettes automatisk ved inntak. Kjør nå for å synke Gmail/Slack — status viser
+        nye vs. allerede kjente signaler.
       </p>
       <Button size="sm" className="mt-4" onClick={onRun} disabled={running}>
         {running ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}

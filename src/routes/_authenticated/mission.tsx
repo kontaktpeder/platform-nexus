@@ -92,7 +92,8 @@ function GlobalMission() {
     try {
       await fetchMorning({ data: { force: true } });
       await queryClient.invalidateQueries({ queryKey: ["morning-mission"] });
-      toast("Brief oppdatert");
+      await queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast("Brief + signaler oppdatert");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke oppdatere");
     } finally {
