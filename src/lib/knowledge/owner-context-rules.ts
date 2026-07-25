@@ -4,7 +4,6 @@
 
 import type { OwnerContext } from "@/lib/knowledge/types";
 import { extractEmailAddress } from "@/lib/knowledge/entity-matcher";
-import { isConsumerEmailDomain } from "@/lib/knowledge/identity/extract";
 
 export type OwnerContextEvidence = {
   to?: string | null;
@@ -22,17 +21,16 @@ export const MAILBOX_ALIASES: Array<{ match: RegExp; owner: OwnerContext }> = [
   { match: /@goldofsicily\./i, owner: "gold-of-sicily" },
   { match: /@gold-of-sicily\./i, owner: "gold-of-sicily" },
   { match: /goldofsicily@/i, owner: "gold-of-sicily" },
-  // Peder ENK / studio (add exact addresses when known)
-  { match: /@pederaugust/i, owner: "peder-enk" },
-  { match: /enk@/i, owner: "peder-enk" },
-  // Personal inbox (Mission showed kontaktpeder@gmail.com)
-  { match: /^kontaktpeder@gmail\.com$/i, owner: "personal" },
+  // Peder ENK — Studio PAH only (kontaktpeder@gmail is mixed → manual org chip)
+  { match: /^mail@studiopah\.no$/i, owner: "peder-enk" },
+  { match: /@studiopah\.no$/i, owner: "peder-enk" },
 ];
 
 /** External sender domains that strongly imply an org. */
 export const SENDER_DOMAIN_OWNERS: Array<{ match: RegExp; owner: OwnerContext }> = [
   { match: /(^|\.)goldofsicily\./i, owner: "gold-of-sicily" },
   { match: /(^|\.)gold-of-sicily\./i, owner: "gold-of-sicily" },
+  { match: /(^|\.)studiopah\.no$/i, owner: "peder-enk" },
 ];
 
 const KEYWORD_RULES: Array<{ owner: OwnerContext; patterns: RegExp[] }> = [
@@ -141,16 +139,7 @@ export function inferOwnerContext(ev: OwnerContextEvidence): OwnerContext | null
   const kw = matchKeywords(text);
   if (kw) return kw;
 
-  // Consumer-only thread with no other signal → personal is a soft hint via recipient
-  // only if To is exclusively personal gmail and From is also consumer.
-  if (
-    recipients.length > 0 &&
-    recipients.every((e) => isConsumerEmailDomain(domainOf(e))) &&
-    fromEmails.every((e) => isConsumerEmailDomain(domainOf(e)))
-  ) {
-    return "personal";
-  }
-
+  // No soft "all consumer = personal" — kontaktpeder@gmail is ENK mailbox above.
   return null;
 }
 
