@@ -1,7 +1,7 @@
 // Morning Mission v0 — one AI call to prioritize all signals.
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import type { MorningMissionPayload } from "@/lib/morning-mission.types";
 import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
@@ -185,8 +185,7 @@ export async function generateMorningMissionAi(input: {
     };
   }
 
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) {
+  if (!getGeminiApiKey()) {
     return applyTrustRules(
       finalizePayload(fallbackPayload(input.signals), input.signals),
       input.signals,
@@ -194,8 +193,7 @@ export async function generateMorningMissionAi(input: {
     );
   }
 
-  const gateway = createLovableAiGatewayProvider(key);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = getGeminiModel("flash");
 
   const hintLines =
     input.hints?.map(

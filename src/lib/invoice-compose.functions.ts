@@ -50,13 +50,12 @@ export const generateInvoiceEmailDraft = createServerFn({ method: "POST" })
       orgSlug: data.orgSlug,
     });
 
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-
     const { generateText } = await import("ai");
-    const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3-flash-preview");
+    const { getGeminiApiKey, getGeminiModel } = await import("@/lib/ai-gateway.server");
+    if (!getGeminiApiKey()) {
+      throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY)");
+    }
+    const model = getGeminiModel("flash");
 
     const inv = ctx.invoice;
     const timeline = ctx.storyline.events

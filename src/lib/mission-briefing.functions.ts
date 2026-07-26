@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 
 // Sanitized action card sent to the model — no raw email/Slack bodies beyond the
 // short snippet already surfaced in the UI. No links, no IDs, no PII beyond what
@@ -48,11 +48,9 @@ export const generateMissionBriefing = createServerFn({ method: "POST" })
       };
     }
 
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
+    if (!getGeminiApiKey()) throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY)");
 
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3-flash-preview");
+    const model = getGeminiModel("flash");
 
     const system = [
       "You are Mission Control, a concise morning briefing assistant.",

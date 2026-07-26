@@ -4,7 +4,7 @@
 
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import type {
   ContextScanBundle,
   ContextSummary,
@@ -172,15 +172,14 @@ export async function synthesizeContextSummary(
     fact_provenance,
   };
 
-  const key = process.env.LOVABLE_API_KEY;
+  const key = getGeminiApiKey();
 
   if (bundle.insufficient || !key) {
     const f = fallback(bundle);
     return { ...base, ...f };
   }
 
-  const gateway = createLovableAiGatewayProvider(key);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = getGeminiModel("flash-lite");
 
   const system = [
     "Du er Context Scan. Du får et sanitert JSON-bundle med bruker-data (widgets, signaler, løfter, mission-actions).",

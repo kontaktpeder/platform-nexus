@@ -8,7 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 
 const ContextInput = z.object({ messageId: z.string().min(1).max(200) });
 
@@ -41,10 +41,10 @@ export const generateGmailReplyDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => GenerateInput.parse(input))
   .handler(async ({ data }): Promise<{ reply: string }> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-    const gateway = createLovableAiGatewayProvider(key);
-    const model = gateway("google/gemini-3-flash-preview");
+    if (!getGeminiApiKey()) {
+      throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY)");
+    }
+    const model = getGeminiModel("flash");
 
     const system = [
       "You draft short, professional email replies.",

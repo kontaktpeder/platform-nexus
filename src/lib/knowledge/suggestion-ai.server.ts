@@ -5,7 +5,7 @@
 
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import type { SuggestionCluster, ClusterKind } from "./suggestion-clusters";
 import type { Entity, EntityType } from "./types";
 import { ENTITY_TYPES } from "./types";
@@ -96,11 +96,9 @@ export async function generateSuggestionsForClusters(
 ): Promise<AiSuggestion[]> {
   if (clusters.length === 0) return [];
 
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) return clusters.map(fallbackFor);
+  if (!getGeminiApiKey()) return clusters.map(fallbackFor);
 
-  const gateway = createLovableAiGatewayProvider(key);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = getGeminiModel("flash-lite");
 
   const sanitizedClusters = clusters.map((c) => ({
     suggestionKey: c.suggestionKey,

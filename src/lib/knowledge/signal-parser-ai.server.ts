@@ -4,7 +4,7 @@
 
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import { ENTITY_TYPES, type Entity, type EntityType, type OwnerContext } from "./types";
 import { RELATIONSHIP_KINDS, type EntityRelationshipKind } from "./types";
 import { ANCHOR_DEFINITIONS } from "./anchors";
@@ -107,11 +107,9 @@ export async function parseSignal(
   existingEntities: Entity[],
 ): Promise<ParseResult> {
   const empty: ParseResult = { entities: [], relations: [], summary: "" };
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) return empty;
+  if (!getGeminiApiKey()) return empty;
 
-  const gateway = createLovableAiGatewayProvider(key);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = getGeminiModel("flash-lite");
 
   // Sanitize existing entities we send to the model (no ids in output binding).
   const sanitizedExisting = existingEntities.slice(0, 60).map((e) => ({

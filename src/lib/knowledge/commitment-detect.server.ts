@@ -4,7 +4,7 @@
 
 import { generateText, Output, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import type { CommitmentConfidence } from "./commitment.types";
 
 export type DetectSignalInput = {
@@ -61,11 +61,9 @@ export async function detectCommitmentsFromSignals(
   );
   if (candidates.length === 0) return [];
 
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) return [];
+  if (!getGeminiApiKey()) return [];
 
-  const gateway = createLovableAiGatewayProvider(key);
-  const model = gateway("google/gemini-3-flash-preview");
+  const model = getGeminiModel("flash-lite");
 
   const sanitized = candidates.map((s) => ({
     sourceRef: s.sourceRef,
