@@ -171,7 +171,7 @@ export function ModuleConnectionPanel({
           invoices_api_key: invoicesApiKey.trim(),
         },
       });
-      toast.success("Faktura-nøkkel lagret — Send purring i Mission er klar");
+      toast.success("Tilleggsnøkkel lagret — Send purring i Mission er klar");
       setInvoicesApiKey("");
       invalidate();
     } catch (e) {
@@ -267,25 +267,26 @@ export function ModuleConnectionPanel({
         </div>
       </div>
 
+      {/* Secondary key: currently only Finance needs an extra scope beyond platform:*. */}
       {moduleSlug === "finance" && isConnected && (
         <div className="rounded-lg border border-border/50 bg-background/60 p-3">
           {invoicesAccess.data?.invoicesCapable ? (
             <p className="text-xs text-emerald-700 dark:text-emerald-400">
-              Faktura-tilgang OK — verify-nøkkelen har <code className="font-mono">invoices:read</code>.
-              Egen faktura-nøkkel er ikke nødvendig.
+              Tilleggsscope OK — verify-nøkkelen har <code className="font-mono">invoices:read</code>.
+              Egen tilleggsnøkkel er ikke nødvendig.
             </p>
           ) : (
             <>
-              <p className="text-xs font-medium">Faktura-nøkkel for Mission</p>
+              <p className="text-xs font-medium">Tilleggsnøkkel (valgfri)</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Verify-nøkkelen mangler <code className="font-mono">invoices:read</code>. Lim inn en
-                nøkkel med det scopet her, eller oppdater verify-nøkkelen over og test på nytt.
+                For Mission-handlinger som krever ekstra scope utover platform-verify. Finance
+                trenger <code className="font-mono">invoices:read</code> for Send purring.
               </p>
               {canEdit && (
                 <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
                   <div className="min-w-0 flex-1">
                     <Label htmlFor={`inv-key-${moduleId}`} className="sr-only">
-                      Faktura-nøkkel
+                      Tilleggsnøkkel
                     </Label>
                     <Input
                       id={`inv-key-${moduleId}`}
@@ -307,7 +308,7 @@ export function ModuleConnectionPanel({
                     {saveInvoicesKey.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Lagre faktura-nøkkel"
+                      "Lagre tilleggsnøkkel"
                     )}
                   </Button>
                 </div>
