@@ -17,11 +17,11 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
+import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/field'
-import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
-import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
+import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
@@ -70,6 +70,11 @@ const AuthenticatedMissionRoute = AuthenticatedMissionRouteImport.update({
   path: '/mission',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
+  id: '/kunder',
+  path: '/kunder',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
@@ -80,21 +85,17 @@ const AuthenticatedFieldRoute = AuthenticatedFieldRouteImport.update({
   path: '/field',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
-  id: '/kunder',
-  path: '/kunder',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedKunderEntityIdRoute = AuthenticatedKunderEntityIdRouteImport.update({
-  id: '/kunder/$entityId',
-  path: '/kunder/$entityId',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   id: '/app',
   path: '/app',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedKunderEntityIdRoute =
+  AuthenticatedKunderEntityIdRouteImport.update({
+    id: '/$entityId',
+    path: '/$entityId',
+    getParentRoute: () => AuthenticatedKunderRoute,
+  } as any)
 const AuthenticatedOOrgSlugIndexRoute =
   AuthenticatedOOrgSlugIndexRouteImport.update({
     id: '/o/$orgSlug/',
@@ -149,14 +150,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
-  '/kunder': typeof AuthenticatedKunderRoute
-  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
+  '/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -171,14 +172,14 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
-  '/kunder': typeof AuthenticatedKunderRoute
-  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
+  '/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -194,14 +195,14 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRoute
   '/_authenticated/field': typeof AuthenticatedFieldRoute
-  '/_authenticated/kunder': typeof AuthenticatedKunderRoute
-  '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
+  '/_authenticated/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/_authenticated/mission': typeof AuthenticatedMissionRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/_authenticated/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/_authenticated/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -218,14 +219,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/field'
-    | '/kunder'
-    | '/kunder/$entityId'
     | '/knowledge'
+    | '/kunder'
     | '/mission'
     | '/modules'
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/kunder/$entityId'
     | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
@@ -240,14 +241,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/field'
-    | '/kunder'
-    | '/kunder/$entityId'
     | '/knowledge'
+    | '/kunder'
     | '/mission'
     | '/modules'
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/kunder/$entityId'
     | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
@@ -262,14 +263,14 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/app'
     | '/_authenticated/field'
-    | '/_authenticated/kunder'
-    | '/_authenticated/kunder/$entityId'
     | '/_authenticated/knowledge'
+    | '/_authenticated/kunder'
     | '/_authenticated/mission'
     | '/_authenticated/modules'
     | '/_authenticated/review'
     | '/_authenticated/settings'
     | '/auth/update-password'
+    | '/_authenticated/kunder/$entityId'
     | '/_authenticated/o/$orgSlug/connections'
     | '/_authenticated/o/$orgSlug/settings'
     | '/_authenticated/o/$orgSlug/slack-channels'
@@ -344,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMissionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/kunder': {
+      id: '/_authenticated/kunder'
+      path: '/kunder'
+      fullPath: '/kunder'
+      preLoaderRoute: typeof AuthenticatedKunderRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/knowledge': {
       id: '/_authenticated/knowledge'
       path: '/knowledge'
@@ -358,26 +366,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFieldRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/kunder': {
-      id: '/_authenticated/kunder'
-      path: '/kunder'
-      fullPath: '/kunder'
-      preLoaderRoute: typeof AuthenticatedKunderRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/kunder/$entityId': {
-      id: '/_authenticated/kunder/$entityId'
-      path: '/kunder/$entityId'
-      fullPath: '/kunder/$entityId'
-      preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/app': {
       id: '/_authenticated/app'
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AuthenticatedAppRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/kunder/$entityId': {
+      id: '/_authenticated/kunder/$entityId'
+      path: '/$entityId'
+      fullPath: '/kunder/$entityId'
+      preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
+      parentRoute: typeof AuthenticatedKunderRoute
     }
     '/_authenticated/o/$orgSlug/': {
       id: '/_authenticated/o/$orgSlug/'
@@ -438,6 +439,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedKunderRouteChildren {
+  AuthenticatedKunderEntityIdRoute: typeof AuthenticatedKunderEntityIdRoute
+}
+
+const AuthenticatedKunderRouteChildren: AuthenticatedKunderRouteChildren = {
+  AuthenticatedKunderEntityIdRoute: AuthenticatedKunderEntityIdRoute,
+}
+
+const AuthenticatedKunderRouteWithChildren =
+  AuthenticatedKunderRoute._addFileChildren(AuthenticatedKunderRouteChildren)
+
 interface AuthenticatedOOrgSlugWWsSlugRouteChildren {
   AuthenticatedOOrgSlugWWsSlugModulesRoute: typeof AuthenticatedOOrgSlugWWsSlugModulesRoute
   AuthenticatedOOrgSlugWWsSlugSettingsRoute: typeof AuthenticatedOOrgSlugWWsSlugSettingsRoute
@@ -462,9 +474,8 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
   AuthenticatedFieldRoute: typeof AuthenticatedFieldRoute
-  AuthenticatedKunderRoute: typeof AuthenticatedKunderRoute
-  AuthenticatedKunderEntityIdRoute: typeof AuthenticatedKunderEntityIdRoute
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
+  AuthenticatedKunderRoute: typeof AuthenticatedKunderRouteWithChildren
   AuthenticatedMissionRoute: typeof AuthenticatedMissionRoute
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
   AuthenticatedReviewRoute: typeof AuthenticatedReviewRoute
@@ -479,9 +490,8 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
   AuthenticatedFieldRoute: AuthenticatedFieldRoute,
-  AuthenticatedKunderRoute: AuthenticatedKunderRoute,
-  AuthenticatedKunderEntityIdRoute: AuthenticatedKunderEntityIdRoute,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
+  AuthenticatedKunderRoute: AuthenticatedKunderRouteWithChildren,
   AuthenticatedMissionRoute: AuthenticatedMissionRoute,
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,
   AuthenticatedReviewRoute: AuthenticatedReviewRoute,
