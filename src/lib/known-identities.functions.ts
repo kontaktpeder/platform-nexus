@@ -4,7 +4,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { EntityType } from "@/lib/knowledge/types";
-import type { KnownIdentity } from "@/lib/knowledge/identity/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalize(v: unknown): any {
@@ -32,7 +31,7 @@ export const listKnownIdentities = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await q;
     if (error) throw error;
-    return normalize(rows ?? []) as KnownIdentity[];
+    return normalize(rows ?? []);
   });
 
 export const linkIdentityToEntity = createServerFn({ method: "POST" })

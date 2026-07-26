@@ -5,6 +5,7 @@ import { gmailToSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { WorkspaceAlertsMap } from "@/lib/module-alerts.types";
 import { resolveModuleOpenUrl } from "@/lib/module-connections";
 import type { FinanceConnectionContext } from "@/lib/finance/finance-invoice.server";
+import type { WidgetDataMap } from "@/lib/widget-data.functions";
 
 export type MorningWorkspaceInput = {
   orgId: string;
@@ -69,7 +70,7 @@ async function unpaidInvoiceSignals(input: {
     supabaseAdmin,
     orgId: input.ws.orgId,
     workspaceId: input.ws.workspaceId,
-  }).catch(() => ({}));
+  }).catch(() => ({}) as WidgetDataMap);
   const display = widgetData["finance:unpaid_invoices"]?.display;
   const count = display ? Number(String(display).replace(/\D/g, "")) || 0 : 0;
   if (count <= 0) return [];

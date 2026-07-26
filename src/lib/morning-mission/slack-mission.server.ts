@@ -1,7 +1,7 @@
 // Slack signals for Morning Mission — mentions + DMs, current ISO week only (Europe/Oslo).
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { SlackMissionStatus } from "@/lib/morning-mission.types";
-import { isSameOsloWeek, isSlackTsThisWeek, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
+import { isSameOsloWeek, isSlackTsThisWeek, osloWeekNumber, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/slack/api";
 const SLACK_CACHE_MS = 5 * 60_000;
@@ -113,12 +113,7 @@ async function resolveDisplayNames(
 async function fetchSlackMissionSignalsUncached(): Promise<SlackFetchResult> {
   const apiKey = process.env.SLACK_API_KEY;
   const lovableKey = process.env.LOVABLE_API_KEY;
-  const weekNumber = parseInt(
-    new Intl.DateTimeFormat("en-US", { week: "numeric", timeZone: "Europe/Oslo" }).format(
-      new Date(),
-    ),
-    10,
-  );
+  const weekNumber = osloWeekNumber();
 
   if (!apiKey || !lovableKey) {
     return {

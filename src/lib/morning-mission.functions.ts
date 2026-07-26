@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 import type { MorningMissionPayload, MorningMissionResponse } from "@/lib/morning-mission.types";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import { snoozeUntil } from "@/lib/mission-snooze";
@@ -184,7 +184,7 @@ export const getMorningMission = createServerFn({ method: "POST" })
         {
           user_id: userId,
           brief_date: briefDate,
-          payload: built.payload as unknown as Record<string, unknown>,
+          payload: built.payload as unknown as Json,
           source_signal_ids: built.sourceSignalIds,
           generated_at: new Date().toISOString(),
         },
