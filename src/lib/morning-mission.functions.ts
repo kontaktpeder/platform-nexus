@@ -7,7 +7,10 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import type { MorningMissionPayload, MorningMissionResponse } from "@/lib/morning-mission.types";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import { snoozeUntil } from "@/lib/mission-snooze";
-import { rebuildRelationsOnPayload } from "@/lib/morning-mission/attach-relations.server";
+import {
+  rebuildRelationsOnPayload,
+  refreshRelationAvatarsOnPayload,
+} from "@/lib/morning-mission/attach-relations.server";
 
 type DB = SupabaseClient<Database>;
 
@@ -207,7 +210,13 @@ export const getMorningMission = createServerFn({ method: "POST" })
       };
     }
 
-    const filtered = filterPayloadByStates(cached.payload, actionStates);
+    // Re-hydrate logos from live entities (same source as Kontakter) — cache may predate /api/logo.
+    const { loadRelationEntityIndex } = await import(
+      "@/lib/morning-mission/attach-relations.server"
+    );
+    const entityIndex = await loadRelationEntityIndex(supabase, userId);
+    const withAvatars = refreshRelationAvatarsOnPayload(cached.payload, entityIndex);
+    const filtered = filterPayloadByStates(withAvatars, actionStates);
 
     return {
       briefDate,

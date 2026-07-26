@@ -252,8 +252,8 @@ function enrichItem(
     resolved.summary,
   ].filter(Boolean);
 
-  // Prefer entity image; else signal email gravatar.
-  let imageUrl = item.image_url ?? resolved.imageUrl;
+  // Prefer live entity avatar (Kontakter always does); fall back to signal email.
+  let imageUrl = resolved.imageUrl ?? item.image_url ?? null;
   if (!imageUrl) {
     for (const s of linkedSignals) {
       const email =
@@ -308,4 +308,15 @@ export function rebuildRelationsOnPayload(payload: MorningMissionPayload): Morni
     ...rest,
     relations: projectPayloadToRelationBriefing(rest),
   };
+}
+
+/**
+ * Refresh avatars / entity fields on a cached brief without re-running AI.
+ * Kontakter computes logos on every load; Mission used to freeze image_url in the brief.
+ */
+export function refreshRelationAvatarsOnPayload(
+  payload: MorningMissionPayload,
+  index: Awaited<ReturnType<typeof loadRelationEntityIndex>>,
+): MorningMissionPayload {
+  return attachRelationsToPayload(payload, [], index);
 }
