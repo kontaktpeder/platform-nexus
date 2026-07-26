@@ -15,7 +15,8 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
-.env
+# .env.local / *.local hold secrets. Committed .env is public anon keys only
+# (required for Lovable Vite builds). Never put SERVICE_ROLE or DB passwords in .env.
 .env.*
 !.env.example
 
