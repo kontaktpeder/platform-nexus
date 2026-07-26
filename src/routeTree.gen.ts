@@ -18,10 +18,14 @@ import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
 import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
 import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
+import { Route as AuthenticatedKontakterRouteImport } from './routes/_authenticated/kontakter'
 import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
 import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/field'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
+import { Route as AuthenticatedKunderIndexRouteImport } from './routes/_authenticated/kunder.index'
+import { Route as AuthenticatedKontakterIndexRouteImport } from './routes/_authenticated/kontakter.index'
 import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
+import { Route as AuthenticatedKontakterEntityIdRouteImport } from './routes/_authenticated/kontakter.$entityId'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
@@ -75,6 +79,11 @@ const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
   path: '/kunder',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedKontakterRoute = AuthenticatedKontakterRouteImport.update({
+  id: '/kontakter',
+  path: '/kontakter',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
@@ -90,11 +99,29 @@ const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   path: '/app',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedKunderIndexRoute =
+  AuthenticatedKunderIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedKunderRoute,
+  } as any)
+const AuthenticatedKontakterIndexRoute =
+  AuthenticatedKontakterIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedKontakterRoute,
+  } as any)
 const AuthenticatedKunderEntityIdRoute =
   AuthenticatedKunderEntityIdRouteImport.update({
     id: '/$entityId',
     path: '/$entityId',
     getParentRoute: () => AuthenticatedKunderRoute,
+  } as any)
+const AuthenticatedKontakterEntityIdRoute =
+  AuthenticatedKontakterEntityIdRouteImport.update({
+    id: '/$entityId',
+    path: '/$entityId',
+    getParentRoute: () => AuthenticatedKontakterRoute,
   } as any)
 const AuthenticatedOOrgSlugIndexRoute =
   AuthenticatedOOrgSlugIndexRouteImport.update({
@@ -151,13 +178,17 @@ export interface FileRoutesByFullPath {
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
+  '/kontakter': typeof AuthenticatedKontakterRouteWithChildren
   '/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
+  '/kontakter/': typeof AuthenticatedKontakterIndexRoute
+  '/kunder/': typeof AuthenticatedKunderIndexRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -173,13 +204,15 @@ export interface FileRoutesByTo {
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
-  '/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
+  '/kontakter': typeof AuthenticatedKontakterIndexRoute
+  '/kunder': typeof AuthenticatedKunderIndexRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -196,13 +229,17 @@ export interface FileRoutesById {
   '/_authenticated/app': typeof AuthenticatedAppRoute
   '/_authenticated/field': typeof AuthenticatedFieldRoute
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
+  '/_authenticated/kontakter': typeof AuthenticatedKontakterRouteWithChildren
   '/_authenticated/kunder': typeof AuthenticatedKunderRouteWithChildren
   '/_authenticated/mission': typeof AuthenticatedMissionRoute
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/_authenticated/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
+  '/_authenticated/kontakter/': typeof AuthenticatedKontakterIndexRoute
+  '/_authenticated/kunder/': typeof AuthenticatedKunderIndexRoute
   '/_authenticated/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
   '/_authenticated/o/$orgSlug/settings': typeof AuthenticatedOOrgSlugSettingsRoute
   '/_authenticated/o/$orgSlug/slack-channels': typeof AuthenticatedOOrgSlugSlackChannelsRoute
@@ -220,13 +257,17 @@ export interface FileRouteTypes {
     | '/app'
     | '/field'
     | '/knowledge'
+    | '/kontakter'
     | '/kunder'
     | '/mission'
     | '/modules'
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/kontakter/$entityId'
     | '/kunder/$entityId'
+    | '/kontakter/'
+    | '/kunder/'
     | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
@@ -242,13 +283,15 @@ export interface FileRouteTypes {
     | '/app'
     | '/field'
     | '/knowledge'
-    | '/kunder'
     | '/mission'
     | '/modules'
     | '/review'
     | '/settings'
     | '/auth/update-password'
+    | '/kontakter/$entityId'
     | '/kunder/$entityId'
+    | '/kontakter'
+    | '/kunder'
     | '/o/$orgSlug/connections'
     | '/o/$orgSlug/settings'
     | '/o/$orgSlug/slack-channels'
@@ -264,13 +307,17 @@ export interface FileRouteTypes {
     | '/_authenticated/app'
     | '/_authenticated/field'
     | '/_authenticated/knowledge'
+    | '/_authenticated/kontakter'
     | '/_authenticated/kunder'
     | '/_authenticated/mission'
     | '/_authenticated/modules'
     | '/_authenticated/review'
     | '/_authenticated/settings'
     | '/auth/update-password'
+    | '/_authenticated/kontakter/$entityId'
     | '/_authenticated/kunder/$entityId'
+    | '/_authenticated/kontakter/'
+    | '/_authenticated/kunder/'
     | '/_authenticated/o/$orgSlug/connections'
     | '/_authenticated/o/$orgSlug/settings'
     | '/_authenticated/o/$orgSlug/slack-channels'
@@ -352,6 +399,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKunderRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/kontakter': {
+      id: '/_authenticated/kontakter'
+      path: '/kontakter'
+      fullPath: '/kontakter'
+      preLoaderRoute: typeof AuthenticatedKontakterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/knowledge': {
       id: '/_authenticated/knowledge'
       path: '/knowledge'
@@ -373,12 +427,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/kunder/': {
+      id: '/_authenticated/kunder/'
+      path: '/'
+      fullPath: '/kunder/'
+      preLoaderRoute: typeof AuthenticatedKunderIndexRouteImport
+      parentRoute: typeof AuthenticatedKunderRoute
+    }
+    '/_authenticated/kontakter/': {
+      id: '/_authenticated/kontakter/'
+      path: '/'
+      fullPath: '/kontakter/'
+      preLoaderRoute: typeof AuthenticatedKontakterIndexRouteImport
+      parentRoute: typeof AuthenticatedKontakterRoute
+    }
     '/_authenticated/kunder/$entityId': {
       id: '/_authenticated/kunder/$entityId'
       path: '/$entityId'
       fullPath: '/kunder/$entityId'
       preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
       parentRoute: typeof AuthenticatedKunderRoute
+    }
+    '/_authenticated/kontakter/$entityId': {
+      id: '/_authenticated/kontakter/$entityId'
+      path: '/$entityId'
+      fullPath: '/kontakter/$entityId'
+      preLoaderRoute: typeof AuthenticatedKontakterEntityIdRouteImport
+      parentRoute: typeof AuthenticatedKontakterRoute
     }
     '/_authenticated/o/$orgSlug/': {
       id: '/_authenticated/o/$orgSlug/'
@@ -439,12 +514,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedKontakterRouteChildren {
+  AuthenticatedKontakterEntityIdRoute: typeof AuthenticatedKontakterEntityIdRoute
+  AuthenticatedKontakterIndexRoute: typeof AuthenticatedKontakterIndexRoute
+}
+
+const AuthenticatedKontakterRouteChildren: AuthenticatedKontakterRouteChildren =
+  {
+    AuthenticatedKontakterEntityIdRoute: AuthenticatedKontakterEntityIdRoute,
+    AuthenticatedKontakterIndexRoute: AuthenticatedKontakterIndexRoute,
+  }
+
+const AuthenticatedKontakterRouteWithChildren =
+  AuthenticatedKontakterRoute._addFileChildren(
+    AuthenticatedKontakterRouteChildren,
+  )
+
 interface AuthenticatedKunderRouteChildren {
   AuthenticatedKunderEntityIdRoute: typeof AuthenticatedKunderEntityIdRoute
+  AuthenticatedKunderIndexRoute: typeof AuthenticatedKunderIndexRoute
 }
 
 const AuthenticatedKunderRouteChildren: AuthenticatedKunderRouteChildren = {
   AuthenticatedKunderEntityIdRoute: AuthenticatedKunderEntityIdRoute,
+  AuthenticatedKunderIndexRoute: AuthenticatedKunderIndexRoute,
 }
 
 const AuthenticatedKunderRouteWithChildren =
@@ -475,6 +568,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
   AuthenticatedFieldRoute: typeof AuthenticatedFieldRoute
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
+  AuthenticatedKontakterRoute: typeof AuthenticatedKontakterRouteWithChildren
   AuthenticatedKunderRoute: typeof AuthenticatedKunderRouteWithChildren
   AuthenticatedMissionRoute: typeof AuthenticatedMissionRoute
   AuthenticatedModulesRoute: typeof AuthenticatedModulesRoute
@@ -491,6 +585,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
   AuthenticatedFieldRoute: AuthenticatedFieldRoute,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
+  AuthenticatedKontakterRoute: AuthenticatedKontakterRouteWithChildren,
   AuthenticatedKunderRoute: AuthenticatedKunderRouteWithChildren,
   AuthenticatedMissionRoute: AuthenticatedMissionRoute,
   AuthenticatedModulesRoute: AuthenticatedModulesRoute,

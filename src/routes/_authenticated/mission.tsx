@@ -303,10 +303,10 @@ function CustomerFollowUps() {
           </h2>
         </div>
         <Link
-          to="/kunder"
+          to="/kontakter"
           className="inline-flex min-h-10 items-center gap-1 rounded-xl px-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          Alle kunder <ArrowRight className="h-4 w-4" />
+          Alle kontakter <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
 
@@ -350,7 +350,7 @@ function CustomerFollowUps() {
             return (
               <li key={followUp.id}>
                 <Link
-                  to="/kunder/$entityId"
+                  to="/kontakter/$entityId"
                   params={{ entityId: customer.entityId }}
                   className="flex min-h-24 items-start gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/35 active:bg-muted"
                 >

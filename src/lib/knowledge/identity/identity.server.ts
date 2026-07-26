@@ -311,7 +311,7 @@ export async function loadLinkedIdentityLookups(
 
 export const PROMOTION_MIN_SEEN_COUNT = 2;
 
-/** Auto-promote thresholds — domains fill Kunder on first sighting. */
+/** Auto-promote thresholds — domains fill Kontakter on first sighting. */
 export const AUTO_PROMOTE_MIN_SEEN_COUNT = 1;
 
 const NOISY_LOCAL_RE =
