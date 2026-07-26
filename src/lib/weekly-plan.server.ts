@@ -11,12 +11,10 @@ import {
 type DB = SupabaseClient<Database>;
 
 export function currentWeekLabel(date = new Date()): string {
-  const week = osloWeekNumber(date);
-  const year = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Oslo",
-    year: "numeric",
-  }).format(date);
-  return `Uke ${week} · ${year}`;
+  const key = osloWeekKey(date);
+  const m = /^(\d{4})-W(\d+)$/.exec(key);
+  if (m) return `Uke ${m[2]} · ${m[1]}`;
+  return `Uke ${osloWeekNumber(date)}`;
 }
 
 export async function getWeeklyPlan(

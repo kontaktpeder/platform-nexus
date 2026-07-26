@@ -120,11 +120,18 @@ export function WeeklyControlCard() {
           </p>
           <h2 id="weekly-control" className="text-lg font-semibold">
             Denne uka
-            {query.data?.weekLabel ? (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {query.data.weekLabel}
-              </span>
-            ) : null}
+            {(() => {
+              const key = query.data?.weekKey;
+              const m = key ? /^(\d{4})-W(\d+)$/.exec(key) : null;
+              const label = m
+                ? `Uke ${m[2]} · ${m[1]}`
+                : query.data?.weekLabel;
+              return label ? (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {label}
+                </span>
+              ) : null;
+            })()}
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Du fyller inn. Systemet husker — ingen AI.

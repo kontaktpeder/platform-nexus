@@ -1,26 +1,34 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useMemo, useState } from "react";
 import {
   ArrowLeft,
+  GitMerge,
   Loader2,
   Mail,
   MapPin,
   MessageSquare,
+  Pencil,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   CUSTOMER_ORG_FILTER_LABEL,
   CUSTOMER_WARMTH_LABEL,
   ensureFieldPlace,
   getCustomerDetail,
+  listCustomers,
+  mergeCustomers,
+  renameCustomer,
   setCustomerOwnerContext,
   setCustomerWarmth,
   type CustomerDetail,
+  type CustomerListItem,
   type CustomerWarmth,
 } from "@/lib/customers.functions";
 import { rejectWrongEntity } from "@/lib/known-identities.functions";
@@ -60,18 +68,45 @@ function sourceIcon(source: string) {
 
 function KundeDetailPage() {
   const { entityId } = Route.useParams();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const fetchDetail = useServerFn(getCustomerDetail);
+  const fetchCustomers = useServerFn(listCustomers);
   const runWarmth = useServerFn(setCustomerWarmth);
   const runOwner = useServerFn(setCustomerOwnerContext);
+  const runRename = useServerFn(renameCustomer);
+  const runMerge = useServerFn(mergeCustomers);
   const runReject = useServerFn(rejectWrongEntity);
   const runEnsureField = useServerFn(ensureFieldPlace);
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeQuery, setMergeQuery] = useState("");
+  const [mergeTargetId, setMergeTargetId] = useState("");
 
   const detailQ = useQuery({
     queryKey: ["customer", entityId],
     queryFn: () =>
       fetchDetail({ data: { entityId } }) as Promise<CustomerDetail>,
   });
+
+  const customersQ = useQuery({
+    queryKey: ["customers"],
+    queryFn: () =>
+      fetchCustomers() as Promise<{ items: CustomerListItem[] }>,
+    staleTime: 5 * 60_000,
+    enabled: mergeOpen,
+  });
+
+  const mergeCandidates = useMemo(() => {
+    const items = customersQ.data?.items ?? [];
+    const q = mergeQuery.trim().toLowerCase();
+    return items
+      .filter((c) => c.entityId !== entityId)
+      .filter((c) => !q || c.name.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [customersQ.data?.items, entityId, mergeQuery]);
 
   const warmthMut = useMutation({
     mutationFn: (warmth: CustomerWarmth) =>
@@ -94,12 +129,39 @@ function KundeDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const renameMut = useMutation({
+    mutationFn: (name: string) => runRename({ data: { entityId, name } }),
+    onSuccess: async (res) => {
+      toast.success("Navn oppdatert");
+      setEditingName(false);
+      setNameDraft(res.name);
+      await qc.invalidateQueries({ queryKey: ["customer", entityId] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const mergeMut = useMutation({
+    mutationFn: (absorbEntityId: string) =>
+      runMerge({ data: { keepEntityId: entityId, absorbEntityId } }),
+    onSuccess: async (res) => {
+      toast.success(`Slo sammen «${res.absorbedName}» inn i denne`);
+      setMergeOpen(false);
+      setMergeTargetId("");
+      setMergeQuery("");
+      await qc.invalidateQueries({ queryKey: ["customer", entityId] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+      await qc.invalidateQueries({ queryKey: ["field-board"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const rejectMut = useMutation({
     mutationFn: () => runReject({ data: { entityId } }),
     onSuccess: async () => {
       toast.success("Fjernet — kommer ikke tilbake");
       await qc.invalidateQueries({ queryKey: ["customers"] });
-      window.location.assign("/kunder");
+      void navigate({ to: "/kunder" });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -120,7 +182,7 @@ function KundeDetailPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <GlobalTopBar
         title={d?.name ?? "Kunde"}
-        subtitle="Entity · tidslinje · koblinger"
+        subtitle="Rett, slå sammen, flytt org"
         back={{ to: "/kunder" }}
       />
 
@@ -149,14 +211,72 @@ function KundeDetailPage() {
         {d && (
           <>
             <header className="mb-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
+              {editingName ? (
+                <form
+                  className="flex flex-col gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    renameMut.mutate(nameDraft);
+                  }}
                 >
-                  {CUSTOMER_WARMTH_LABEL[d.warmth]}
-                </span>
-              </div>
+                  <Input
+                    value={nameDraft}
+                    autoFocus
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    className="h-12 rounded-xl text-lg font-semibold"
+                    maxLength={200}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      className="h-11 flex-1 rounded-xl"
+                      disabled={renameMut.isPending || !nameDraft.trim()}
+                    >
+                      {renameMut.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Lagre navn"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-11 rounded-xl"
+                      onClick={() => {
+                        setEditingName(false);
+                        setNameDraft(d.name);
+                      }}
+                    >
+                      Avbryt
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex flex-wrap items-start gap-2">
+                  <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">
+                    {d.name}
+                  </h1>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 gap-1.5 rounded-xl"
+                    onClick={() => {
+                      setNameDraft(d.name);
+                      setEditingName(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Endre navn
+                  </Button>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
+                  >
+                    {CUSTOMER_WARMTH_LABEL[d.warmth]}
+                  </span>
+                </div>
+              )}
+
               {d.summary && (
                 <p className="mt-2 text-sm text-muted-foreground">{d.summary}</p>
               )}
@@ -181,7 +301,7 @@ function KundeDetailPage() {
 
               <div className="mt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Org
+                  Org — flytt hvis AI gjettet feil
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {OWNER_OPTIONS.map((o) => (
@@ -202,6 +322,100 @@ function KundeDetailPage() {
                 </div>
               </div>
             </header>
+
+            <section className="mb-5 rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Duplikat
+                  </p>
+                  <h2 className="text-base font-semibold">Slå sammen med annen kunde</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Behold denne. Den andre slettes — identiteter, felt og signaler følger med.
+                  </p>
+                </div>
+                <GitMerge className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
+              </div>
+
+              {!mergeOpen ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 h-11 w-full rounded-xl"
+                  onClick={() => setMergeOpen(true)}
+                >
+                  Velg kunde å slå inn her…
+                </Button>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <Input
+                    value={mergeQuery}
+                    onChange={(e) => setMergeQuery(e.target.value)}
+                    placeholder="Søk navn (f.eks. Parkteater)"
+                    className="h-11 rounded-xl"
+                  />
+                  {customersQ.isLoading && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Laster kunder…
+                    </div>
+                  )}
+                  <select
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="">Velg kunde…</option>
+                    {mergeCandidates.map((c) => (
+                      <option key={c.entityId} value={c.entityId}>
+                        {c.name}
+                        {c.ownerContext !== "unknown"
+                          ? ` · ${CUSTOMER_ORG_FILTER_LABEL[c.ownerContext]}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-11 flex-1 rounded-xl"
+                      onClick={() => {
+                        setMergeOpen(false);
+                        setMergeTargetId("");
+                        setMergeQuery("");
+                      }}
+                    >
+                      Avbryt
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-11 flex-1 rounded-xl"
+                      disabled={!mergeTargetId || mergeMut.isPending}
+                      onClick={() => {
+                        const target = mergeCandidates.find(
+                          (c) => c.entityId === mergeTargetId,
+                        );
+                        if (
+                          !window.confirm(
+                            `Slå «${target?.name ?? "kunden"}» inn i «${d.name}»?\n\n«${target?.name ?? "Den andre"}» slettes.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        mergeMut.mutate(mergeTargetId);
+                      }}
+                    >
+                      {mergeMut.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Slå sammen"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </section>
 
             <Button
               variant="ghost"
@@ -317,7 +531,7 @@ function KundeDetailPage() {
                   auto-linkes hit.
                 </p>
               ) : (
-                <ol className="relative space-y-0 border-l border-border ml-2">
+                <ol className="relative ml-2 space-y-0 border-l border-border">
                   {d.timeline.map((t) => {
                     const Icon = sourceIcon(t.source);
                     return (
