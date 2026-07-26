@@ -12,7 +12,7 @@ import {
 } from "@/lib/auth-helpers";
 import { clearPasswordRecoveryPending } from "@/lib/auth-recovery";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
-import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,7 +88,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <PlatformShell>
       <GlobalTopBar title="Mer" subtitle="Organisasjoner, konto og innstillinger" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24">
         <Link
@@ -217,7 +217,6 @@ function SettingsPage() {
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
         </Link>
       </main>
-      <PlatformBottomNav />
-    </div>
+      </PlatformShell>
   );
 }

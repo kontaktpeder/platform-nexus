@@ -12,12 +12,64 @@ const PRIORITY_LABEL: Record<RelationCardModel["priority"], string> = {
   low: "Lav",
 };
 
+function DetailButton({
+  card,
+  onOpenDetail,
+  featured,
+}: {
+  card: RelationCardModel;
+  onOpenDetail?: () => void;
+  featured?: boolean;
+}) {
+  if (!card.entityId) {
+    if (!card.href) return null;
+    return (
+      <Button
+        variant={featured ? "outline" : "ghost"}
+        className={featured ? "h-12 flex-1 rounded-xl text-sm" : "h-8 px-2 text-xs text-muted-foreground"}
+        size={featured ? "default" : "sm"}
+        asChild
+      >
+        <a href={card.href}>Se detalj</a>
+      </Button>
+    );
+  }
+
+  if (onOpenDetail) {
+    return (
+      <Button
+        type="button"
+        variant={featured ? "outline" : "ghost"}
+        className={featured ? "h-12 flex-1 rounded-xl text-sm" : "h-8 px-2 text-xs text-muted-foreground"}
+        size={featured ? "default" : "sm"}
+        onClick={onOpenDetail}
+      >
+        Se detalj
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant={featured ? "outline" : "ghost"}
+      className={featured ? "h-12 flex-1 rounded-xl text-sm" : "h-8 px-2 text-xs text-muted-foreground"}
+      size={featured ? "default" : "sm"}
+      asChild
+    >
+      <Link to="/kontakter/$entityId" params={{ entityId: card.entityId }}>
+        Se detalj
+      </Link>
+    </Button>
+  );
+}
+
 export function RelationCard({
   card,
   featured = false,
   primaryLabel = "Neste steg",
   onPrimary,
   onDone,
+  onOpenDetail,
   className,
 }: {
   card: RelationCardModel;
@@ -25,6 +77,7 @@ export function RelationCard({
   primaryLabel?: string;
   onPrimary?: () => void;
   onDone?: () => void;
+  onOpenDetail?: () => void;
   className?: string;
 }) {
   const source =
@@ -81,13 +134,7 @@ export function RelationCard({
               {primaryLabel}
             </Button>
           )}
-          {card.entityId ? (
-            <Button variant="outline" className="h-12 flex-1 rounded-xl text-sm" asChild>
-              <Link to="/kontakter/$entityId" params={{ entityId: card.entityId }}>
-                Se detalj
-              </Link>
-            </Button>
-          ) : null}
+          <DetailButton card={card} onOpenDetail={onOpenDetail} featured />
           {onDone && (
             <Button
               type="button"
@@ -103,7 +150,6 @@ export function RelationCard({
     );
   }
 
-  // Mockup list row — avatar left, copy center, CTA + priority right
   return (
     <article
       className={cn(
@@ -154,13 +200,7 @@ export function RelationCard({
               {primaryLabel}
             </Button>
           )}
-          {card.entityId ? (
-            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" asChild>
-              <Link to="/kontakter/$entityId" params={{ entityId: card.entityId }}>
-                Se detalj
-              </Link>
-            </Button>
-          ) : null}
+          <DetailButton card={card} onOpenDetail={onOpenDetail} />
           {onDone && (
             <button
               type="button"

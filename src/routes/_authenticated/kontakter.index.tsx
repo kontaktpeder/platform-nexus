@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Building2, ChevronRight, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
-import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { PlatformShell } from "@/components/platform/PlatformShell";
 import { RelationAvatar } from "@/components/platform/relation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -146,17 +146,17 @@ function KontakterPage() {
   const subtitleCount = orgFilter === "all" ? items.length : (counts?.[orgFilter] ?? filtered.length);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <PlatformShell>
       <GlobalTopBar
         title="Kontakter"
         subtitle={
           items.length
             ? `${subtitleCount} i ${CUSTOMER_ORG_FILTER_LABEL[orgFilter]}`
-            : "Samlingssted for virksomheter og oppfølging"
+            : "Full katalog — personer og selskaper"
         }
       />
 
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-28 pt-3">
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-8 pt-3 md:max-w-3xl">
         <div className="mb-3 flex gap-2">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -344,8 +344,6 @@ function KontakterPage() {
           ))}
         </ul>
       </main>
-
-      <PlatformBottomNav />
-    </div>
+    </PlatformShell>
   );
 }

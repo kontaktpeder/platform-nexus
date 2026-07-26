@@ -63,6 +63,7 @@ export function RelationBriefingSection({
   busyItemId,
   onAction,
   onComposeInvoice,
+  onOpenContact,
 }: {
   briefing: RelationBriefing;
   closedItems?: MorningMissionItem[];
@@ -74,6 +75,8 @@ export function RelationBriefingSection({
     options?: MorningBriefActionOptions,
   ) => void;
   onComposeInvoice?: (item: MorningMissionItem) => void;
+  /** Open contact in Mission panel (desktop) instead of /kontakter. */
+  onOpenContact?: (entityId: string) => void;
 }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<RelationListFilter>("all");
@@ -170,7 +173,9 @@ export function RelationBriefingSection({
     }
 
     if (card.sourceKind === "felt") {
-      if (card.entityId) {
+      if (card.entityId && onOpenContact) {
+        onOpenContact(card.entityId);
+      } else if (card.entityId) {
         void navigate({ to: "/kontakter/$entityId", params: { entityId: card.entityId } });
       } else {
         void navigate({ to: "/field" });
@@ -184,7 +189,8 @@ export function RelationBriefingSection({
     }
 
     if (card.entityId) {
-      void navigate({ to: "/kontakter/$entityId", params: { entityId: card.entityId } });
+      if (onOpenContact) onOpenContact(card.entityId);
+      else void navigate({ to: "/kontakter/$entityId", params: { entityId: card.entityId } });
       return;
     }
 
@@ -211,6 +217,11 @@ export function RelationBriefingSection({
         primaryLabel={primaryLabelFor(card, item)}
         onPrimary={canAct ? () => handlePrimary(card) : undefined}
         onDone={canAct ? () => handleDone(card) : undefined}
+        onOpenDetail={
+          card.entityId && onOpenContact
+            ? () => onOpenContact(card.entityId!)
+            : undefined
+        }
       />
     );
   }

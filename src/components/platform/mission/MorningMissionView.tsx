@@ -20,6 +20,7 @@ export function MorningMissionView({
   onRefresh,
   onAction,
   onComposeInvoice,
+  onOpenContact,
 }: {
   data: MorningMissionResponse | undefined;
   loading: boolean;
@@ -33,6 +34,7 @@ export function MorningMissionView({
     options?: MorningBriefActionOptions,
   ) => void;
   onComposeInvoice?: (item: MorningMissionItem) => void;
+  onOpenContact?: (entityId: string) => void;
 }) {
   const payload: MorningMissionPayload = data?.payload ?? {
     today: [],
@@ -156,6 +158,7 @@ export function MorningMissionView({
         busyItemId={busyItemId}
         onAction={onAction}
         onComposeInvoice={onComposeInvoice}
+        onOpenContact={onOpenContact}
       />
     </div>
   );

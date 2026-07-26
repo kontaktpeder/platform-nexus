@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, MapPin, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
-import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { PlatformShell } from "@/components/platform/PlatformShell";
 import { LogVisitSheet } from "@/components/platform/field/LogVisitSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +173,7 @@ function FieldPage() {
   const dueCount = board?.counts.due ?? 0;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <PlatformShell>
       <GlobalTopBar
         title="Felt"
         subtitle={
@@ -270,8 +270,6 @@ function FieldPage() {
           </Button>
         </div>
       </div>
-
-      <PlatformBottomNav />
 
       <LogVisitSheet
         open={logOpen}
@@ -373,7 +371,7 @@ function FieldPage() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
+    </PlatformShell>
   );
 }
 

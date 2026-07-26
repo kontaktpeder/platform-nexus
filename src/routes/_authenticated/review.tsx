@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Sparkles, Users, Link2, Compass, CheckCircle2, XCircle, GitMerge, RefreshCw } from "lucide-react";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
-import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -83,7 +83,7 @@ function ReviewPage() {
   const existingEntities = query.data?.existingEntities ?? [];
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <PlatformShell>
       <GlobalTopBar title="Innboks" subtitle="Korriger feil — kontakter opprettes automatisk fra Gmail/Slack" />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6 pb-28 sm:px-8">
         <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -146,8 +146,7 @@ function ReviewPage() {
           ))}
         </ul>
       </main>
-      <PlatformBottomNav />
-    </div>
+      </PlatformShell>
   );
 }
 
