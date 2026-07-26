@@ -6,9 +6,7 @@ import {
   ArrowLeft,
   GitMerge,
   Loader2,
-  Mail,
   MapPin,
-  MessageSquare,
   Pencil,
   Users,
 } from "lucide-react";
@@ -16,10 +14,13 @@ import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
 import {
+  ContactAboutCard,
   NextStepPanel,
   RelationAvatar,
   OwnerContextChip,
   PlanFollowUpPanel,
+  RelationStatusBadge,
+  TimelineEvent,
 } from "@/components/platform/relation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +39,11 @@ import {
   type CustomerWarmth,
 } from "@/lib/customers.functions";
 import { scheduleEntityFollowUp } from "@/lib/field.functions";
-import type { FollowUpPreset } from "@/lib/field/field.types";
+import { FIELD_RESULT_LABEL, type FollowUpPreset } from "@/lib/field/field.types";
 import { rejectWrongEntity } from "@/lib/known-identities.functions";
 import { RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
+import type { RelationSourceKind, RelationStatus } from "@/lib/relation/types";
+import { formatOsloActivityDate } from "@/lib/field/field-dates";
 
 const OWNER_OPTIONS: OwnerContext[] = [
   "gold-of-sicily",
@@ -48,6 +51,13 @@ const OWNER_OPTIONS: OwnerContext[] = [
   "personal",
   "unknown",
 ];
+
+const SECTION_CHIPS = [
+  { id: "oversikt", label: "Oversikt" },
+  { id: "historikk", label: "Historikk" },
+  { id: "oppfolging", label: "Oppfølging" },
+  { id: "relasjoner", label: "Relasjoner" },
+] as const;
 
 export const Route = createFileRoute("/_authenticated/kontakter/$entityId")({
   head: () => ({ meta: [{ title: "Kontakt — Mission" }] }),
@@ -67,11 +77,26 @@ function warmthClass(w: CustomerWarmth): string {
   }
 }
 
-function sourceIcon(source: string) {
-  if (source === "gmail" || source === "email") return Mail;
-  if (source === "slack") return MessageSquare;
-  if (source === "felt" || source === "field") return MapPin;
-  return MessageSquare;
+function relationStatusFromDetail(d: CustomerDetail): RelationStatus {
+  if (d.followUp?.overdue) return "waiting_on_me";
+  if (d.warmth === "waiting") return "waiting_on_them";
+  if (d.warmth === "warm") return "waiting_on_me";
+  if (d.warmth === "cold") return "quiet";
+  return "confirmed";
+}
+
+function timelineSourceKind(source: string): RelationSourceKind | null {
+  const raw = source.toLowerCase();
+  if (raw.includes("gmail") || raw.includes("mail") || raw.includes("email")) return "gmail";
+  if (raw.includes("slack")) return "slack";
+  if (raw.includes("felt") || raw.includes("field")) return "felt";
+  if (raw.includes("finance") || raw.includes("faktura")) return "finance";
+  if (raw.includes("work")) return "work";
+  return "manual";
+}
+
+function scrollToSection(id: string) {
+  document.getElementById(`kontakt-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function KontaktDetailPage() {
@@ -93,6 +118,7 @@ function KontaktDetailPage() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeQuery, setMergeQuery] = useState("");
   const [mergeTargetId, setMergeTargetId] = useState("");
+  const [activeChip, setActiveChip] = useState<(typeof SECTION_CHIPS)[number]["id"]>("oversikt");
 
   const detailQ = useQuery({
     queryKey: ["customer", entityId],
@@ -206,12 +232,24 @@ function KontaktDetailPage() {
   });
 
   const d = detailQ.data;
+  const lastEvent = d?.timeline[0] ?? null;
+  const metaEmail = typeof d?.metadata.email === "string" ? d.metadata.email : null;
+  const metaDomain =
+    typeof d?.metadata.email_domain === "string" ? d.metadata.email_domain : null;
+  const metaRole =
+    typeof d?.metadata.role === "string"
+      ? d.metadata.role
+      : typeof d?.metadata.title === "string"
+        ? d.metadata.title
+        : null;
+  const metaIndustry =
+    typeof d?.metadata.industry === "string" ? d.metadata.industry : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <GlobalTopBar
         title={d?.name ?? "Kontakt"}
-        subtitle="Arbeidsrom — se, rett, slå sammen"
+        subtitle="Husk mennesket — ikke bare saken"
         back={{ to: "/kontakter" }}
       />
 
@@ -239,7 +277,7 @@ function KontaktDetailPage() {
 
         {d && (
           <>
-            <header className="mb-5">
+            <header className="mb-4">
               {editingName ? (
                 <form
                   className="flex flex-col gap-2"
@@ -281,7 +319,7 @@ function KontaktDetailPage() {
                   </div>
                 </form>
               ) : (
-                <div className="flex flex-wrap items-start gap-3">
+                <div className="flex items-start gap-3">
                   <RelationAvatar
                     name={d.name}
                     entityType={d.entityType}
@@ -289,76 +327,170 @@ function KontaktDetailPage() {
                     size="lg"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start gap-2">
-                      <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">
-                        {d.name}
-                      </h1>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-10 shrink-0 gap-1.5 rounded-xl"
-                        onClick={() => {
-                          setNameDraft(d.name);
-                          setEditingName(true);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Endre navn
-                      </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
+                      <RelationStatusBadge status={relationStatusFromDetail(d)} />
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
                       >
                         {CUSTOMER_WARMTH_LABEL[d.warmth]}
                       </span>
                       <OwnerContextChip ownerContext={d.ownerContext} />
+                      {d.relatedCompanies[0] && (
+                        <span className="text-sm text-muted-foreground">
+                          {d.relatedCompanies[0].name}
+                        </span>
+                      )}
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-8 gap-1.5 px-2 text-xs text-muted-foreground"
+                      onClick={() => {
+                        setNameDraft(d.name);
+                        setEditingName(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Endre navn
+                    </Button>
                   </div>
                 </div>
               )}
+            </header>
 
-              {d.summary && (
-                <p className="mt-2 text-sm text-muted-foreground">{d.summary}</p>
-              )}
-
-              {d.followUp && (
-              <NextStepPanel
-                className="mt-4"
-                action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
-              />
-            )}
-
-            <PlanFollowUpPanel
-              className="mt-4"
-              defaultAction={d.followUp?.action ?? ""}
-              existingLabel={
-                d.followUp
-                  ? `${d.followUp.overdue ? "Forsinket · " : ""}${d.followUp.dueLabel}`
-                  : null
-              }
-              busy={scheduleMut.isPending}
-              onSchedule={(input) => scheduleMut.mutate(input)}
-            />
-
-            <div className="mt-3 flex flex-wrap gap-2">
-                {(["cold", "waiting", "warm"] as const).map((w) => (
+            <nav className="-mx-1 mb-5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-2">
+                {SECTION_CHIPS.map((chip) => (
                   <button
-                    key={w}
+                    key={chip.id}
                     type="button"
-                    disabled={warmthMut.isPending}
-                    onClick={() => warmthMut.mutate(w)}
-                    className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
-                      d.warmth === w
+                    onClick={() => {
+                      setActiveChip(chip.id);
+                      scrollToSection(chip.id);
+                    }}
+                    className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors ${
+                      activeChip === chip.id
                         ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card"
+                        : "border-border bg-card text-muted-foreground"
                     }`}
                   >
-                    {CUSTOMER_WARMTH_LABEL[w]}
+                    {chip.label}
                   </button>
                 ))}
               </div>
+            </nav>
 
-              <div className="mt-4">
+            <section id="kontakt-oversikt" className="mb-8 scroll-mt-4 space-y-4">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Oversikt
+              </h2>
+
+              {d.followUp ? (
+                <NextStepPanel
+                  action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
+                />
+              ) : (
+                <NextStepPanel action="Ingen planlagt oppfølging — sett en under Oppfølging." />
+              )}
+
+              <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <h3 className="text-sm font-semibold">Siste kontakt</h3>
+                {lastEvent ? (
+                  <>
+                    <p className="mt-2 text-sm font-medium leading-snug">{lastEvent.title}</p>
+                    {lastEvent.detail && (
+                      <p className="mt-1 text-sm text-muted-foreground">{lastEvent.detail}</p>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {lastEvent.atLabel} · {lastEvent.source}
+                    </p>
+                  </>
+                ) : d.lastFieldResult ? (
+                  <>
+                    <p className="mt-2 text-sm font-medium">
+                      {FIELD_RESULT_LABEL[d.lastFieldResult]}
+                    </p>
+                    {d.lastFieldNote && (
+                      <p className="mt-1 text-sm text-muted-foreground">{d.lastFieldNote}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Ingen aktivitet ennå. Mail, Slack og Felt lander her.
+                  </p>
+                )}
+                {d.lastSeenAt && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Sist sett {formatOsloActivityDate(d.lastSeenAt)}
+                  </p>
+                )}
+              </section>
+
+              <ContactAboutCard
+                name={d.name}
+                entityType={d.entityType}
+                warmth={d.warmth}
+                ownerContext={d.ownerContext}
+                companyName={d.relatedCompanies[0]?.name ?? null}
+                email={metaEmail}
+                domain={metaDomain}
+                role={metaRole}
+                industry={metaIndustry}
+              />
+
+              <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <h3 className="text-sm font-semibold">Aktive saker</h3>
+                {d.followUp ? (
+                  <ul className="mt-3 space-y-2">
+                    <li className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{d.followUp.action}</p>
+                        <p className="text-xs text-muted-foreground">{d.followUp.dueLabel}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          d.followUp.overdue
+                            ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                            : "bg-sky-500/15 text-sky-800 dark:text-sky-300"
+                        }`}
+                      >
+                        {d.followUp.overdue ? "Forsinket" : "Planlagt"}
+                      </span>
+                    </li>
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">Ingen åpne saker.</p>
+                )}
+              </section>
+
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Relasjonsstatus
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(["cold", "waiting", "warm"] as const).map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      disabled={warmthMut.isPending}
+                      onClick={() => warmthMut.mutate(w)}
+                      className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
+                        d.warmth === w
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      {CUSTOMER_WARMTH_LABEL[w]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Org
                 </p>
@@ -380,63 +512,11 @@ function KontaktDetailPage() {
                   ))}
                 </div>
               </div>
-            </header>
-
-            <section className="mb-6">
-              <div className="mb-2 flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Personer ({d.people.length})
-                </h2>
-              </div>
-              {d.people.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                  Ingen personer koblet ennå. De dukker opp fra mail/Slack og Innboks.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {d.people.map((p) => (
-                    <li
-                      key={p.entityId}
-                      className="rounded-xl border border-border bg-card px-4 py-3"
-                    >
-                      <p className="font-medium">{p.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {RELATIONSHIP_LABEL[p.relationshipKind as keyof typeof RELATIONSHIP_LABEL] ??
-                          p.relationshipKind}
-                        {p.summary ? ` · ${p.summary}` : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </section>
 
-            {d.relatedCompanies.length > 0 && (
-              <section className="mb-6">
-                <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Andre koblinger
-                </h2>
-                <ul className="space-y-2">
-                  {d.relatedCompanies.map((c) => (
-                    <li key={c.entityId}>
-                      <Link
-                        to="/kontakter/$entityId"
-                        params={{ entityId: c.entityId }}
-                        className="block rounded-xl border border-border bg-card px-4 py-3 active:bg-muted/60"
-                      >
-                        <p className="font-medium">{c.name}</p>
-                        <p className="text-xs text-muted-foreground">{c.kind}</p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            <section className="mb-6">
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Tidslinje ({d.timeline.length})
+            <section id="kontakt-historikk" className="mb-8 scroll-mt-4">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Historikk ({d.timeline.length})
               </h2>
               {d.timeline.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
@@ -444,41 +524,108 @@ function KontaktDetailPage() {
                 </p>
               ) : (
                 <ol className="relative ml-2 space-y-0 border-l border-border">
-                  {d.timeline.map((t) => {
-                    const Icon = sourceIcon(t.source);
-                    return (
-                      <li key={t.id} className="relative pb-5 pl-5 last:pb-0">
-                        <span className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full border-2 border-background bg-primary/70" />
-                        <div className="flex items-start gap-2">
-                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs text-muted-foreground">
-                              {t.atLabel} · {t.source}
-                            </p>
-                            <p className="text-sm font-medium leading-snug">{t.title}</p>
-                            {t.detail && (
-                              <p className="mt-0.5 text-sm text-muted-foreground">{t.detail}</p>
-                            )}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {d.timeline.map((t) => (
+                    <TimelineEvent
+                      key={t.id}
+                      atLabel={t.atLabel}
+                      title={t.title}
+                      detail={t.detail}
+                      sourceKind={timelineSourceKind(t.source)}
+                    />
+                  ))}
                 </ol>
               )}
             </section>
 
-            {!d.isFieldPlace && (
-              <Button
-                variant="outline"
-                className="mb-5 h-12 w-full gap-2"
-                disabled={fieldMut.isPending}
-                onClick={() => fieldMut.mutate()}
-              >
-                <MapPin className="h-4 w-4" />
-                Vis i Felt-tavlen
-              </Button>
-            )}
+            <section id="kontakt-oppfolging" className="mb-8 scroll-mt-4">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Oppfølging
+              </h2>
+              <PlanFollowUpPanel
+                defaultAction={d.followUp?.action ?? ""}
+                existingLabel={
+                  d.followUp
+                    ? `${d.followUp.overdue ? "Forsinket · " : ""}${d.followUp.dueLabel}`
+                    : null
+                }
+                busy={scheduleMut.isPending}
+                onSchedule={(input) => scheduleMut.mutate(input)}
+              />
+              {!d.isFieldPlace && (
+                <Button
+                  variant="outline"
+                  className="mt-3 h-12 w-full gap-2 rounded-xl"
+                  disabled={fieldMut.isPending}
+                  onClick={() => fieldMut.mutate()}
+                >
+                  <MapPin className="h-4 w-4" />
+                  Vis i Felt-tavlen
+                </Button>
+              )}
+            </section>
+
+            <section id="kontakt-relasjoner" className="mb-8 scroll-mt-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Relasjoner
+                </h2>
+              </div>
+
+              <h3 className="mb-2 text-sm font-semibold">Personer ({d.people.length})</h3>
+              {d.people.length === 0 ? (
+                <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                  Ingen personer koblet ennå. De dukker opp fra mail/Slack og Innboks.
+                </p>
+              ) : (
+                <ul className="mb-4 space-y-2">
+                  {d.people.map((p) => (
+                    <li key={p.entityId}>
+                      <Link
+                        to="/kontakter/$entityId"
+                        params={{ entityId: p.entityId }}
+                        className="block rounded-xl border border-border bg-card px-4 py-3 active:bg-muted/60"
+                      >
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {RELATIONSHIP_LABEL[
+                            p.relationshipKind as keyof typeof RELATIONSHIP_LABEL
+                          ] ?? p.relationshipKind}
+                          {p.summary ? ` · ${p.summary}` : ""}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <h3 className="mb-2 text-sm font-semibold">
+                Selskaper ({d.relatedCompanies.length})
+              </h3>
+              {d.relatedCompanies.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                  Ingen selskapskobling ennå.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {d.relatedCompanies.map((c) => (
+                    <li key={c.entityId}>
+                      <Link
+                        to="/kontakter/$entityId"
+                        params={{ entityId: c.entityId }}
+                        className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 active:bg-muted/60"
+                      >
+                        <RelationAvatar name={c.name} entityType="company" size="sm" />
+                        <div className="min-w-0">
+                          <p className="font-medium">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{c.kind}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             <section className="mb-5 rounded-2xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
@@ -498,40 +645,47 @@ function KontaktDetailPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="mt-3 h-11 w-full rounded-xl"
+                  className="mt-4 h-11 w-full rounded-xl"
                   onClick={() => setMergeOpen(true)}
                 >
-                  Velg kontakt å slå inn her…
+                  Velg kontakt å slå sammen
                 </Button>
               ) : (
-                <div className="mt-3 space-y-2">
+                <div className="mt-4 space-y-3">
                   <Input
+                    placeholder="Søk kontakt…"
                     value={mergeQuery}
                     onChange={(e) => setMergeQuery(e.target.value)}
-                    placeholder="Søk navn…"
                     className="h-11 rounded-xl"
                   />
-                  {customersQ.isLoading && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Laster kontakter…
-                    </div>
-                  )}
-                  <select
-                    value={mergeTargetId}
-                    onChange={(e) => setMergeTargetId(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
-                  >
-                    <option value="">Velg kontakt…</option>
+                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
+                    {customersQ.isLoading && (
+                      <p className="px-2 py-3 text-sm text-muted-foreground">Laster…</p>
+                    )}
                     {mergeCandidates.map((c) => (
-                      <option key={c.entityId} value={c.entityId}>
-                        {c.name}
-                        {c.ownerContext !== "unknown"
-                          ? ` · ${CUSTOMER_ORG_FILTER_LABEL[c.ownerContext]}`
-                          : ""}
-                      </option>
+                      <button
+                        key={c.entityId}
+                        type="button"
+                        onClick={() => setMergeTargetId(c.entityId)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${
+                          mergeTargetId === c.entityId
+                            ? "bg-primary/10 text-foreground"
+                            : "hover:bg-muted/60"
+                        }`}
+                      >
+                        <RelationAvatar
+                          name={c.name}
+                          entityType={c.entityType}
+                          imageUrl={c.imageUrl}
+                          size="sm"
+                        />
+                        <span className="min-w-0 truncate font-medium">{c.name}</span>
+                      </button>
                     ))}
-                  </select>
+                    {!customersQ.isLoading && mergeCandidates.length === 0 && (
+                      <p className="px-2 py-3 text-sm text-muted-foreground">Ingen treff</p>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -601,10 +755,10 @@ function KontaktDetailPage() {
               slug: {d.slug}
               <br />
               owner_context: {d.ownerContext}
-              {typeof d.metadata.email_domain === "string" && (
+              {metaDomain && (
                 <>
                   <br />
-                  email_domain: {d.metadata.email_domain}
+                  email_domain: {metaDomain}
                 </>
               )}
             </div>
