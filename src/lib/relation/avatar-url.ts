@@ -1,4 +1,4 @@
-/** Avatar URLs for relation faces — Gravatar (person) + domain logo (company). */
+/** Avatar URLs for relation faces — Gravatar (person) + Logo.dev (company). */
 
 import { createHash } from "node:crypto";
 
@@ -9,17 +9,31 @@ export function gravatarUrl(email: string, size = 128): string {
   return `https://www.gravatar.com/avatar/${hash}?s=${size}&d=404&r=g`;
 }
 
-/** Public company mark from domain (Clearbit). 404 → Avatar fallback. */
-export function companyLogoUrl(domain: string, size = 128): string {
+/**
+ * Company logo via Logo.dev (Clearbit Logo API shut down Dec 2025).
+ * Publishable key: https://www.logo.dev — set LOGO_DEV_PUBLISHABLE_KEY.
+ */
+export function companyLogoUrl(domain: string, size = 128): string | null {
   const host = domain
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, "")
     .replace(/^www\./, "")
     .split("/")[0];
-  if (!host || !host.includes(".")) return "";
-  // Clearbit serves square logos; size hint unused but keeps URL stable for cache.
-  return `https://logo.clearbit.com/${host}?size=${size}`;
+  if (!host || !host.includes(".")) return null;
+
+  const token =
+    process.env.LOGO_DEV_PUBLISHABLE_KEY?.trim() ||
+    process.env.VITE_LOGO_DEV_PUBLISHABLE_KEY?.trim() ||
+    "";
+  if (!token) return null;
+
+  const params = new URLSearchParams({
+    token,
+    size: String(size),
+    format: "png",
+  });
+  return `https://img.logo.dev/${encodeURIComponent(host)}?${params.toString()}`;
 }
 
 export function relationImageUrl(input: {
@@ -33,10 +47,7 @@ export function relationImageUrl(input: {
     return gravatarUrl(input.email);
   }
   if (input.entityType === "company" && input.domain) {
-    const url = companyLogoUrl(input.domain);
-    return url || null;
+    return companyLogoUrl(input.domain);
   }
-  // Person without email but with domain — skip (no face).
-  // Company without domain — skip.
   return null;
 }
