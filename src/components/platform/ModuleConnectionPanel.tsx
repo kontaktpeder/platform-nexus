@@ -120,13 +120,16 @@ export function ModuleConnectionPanel({
           moduleId,
           moduleSlug,
           external_org_id: externalOrgId.trim(),
-          external_base_url: baseUrl.trim(),
+          external_base_url: baseUrl.trim() || moduleDefaultUrl || "",
           verify_api_key: verifyApiKey.trim(),
         },
       });
       if (!res.ok) {
         toast.error(res.error);
         return;
+      }
+      if ("externalOrgId" in res && res.externalOrgId) {
+        setExternalOrgId(res.externalOrgId);
       }
       toast.success(`Koblet til ${res.orgName}`);
       setVerifyApiKey("");
@@ -207,27 +210,20 @@ export function ModuleConnectionPanel({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Verify-nøkkel trenger scope <code className="font-mono">platform:read</code> +{" "}
-        <code className="font-mono">platform:verify</code>. For Send purring fra Mission trenger
-        nøkkelen også <code className="font-mono">invoices:read</code> — enten på verify-nøkkelen
-        eller som egen faktura-nøkkel nedenfor.
+        Lim inn base URL + verify-nøkkel — org-ID hentes automatisk fra nøkkelen. Nøkkelen trenger{" "}
+        <code className="font-mono">platform:read</code> +{" "}
+        <code className="font-mono">platform:verify</code>
+        {moduleSlug === "finance" ? (
+          <>
+            . For Send purring trengs også <code className="font-mono">invoices:read</code>.
+          </>
+        ) : (
+          "."
+        )}
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`ext-${moduleId}`} className="text-xs">
-            Ekstern organisasjon-ID (UUID)
-          </Label>
-          <Input
-            id={`ext-${moduleId}`}
-            value={externalOrgId}
-            onChange={(e) => setExternalOrgId(e.target.value)}
-            placeholder="bbc194b3-3067-4eb9-9918-87bed9ab7670"
-            disabled={!canEdit || busy}
-            className="font-mono text-xs"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label htmlFor={`url-${moduleId}`} className="text-xs">
             Base URL
           </Label>
@@ -251,6 +247,20 @@ export function ModuleConnectionPanel({
             value={verifyApiKey}
             onChange={(e) => setVerifyApiKey(e.target.value)}
             placeholder={moduleKeyPrefix ? `${moduleKeyPrefix}...` : "api_live_..."}
+            disabled={!canEdit || busy}
+            className="font-mono text-xs"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor={`ext-${moduleId}`} className="text-xs">
+            Ekstern organisasjon-ID{" "}
+            <span className="font-normal text-muted-foreground">(valgfri — fylles fra nøkkel)</span>
+          </Label>
+          <Input
+            id={`ext-${moduleId}`}
+            value={externalOrgId}
+            onChange={(e) => setExternalOrgId(e.target.value)}
+            placeholder="La stå tom for å hente fra nøkkel"
             disabled={!canEdit || busy}
             className="font-mono text-xs"
           />
@@ -314,8 +324,7 @@ export function ModuleConnectionPanel({
             onClick={onTestAndSave}
             disabled={
               busy ||
-              !externalOrgId.trim() ||
-              !baseUrl.trim() ||
+              !(baseUrl.trim() || moduleDefaultUrl) ||
               verifyApiKey.trim().length < 20
             }
           >

@@ -77,6 +77,32 @@ export async function fetchModuleInfo(baseUrl: string): Promise<ModuleInfo> {
   return info;
 }
 
+/** Resolve the org bound to a platform:read key (no org UUID required). */
+export async function fetchModuleOrganizationFromKey(params: {
+  baseUrl: string;
+  apiKey: string;
+}): Promise<{ id: string; name: string }> {
+  const base = normalizeBase(params.baseUrl);
+  const res = await fetch(`${base}/api/public/v1/module/organization`, {
+    headers: { Authorization: `Bearer ${params.apiKey}` },
+  });
+  const body = await parseJson(res);
+  if (!res.ok) {
+    throw new ModuleClientError(
+      res.status === 401 || res.status === 403
+        ? "Ugyldig eller manglende verify-nøkkel"
+        : `Kunne ikke hente organisasjon (${res.status})`,
+      res.status,
+      body,
+    );
+  }
+  const org = (body as { organization?: { id?: string; name?: string } })?.organization;
+  if (!org?.id || !org?.name) {
+    throw new ModuleClientError("Modulen returnerte ingen organisasjon for nøkkelen");
+  }
+  return { id: org.id, name: org.name };
+}
+
 export async function verifyModuleOrganization(params: {
   baseUrl: string;
   orgId: string;

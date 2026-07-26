@@ -8,7 +8,8 @@ const VerifyInput = z.object({
   workspaceId: z.string().uuid(),
   moduleId: z.string().uuid(),
   moduleSlug: z.string().min(1),
-  external_org_id: z.string().uuid(),
+  /** Optional — when omitted, resolved from the API key via GET /module/organization */
+  external_org_id: z.union([z.string().uuid(), z.literal("")]).optional(),
   external_base_url: z.string().url(),
   verify_api_key: z.string().min(20),
 });
@@ -47,20 +48,27 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
 
     await assertOrgAdmin(supabase, data.orgId, userId);
 
-    connectionInputSchema.parse({
-      external_org_id: data.external_org_id,
-      external_base_url: data.external_base_url,
-    });
-
     const baseUrl = normalizeBaseUrl(data.external_base_url);
     const now = new Date().toISOString();
     const apiKey = data.verify_api_key.trim();
 
     try {
+      const { fetchModuleOrganizationFromKey } = await import("@/lib/module-client.server");
+      let externalOrgId = (data.external_org_id ?? "").trim();
+      if (!externalOrgId) {
+        const discovered = await fetchModuleOrganizationFromKey({ baseUrl, apiKey });
+        externalOrgId = discovered.id;
+      }
+
+      connectionInputSchema.parse({
+        external_org_id: externalOrgId,
+        external_base_url: data.external_base_url,
+      });
+
       const result = await verifyModuleConnection({
         baseUrl,
         expectedModuleSlug: data.moduleSlug,
-        externalOrgId: data.external_org_id,
+        externalOrgId,
         apiKey,
       });
 
@@ -80,7 +88,7 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
             org_id: data.orgId,
             workspace_id: data.workspaceId,
             module_id: data.moduleId,
-            external_org_id: data.external_org_id,
+            external_org_id: externalOrgId,
             external_base_url: baseUrl,
             external_org_name: result.orgName,
             resolved_org_home_url: result.orgHome,
@@ -114,6 +122,7 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
         status: "connected" as const,
         orgName: result.orgName,
         orgHome: result.orgHome,
+        externalOrgId,
       };
     } catch (e) {
       const msg =
@@ -123,21 +132,24 @@ export const verifyAndSaveModuleConnection = createServerFn({ method: "POST" })
             ? e.message
             : "Verify feilet";
 
-      await supabaseAdmin.from("module_connections").upsert(
-        {
-          org_id: data.orgId,
-          workspace_id: data.workspaceId,
-          module_id: data.moduleId,
-          external_org_id: data.external_org_id,
-          external_base_url: baseUrl,
-          module_slug: data.moduleSlug,
-          status: "error",
-          connected_by: userId,
-          last_verified_at: now,
-          error_message: msg,
-        },
-        { onConflict: "workspace_id,module_id" },
-      );
+      const knownOrgId = (data.external_org_id ?? "").trim();
+      if (knownOrgId) {
+        await supabaseAdmin.from("module_connections").upsert(
+          {
+            org_id: data.orgId,
+            workspace_id: data.workspaceId,
+            module_id: data.moduleId,
+            external_org_id: knownOrgId,
+            external_base_url: baseUrl,
+            module_slug: data.moduleSlug,
+            status: "error",
+            connected_by: userId,
+            last_verified_at: now,
+            error_message: msg,
+          },
+          { onConflict: "workspace_id,module_id" },
+        );
+      }
 
       return { ok: false as const, status: "error" as const, error: msg };
     }

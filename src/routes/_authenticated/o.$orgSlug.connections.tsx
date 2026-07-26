@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, RefreshCw } from "lucide-react";
 import { TopBar } from "@/components/platform/TopBar";
 import { ConnectionHubPanel } from "@/components/platform/ConnectionHubPanel";
 import { useOrgConnectionHub } from "@/lib/connection-hub.hooks";
 import { Button } from "@/components/ui/button";
+import type { ConnectionHubResponse } from "@/lib/connection-hub.types";
 
 export const Route = createFileRoute("/_authenticated/o/$orgSlug/connections")({
   head: ({ params }) => ({
@@ -11,6 +12,92 @@ export const Route = createFileRoute("/_authenticated/o/$orgSlug/connections")({
   }),
   component: OrgConnectionsPage,
 });
+
+function platformConnected(hub: ConnectionHubResponse, platform: "finance" | "work") {
+  return hub.workspaces.some((ws) =>
+    ws.items.some((i) => i.platform === platform && i.status === "connected"),
+  );
+}
+
+function FirstRunChecklist({
+  hub,
+  orgSlug,
+}: {
+  hub: ConnectionHubResponse;
+  orgSlug: string;
+}) {
+  const financeOk = platformConnected(hub, "finance");
+  const workOk = platformConnected(hub, "work");
+  const firstWs = hub.workspaces[0];
+  const steps = [
+    {
+      done: true,
+      title: "Organisasjon opprettet",
+      detail: hub.org.name,
+      href: null as string | null,
+    },
+    {
+      done: financeOk,
+      title: "Koble Finance",
+      detail: financeOk
+        ? "Finance er koblet"
+        : "Åpne moduler → lim inn base URL + platform-verify-nøkkel",
+      href: firstWs
+        ? `/o/${orgSlug}/w/${firstWs.slug}/modules`
+        : `/o/${orgSlug}/settings`,
+    },
+    {
+      done: workOk,
+      title: "Koble Work",
+      detail: workOk
+        ? "Work er koblet"
+        : "Åpne moduler → lim inn base URL + platform-verify-nøkkel",
+      href: firstWs
+        ? `/o/${orgSlug}/w/${firstWs.slug}/modules`
+        : `/o/${orgSlug}/settings`,
+    },
+    {
+      done: financeOk && workOk,
+      title: "Åpne Mission",
+      detail:
+        financeOk && workOk
+          ? "Mission kan hente alerts fra Finance og Work"
+          : "Når begge er koblet, ser du neste handlinger i Mission",
+      href: "/mission",
+    },
+  ];
+
+  return (
+    <section className="mt-6 rounded-xl border border-border/60 bg-card p-4">
+      <h2 className="text-sm font-semibold">Kom i gang</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Sjekkliste for sømløs CORE — lim inn URL + nøkkel, org-ID hentes automatisk.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {steps.map((s) => (
+          <li key={s.title} className="flex items-start gap-2 text-sm">
+            {s.done ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            ) : (
+              <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <div className={s.done ? "text-muted-foreground line-through" : "font-medium"}>
+                {s.title}
+              </div>
+              <p className="text-xs text-muted-foreground">{s.detail}</p>
+              {!s.done && s.href && (
+                <a href={s.href} className="text-xs font-medium text-primary hover:underline">
+                  Fortsett →
+                </a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function OrgConnectionsPage() {
   const { orgSlug } = Route.useParams();
@@ -51,8 +138,11 @@ function OrgConnectionsPage() {
             {query.error instanceof Error ? query.error.message : "Kunne ikke laste koblinger"}
           </p>
         ) : query.data ? (
-          <div className="mt-6">
-            <ConnectionHubPanel hub={query.data} />
+          <div className="mt-2">
+            <FirstRunChecklist hub={query.data} orgSlug={orgSlug} />
+            <div className="mt-6">
+              <ConnectionHubPanel hub={query.data} />
+            </div>
           </div>
         ) : null}
 
