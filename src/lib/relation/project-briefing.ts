@@ -42,7 +42,13 @@ function itemToCard(item: MorningMissionItem, status: RelationCardModel["status"
 export function projectPayloadToRelationBriefing(
   payload: MorningMissionPayload,
 ): RelationBriefing {
-  if (payload.relations) return payload.relations;
+  if (payload.relations) {
+    return {
+      ...payload.relations,
+      system: [],
+      noiseCount: payload.relations.noiseCount ?? (payload.noise ?? []).length,
+    };
+  }
 
   const today = payload.today ?? [];
   const waiting = payload.waiting ?? [];
@@ -86,23 +92,13 @@ export function projectPayloadToRelationBriefing(
       briefItemId: null,
     }));
 
-  const system: RelationCardModel[] = (payload.noise ?? []).map((n, idx) => ({
-    id: `system-${idx}`,
-    entityId: null,
-    entityType: null,
-    name: n.label,
-    subtitle: null,
-    whyNow: "System eller støy — ikke knyttet til en person.",
-    nextAction: "Se over",
-    status: "quiet" as const,
-    ownerContext: null,
-    sourceKind: "system" as const,
-    sourceLabel: "System",
-    imageUrl: null,
-    href: null,
-    priority: "low" as const,
-    briefItemId: null,
-  }));
-
-  return { startHere, needsFollowUp, upcoming, unresolved, system };
+  // Noise stays out of the relation list — it's not "people who need you".
+  return {
+    startHere,
+    needsFollowUp,
+    upcoming,
+    unresolved,
+    system: [],
+    noiseCount: (payload.noise ?? []).length,
+  };
 }

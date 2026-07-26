@@ -10,18 +10,26 @@ export function normalizeEmail(email: string | null | undefined): string | null 
   return email.trim().toLowerCase();
 }
 
-/** Drop user's own test/noise mail before AI and from brief sections. */
+/** Drop user's own *test* mail — not all sent outreach (those are waiting_on_them). */
 export function isOwnNoiseMail(signal: MissionSignal, userEmail: string | null): boolean {
   const email = normalizeEmail(userEmail);
   const fromEmail = normalizeEmail(signal.meta?.from_email as string | undefined);
   const fromText = signal.from.toLowerCase();
   const subj = signal.subject.toLowerCase().trim();
 
-  if (email) {
-    if (fromEmail === email) return true;
-    if (fromText.includes(email)) return true;
-    const local = email.split("@")[0];
-    if (local && fromText.includes(local) && subj.length <= 20) return true;
+  const fromSelf =
+    !!email &&
+    (fromEmail === email ||
+      fromText.includes(email) ||
+      (!!email.split("@")[0] && fromText.includes(email.split("@")[0]!)));
+
+  // Only treat as noise when it's clearly a short test from yourself.
+  if (fromSelf) {
+    if (TEST_SUBJECTS.has(subj)) return true;
+    if (/^test\b/i.test(subj)) return true;
+    if (subj === "hei" && signal.snippet.toLowerCase().includes("test")) return true;
+    if (subj.length <= 4 && /^(hei|hi|yo)$/i.test(subj)) return true;
+    return false;
   }
 
   if (TEST_SUBJECTS.has(subj)) return true;

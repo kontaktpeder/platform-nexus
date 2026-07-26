@@ -274,6 +274,8 @@ export async function generateMorningMissionAi(input: {
     "- tag system_noise / bulk_mail / noreply / sikkerhetsvarsel / sign-in / nyhetsbrev → ALLTID noise.",
     "  Aldri today/waiting. Aldri «Svar på e-post».",
     "- Kun ekte mennesker/selskaper du har en relasjon til hører hjemme i today/waiting.",
+    "- Egen utgående oppfølging til kunder (Gold of Sicily, Felt-besøk, osv.) → waiting, IKKE noise.",
+    "  Brukeren venter på svar — det er en relasjon.",
     "",
     "MYKE REGLER:",
     "Avslag, fullførte saker, irrelevant historikk → closed.",

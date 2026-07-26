@@ -68,5 +68,8 @@ export type RelationBriefing = {
   needsFollowUp: RelationCardModel[];
   upcoming: RelationCardModel[];
   unresolved: RelationCardModel[];
+  /** @deprecated Never show noise as relation cards — use noiseCount. */
   system: RelationCardModel[];
+  /** Hidden system/product mail count — not people. */
+  noiseCount: number;
 };

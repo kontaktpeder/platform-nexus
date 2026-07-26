@@ -113,8 +113,8 @@ export function RelationBriefingSection({
   }, [briefing]);
 
   const quietCards = useMemo(
-    () => [...briefing.system, ...activeCards.filter((c) => c.status === "quiet")],
-    [briefing.system, activeCards],
+    () => activeCards.filter((c) => c.status === "quiet"),
+    [activeCards],
   );
 
   const counts = useMemo(() => {
@@ -283,10 +283,22 @@ export function RelationBriefingSection({
                 </div>
               </section>
             )}
+
+            {(briefing.noiseCount ?? 0) > 0 && (
+              <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                {briefing.noiseCount} systemvarsler er skjult (noreply, sikkerhet, produktmail) —
+                de er ikke relasjoner.
+              </p>
+            )}
           </div>
         )
       ) : (
         <div className="space-y-3">
+          {filter === "quiet" && (
+            <p className="text-sm text-muted-foreground">
+              Relasjoner uten aktiv oppfølging. Systemmail vises ikke her.
+            </p>
+          )}
           {(filteredList ?? []).length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
               Ingen i denne listen.

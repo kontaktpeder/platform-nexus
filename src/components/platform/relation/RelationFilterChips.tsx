@@ -11,7 +11,7 @@ const CHIPS: { label: string; value: RelationListFilter }[] = [
   { label: "Alle", value: "all" },
   { label: "Venter på meg", value: "waiting_on_me" },
   { label: "Kommende", value: "upcoming" },
-  { label: "Ingen aktivitet", value: "quiet" },
+  { label: "Stille", value: "quiet" },
   { label: "Fullført i dag", value: "done" },
 ];
 
