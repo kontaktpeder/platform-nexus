@@ -221,18 +221,8 @@ export function RelationBriefingSection({
     visible.rest.length === 0 &&
     filter === "all" &&
     activeCards.length === 0 &&
-    quietCards.length === 0;
-
-  if (empty) {
-    return (
-      <div className="rounded-2xl border border-border/60 bg-card p-6 text-center shadow-sm">
-        <p className="text-sm font-medium">Ingen som trenger deg akkurat nå.</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Når mail, Slack eller Felt knyttes til en kontakt, lander det her.
-        </p>
-      </div>
-    );
-  }
+    quietCards.length === 0 &&
+    doneCards.length === 0;
 
   const sectionTitle =
     filter === "all"
@@ -256,19 +246,30 @@ export function RelationBriefingSection({
         </p>
       </header>
 
-      <RelationFilterChips value={filter} onChange={setFilter} counts={counts} />
-
-      <h3 className="mb-3 mt-5 text-sm font-semibold text-foreground">{sectionTitle}</h3>
-
-      <div className="space-y-3">
-        {visible.featured && renderCard(visible.featured, true)}
-        {visible.rest.map((card) => renderCard(card))}
-        {visible.featured === null && visible.rest.length === 0 && (
-          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Ingen i denne listen.
-          </p>
-        )}
+      <div className="sticky top-0 z-10 -mx-1 mb-4 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <RelationFilterChips value={filter} onChange={setFilter} counts={counts} />
       </div>
+
+      <h3 className="mb-3 text-base font-semibold text-foreground">{sectionTitle}</h3>
+
+      {empty ? (
+        <div className="rounded-2xl border border-border/60 bg-card p-6 text-center shadow-sm">
+          <p className="text-sm font-medium">Ingen som trenger deg akkurat nå.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Når mail, Slack eller Felt knyttes til en kontakt, lander det her.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visible.featured && renderCard(visible.featured, true)}
+          {visible.rest.map((card) => renderCard(card))}
+          {visible.featured === null && visible.rest.length === 0 && (
+            <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+              Ingen i denne listen.
+            </p>
+          )}
+        </div>
+      )}
 
       {filter === "all" && briefing.unresolved.length > 0 && (
         <p className="mt-4 text-xs text-muted-foreground">

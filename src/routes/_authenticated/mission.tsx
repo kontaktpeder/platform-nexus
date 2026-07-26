@@ -219,14 +219,16 @@ function GlobalMission() {
           />
         </div>
 
-        <div className="mt-10 space-y-4 border-t border-border/60 pt-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Mer kontekst
-          </p>
-          <WeeklyControlCard />
-          <CustomerFollowUps />
-          <ReviewInboxTeaser />
-        </div>
+        <details className="mt-10 rounded-2xl border border-border/60 bg-muted/20 open:pb-4">
+          <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+            Mer kontekst (ukeplan, Felt, Review)
+          </summary>
+          <div className="space-y-4 px-4 pt-1">
+            <WeeklyControlCard />
+            <CustomerFollowUps />
+            <ReviewInboxTeaser />
+          </div>
+        </details>
 
         {composeTarget && (
           <InvoiceComposeSheet
