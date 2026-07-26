@@ -71,6 +71,7 @@ export type CustomerListItem = {
   name: string;
   slug: string;
   summary: string | null;
+  entityType: "person" | "company";
   warmth: CustomerWarmth;
   ownerContext: OwnerContext;
   isFieldPlace: boolean;
@@ -85,6 +86,7 @@ export type CustomerListItem = {
   } | null;
   peopleCount: number;
   signalCount: number;
+  companyName: string | null;
 };
 
 export type CustomerPerson = {
@@ -109,6 +111,7 @@ export type CustomerDetail = {
   name: string;
   slug: string;
   summary: string | null;
+  entityType: "person" | "company";
   warmth: CustomerWarmth;
   ownerContext: OwnerContext;
   isFieldPlace: boolean;
@@ -144,12 +147,12 @@ export const listCustomers = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const todayKey = osloDateKey();
 
-    const [companiesRes, followRes, actRes, relRes, sigRes] = await Promise.all([
+    const [entitiesRes, followRes, actRes, relRes, sigRes] = await Promise.all([
       supabase
         .from("entities")
         .select("id, name, slug, summary, metadata, last_seen_at, type, owner_context")
         .eq("user_id", userId)
-        .eq("type", "company")
+        .in("type", ["company", "person"])
         .order("name"),
       supabase
         .from("field_follow_ups")
@@ -171,9 +174,14 @@ export const listCustomers = createServerFn({ method: "POST" })
         .eq("user_id", userId),
     ]);
 
-    if (companiesRes.error) throw companiesRes.error;
+    if (entitiesRes.error) throw entitiesRes.error;
 
-    const companies = (companiesRes.data ?? []).filter((c) => !ANCHOR_SLUG_SET.has(c.slug));
+    const entities = (entitiesRes.data ?? []).filter((c) => !ANCHOR_SLUG_SET.has(c.slug));
+    const companies = entities.filter((e) => e.type === "company");
+    const persons = entities.filter((e) => e.type === "person");
+    const companyIds = new Set(companies.map((c) => c.id));
+    const personIdSet = new Set(persons.map((p) => p.id));
+    const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
 
     const followByEntity = new Map<
       string,
@@ -198,32 +206,16 @@ export const listCustomers = createServerFn({ method: "POST" })
     }
 
     const peopleCount = new Map<string, number>();
-    const companyIds = new Set(companies.map((c) => c.id));
-    // Count person links: need entity types — fetch persons linked
-    const personIds = new Set<string>();
+    const personCompany = new Map<string, string>();
     const edges = relRes.data ?? [];
-    for (const e of edges) {
-      if (companyIds.has(e.from_entity_id)) personIds.add(e.to_entity_id);
-      if (companyIds.has(e.to_entity_id)) personIds.add(e.from_entity_id);
-    }
-
-    let personIdSet = new Set<string>();
-    if (personIds.size) {
-      const { data: persons } = await supabase
-        .from("entities")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("type", "person")
-        .in("id", Array.from(personIds));
-      personIdSet = new Set((persons ?? []).map((p) => p.id));
-    }
-
     for (const e of edges) {
       if (companyIds.has(e.from_entity_id) && personIdSet.has(e.to_entity_id)) {
         peopleCount.set(e.from_entity_id, (peopleCount.get(e.from_entity_id) ?? 0) + 1);
+        if (!personCompany.has(e.to_entity_id)) personCompany.set(e.to_entity_id, e.from_entity_id);
       }
       if (companyIds.has(e.to_entity_id) && personIdSet.has(e.from_entity_id)) {
         peopleCount.set(e.to_entity_id, (peopleCount.get(e.to_entity_id) ?? 0) + 1);
+        if (!personCompany.has(e.from_entity_id)) personCompany.set(e.from_entity_id, e.to_entity_id);
       }
     }
 
@@ -232,7 +224,10 @@ export const listCustomers = createServerFn({ method: "POST" })
       signalCount.set(s.entity_id, (signalCount.get(s.entity_id) ?? 0) + 1);
     }
 
-    const items: CustomerListItem[] = companies.map((c) => {
+    function toListItem(
+      c: (typeof entities)[number],
+      entityType: "person" | "company",
+    ): CustomerListItem {
       const meta = (c.metadata ?? {}) as Record<string, unknown>;
       const fu = followByEntity.get(c.id) ?? null;
       const followUp = fu
@@ -253,21 +248,29 @@ export const listCustomers = createServerFn({ method: "POST" })
         typeof meta.platform_org_slug === "string" ? meta.platform_org_slug : null,
       );
       const ownerContext = normalizeOwnerContext(c.owner_context ?? fromMeta ?? "unknown");
+      const linkedCompanyId = entityType === "person" ? personCompany.get(c.id) : undefined;
       return {
         entityId: c.id,
         name: c.name,
         slug: c.slug,
         summary: c.summary,
+        entityType,
         warmth,
         ownerContext,
         isFieldPlace: meta.field_place === true,
         lastSeenAt: c.last_seen_at,
         lastSeenLabel: c.last_seen_at ? formatOsloActivityDate(c.last_seen_at) : null,
         followUp,
-        peopleCount: peopleCount.get(c.id) ?? 0,
+        peopleCount: entityType === "company" ? (peopleCount.get(c.id) ?? 0) : 0,
         signalCount: signalCount.get(c.id) ?? 0,
+        companyName: linkedCompanyId ? (companyNameById.get(linkedCompanyId) ?? null) : null,
       };
-    });
+    }
+
+    const items: CustomerListItem[] = [
+      ...companies.map((c) => toListItem(c, "company")),
+      ...persons.map((p) => toListItem(p, "person")),
+    ];
 
     // Sort: overdue follow-ups first, then warm, waiting, cold, unknown; then name
     const warmthRank: Record<CustomerWarmth, number> = {
@@ -315,7 +318,10 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
       .eq("id", data.entityId)
       .maybeSingle();
     if (error) throw error;
-    if (!company || company.type !== "company") throw new Error("Kunde ikke funnet");
+    if (!company || (company.type !== "company" && company.type !== "person")) {
+      throw new Error("Kontakt ikke funnet");
+    }
+    const entityType = company.type as "person" | "company";
 
     const [relsRes, signalsRes, actsRes, followRes] = await Promise.all([
       supabase
@@ -440,6 +446,7 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
       name: company.name,
       slug: company.slug,
       summary: company.summary,
+      entityType,
       warmth: warmthFromMetaAndFollowUp(meta, followUp, !!latestAct),
       ownerContext: normalizeOwnerContext(company.owner_context ?? fromMeta ?? "unknown"),
       isFieldPlace: meta.field_place === true,

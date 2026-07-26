@@ -6,6 +6,7 @@ import { Building2, ChevronRight, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import { RelationAvatar } from "@/components/platform/relation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +25,7 @@ import type { OwnerContext } from "@/lib/knowledge/types";
 
 const ORG_FILTER_KEY = "mission:kontakterOrgFilter";
 const LEGACY_ORG_FILTER_KEY = "mission:kunderOrgFilter";
+type TypeFilter = "all" | "person" | "company";
 
 export const Route = createFileRoute("/_authenticated/kontakter/")({
   head: () => ({ meta: [{ title: "Kontakter — Mission" }] }),
@@ -74,6 +76,7 @@ function KontakterPage() {
   const lastWs = useResolvedLastWorkspace();
   const [q, setQ] = useState("");
   const [orgFilter, setOrgFilter] = useState<CustomerOrgFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [filterReady, setFilterReady] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -107,14 +110,17 @@ function KontakterPage() {
   const filtered = useMemo(() => {
     const byOrg =
       orgFilter === "all" ? items : items.filter((i) => i.ownerContext === orgFilter);
+    const byType =
+      typeFilter === "all" ? byOrg : byOrg.filter((i) => i.entityType === typeFilter);
     const needle = q.trim().toLowerCase();
-    if (!needle) return byOrg;
-    return byOrg.filter(
+    if (!needle) return byType;
+    return byType.filter(
       (i) =>
         i.name.toLowerCase().includes(needle) ||
-        (i.summary ?? "").toLowerCase().includes(needle),
+        (i.summary ?? "").toLowerCase().includes(needle) ||
+        (i.companyName ?? "").toLowerCase().includes(needle),
     );
-  }, [items, orgFilter, q]);
+  }, [items, orgFilter, typeFilter, q]);
 
   const createOwnerContext: OwnerContext =
     orgFilter !== "all" && orgFilter !== "unknown" ? orgFilter : "gold-of-sicily";
@@ -171,7 +177,7 @@ function KontakterPage() {
         </div>
 
         {filterReady && (
-          <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1">
             {CUSTOMER_ORG_FILTERS.map((f) => {
               const n = counts?.[f];
               const active = orgFilter === f;
@@ -193,6 +199,29 @@ function KontakterPage() {
             })}
           </div>
         )}
+
+        <div className="mb-3 flex gap-1.5">
+          {(
+            [
+              ["all", "Alle"],
+              ["person", "Personer"],
+              ["company", "Selskaper"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTypeFilter(id)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                typeFilter === id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {addOpen && (
           <div className="mb-4 rounded-2xl border border-border bg-card p-3">
@@ -267,6 +296,7 @@ function KontakterPage() {
                 params={{ entityId: c.entityId }}
                 className="flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-border bg-card p-4 active:bg-muted/60"
               >
+                <RelationAvatar name={c.name} entityType={c.entityType} size="md" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-base font-semibold leading-tight">{c.name}</p>
@@ -281,6 +311,9 @@ function KontakterPage() {
                       </span>
                     )}
                   </div>
+                  {c.companyName && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{c.companyName}</p>
+                  )}
                   {c.followUp ? (
                     <p
                       className={`mt-1 text-sm ${c.followUp.overdue ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
@@ -293,7 +326,9 @@ function KontakterPage() {
                     <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{c.summary}</p>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground/80">
-                      {c.peopleCount} personer · {c.signalCount} signaler
+                      {c.entityType === "company"
+                        ? `${c.peopleCount} personer · ${c.signalCount} signaler`
+                        : `${c.signalCount} signaler`}
                       {c.isFieldPlace ? " · Felt" : ""}
                     </p>
                   )}

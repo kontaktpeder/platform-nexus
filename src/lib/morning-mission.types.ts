@@ -1,4 +1,11 @@
 // Morning Mission v0 — client-safe types.
+import type { OwnerContext } from "@/lib/knowledge/types";
+import type {
+  RelationBriefing,
+  RelationEntityType,
+  RelationSourceKind,
+  RelationStatus,
+} from "@/lib/relation/types";
 
 export type MorningMissionPriority = "high" | "medium" | "low";
 
@@ -11,6 +18,15 @@ export type MorningMissionItem = {
   source_ids: string[];
   source_label?: string | null;
   href?: string | null;
+  /** Relation-first fields (Direction C) — optional until AI brief fills them. */
+  entity_id?: string | null;
+  entity_type?: RelationEntityType | null;
+  relation_name?: string | null;
+  relation_subtitle?: string | null;
+  relation_status?: RelationStatus | null;
+  owner_context?: OwnerContext | null;
+  source_kind?: RelationSourceKind | null;
+  image_url?: string | null;
 };
 
 export type MorningMissionNoise = {
@@ -43,6 +59,8 @@ export type MorningMissionPayload = {
   hygiene: MorningMissionHygiene[];
   weekly_summary?: string | null;
   slack_status?: SlackMissionStatus | null;
+  /** Prefer when present — relation owns Mission cards. */
+  relations?: RelationBriefing | null;
 };
 
 export type MorningMissionResponse = {

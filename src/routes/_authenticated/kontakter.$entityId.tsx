@@ -15,6 +15,11 @@ import {
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformBottomNav } from "@/components/platform/PlatformBottomNav";
+import {
+  NextStepPanel,
+  RelationAvatar,
+  OwnerContextChip,
+} from "@/components/platform/relation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -252,33 +257,50 @@ function KontaktDetailPage() {
                   </div>
                 </form>
               ) : (
-                <div className="flex flex-wrap items-start gap-2">
-                  <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">
-                    {d.name}
-                  </h1>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 shrink-0 gap-1.5 rounded-xl"
-                    onClick={() => {
-                      setNameDraft(d.name);
-                      setEditingName(true);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Endre navn
-                  </Button>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
-                  >
-                    {CUSTOMER_WARMTH_LABEL[d.warmth]}
-                  </span>
+                <div className="flex flex-wrap items-start gap-3">
+                  <RelationAvatar
+                    name={d.name}
+                    entityType={d.entityType}
+                    size="lg"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start gap-2">
+                      <h1 className="min-w-0 flex-1 text-2xl font-semibold tracking-tight">
+                        {d.name}
+                      </h1>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-10 shrink-0 gap-1.5 rounded-xl"
+                        onClick={() => {
+                          setNameDraft(d.name);
+                          setEditingName(true);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Endre navn
+                      </Button>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
+                      >
+                        {CUSTOMER_WARMTH_LABEL[d.warmth]}
+                      </span>
+                      <OwnerContextChip ownerContext={d.ownerContext} />
+                    </div>
+                  </div>
                 </div>
               )}
 
               {d.summary && (
                 <p className="mt-2 text-sm text-muted-foreground">{d.summary}</p>
+              )}
+
+              {d.followUp && (
+                <NextStepPanel
+                  className="mt-4"
+                  action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
+                />
               )}
 
               <div className="mt-3 flex flex-wrap gap-2">

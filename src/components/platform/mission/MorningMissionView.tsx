@@ -1,5 +1,5 @@
 import { Loader2, RefreshCw, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type {
   MorningMissionItem,
@@ -9,7 +9,8 @@ import type {
   MorningBriefActionOptions,
 } from "@/lib/morning-mission.types";
 import { WeeklyPlanBoard } from "@/components/platform/mission/WeeklyPlanBoard";
-import { DailyPlanSection } from "@/components/platform/mission/DailyPlanSection";
+import { RelationBriefingSection } from "@/components/platform/relation";
+import { projectPayloadToRelationBriefing } from "@/lib/relation/project-briefing";
 
 function CollapsibleSection({
   title,
@@ -41,18 +42,6 @@ function CollapsibleSection({
   );
 }
 
-function SimpleList({ items }: { items: { label: string }[] }) {
-  return (
-    <ul className="space-y-1 text-sm text-muted-foreground">
-      {items.map((item, i) => (
-        <li key={i} className="rounded-lg bg-muted/40 px-3 py-2">
-          {item.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function MorningMissionView({
   data,
   loading,
@@ -76,6 +65,34 @@ export function MorningMissionView({
   ) => void;
   onComposeInvoice?: (item: MorningMissionItem) => void;
 }) {
+  const payload: MorningMissionPayload = data?.payload ?? {
+    today: [],
+    this_week: [],
+    waiting: [],
+    closed: [],
+    noise: [],
+    hygiene: [],
+  };
+
+  const briefing = useMemo(
+    () => projectPayloadToRelationBriefing(payload),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on brief identity
+    [data?.briefDate, data?.generatedAt, data?.payload],
+  );
+
+  const itemsById = useMemo(() => {
+    const map = new Map<string, MorningMissionItem>();
+    for (const item of [
+      ...payload.today,
+      ...payload.this_week,
+      ...payload.waiting,
+      ...payload.closed,
+    ]) {
+      map.set(item.id, item);
+    }
+    return map;
+  }, [data?.briefDate, data?.generatedAt, data?.payload, payload.today, payload.this_week, payload.waiting, payload.closed]);
+
   if (loading) {
     return (
       <div className="grid place-items-center py-16">
@@ -123,15 +140,6 @@ export function MorningMissionView({
     );
   }
 
-  const payload: MorningMissionPayload = data?.payload ?? {
-    today: [],
-    this_week: [],
-    waiting: [],
-    closed: [],
-    noise: [],
-    hygiene: [],
-  };
-
   return (
     <div className="mt-2">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -171,16 +179,16 @@ export function MorningMissionView({
           slackStatus={payload.slack_status}
         />
 
-        <DailyPlanSection
-          today={payload.today}
-          waiting={payload.waiting}
+        <RelationBriefingSection
+          briefing={briefing}
+          itemsById={itemsById}
           busyItemId={busyItemId}
           onAction={onAction}
           onComposeInvoice={onComposeInvoice}
         />
       </div>
 
-      <CollapsibleSection title="Lukket / ingen handling" count={payload.closed.length}>
+      <CollapsibleSection title="Lukket i dag" count={payload.closed.length}>
         {payload.closed.map((item) => (
           <div
             key={item.id}
@@ -190,18 +198,6 @@ export function MorningMissionView({
             {item.explanation && <span> — {item.explanation}</span>}
           </div>
         ))}
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Støy" count={payload.noise.length}>
-        <SimpleList items={payload.noise.map((n) => ({ label: n.label }))} />
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Digital hygiene" count={payload.hygiene.length}>
-        <SimpleList
-          items={payload.hygiene.map((h) => ({
-            label: h.count ? `${h.label} (${h.count})` : h.label,
-          }))}
-        />
       </CollapsibleSection>
     </div>
   );
