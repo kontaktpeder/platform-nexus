@@ -183,7 +183,10 @@ function GlobalMission() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <GlobalTopBar title="Dagens plan" subtitle="Neste handling på tvers av alt" />
+      <GlobalTopBar
+        title="Mission"
+        subtitle="Husk, følg opp og bygg sterke relasjoner"
+      />
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-4 pb-28 sm:px-8 sm:py-8">
         <GlobalMissionHeader
           firstName={firstName}
@@ -194,10 +197,6 @@ function GlobalMission() {
             document.getElementById("morning-today")?.scrollIntoView({ behavior: "smooth" });
           }}
         />
-
-        <WeeklyControlCard />
-        <CustomerFollowUps />
-        <ReviewInboxTeaser />
 
         <div id="morning-today">
           <MorningMissionView
@@ -218,6 +217,15 @@ function GlobalMission() {
               });
             }}
           />
+        </div>
+
+        <div className="mt-10 space-y-4 border-t border-border/60 pt-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Mer kontekst
+          </p>
+          <WeeklyControlCard />
+          <CustomerFollowUps />
+          <ReviewInboxTeaser />
         </div>
 
         {composeTarget && (

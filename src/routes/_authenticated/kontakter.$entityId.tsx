@@ -19,6 +19,7 @@ import {
   NextStepPanel,
   RelationAvatar,
   OwnerContextChip,
+  PlanFollowUpPanel,
 } from "@/components/platform/relation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,8 @@ import {
   type CustomerListItem,
   type CustomerWarmth,
 } from "@/lib/customers.functions";
+import { scheduleEntityFollowUp } from "@/lib/field.functions";
+import type { FollowUpPreset } from "@/lib/field/field.types";
 import { rejectWrongEntity } from "@/lib/known-identities.functions";
 import { RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
 
@@ -83,6 +86,7 @@ function KontaktDetailPage() {
   const runMerge = useServerFn(mergeCustomers);
   const runReject = useServerFn(rejectWrongEntity);
   const runEnsureField = useServerFn(ensureFieldPlace);
+  const runScheduleFollowUp = useServerFn(scheduleEntityFollowUp);
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -179,6 +183,26 @@ function KontaktDetailPage() {
       await qc.invalidateQueries({ queryKey: ["customers"] });
       await qc.invalidateQueries({ queryKey: ["field-board"] });
     },
+  });
+
+  const scheduleMut = useMutation({
+    mutationFn: (input: { action: string; preset: FollowUpPreset; pickDate?: string }) =>
+      runScheduleFollowUp({
+        data: {
+          entityId,
+          action: input.action,
+          preset: input.preset,
+          followUpDate: input.pickDate ?? null,
+        },
+      }),
+    onSuccess: async (res) => {
+      toast.success(`Oppfølging planlagt ${res.dueLabel}`);
+      await qc.invalidateQueries({ queryKey: ["customer", entityId] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+      await qc.invalidateQueries({ queryKey: ["field-board"] });
+      await qc.invalidateQueries({ queryKey: ["morning-mission"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const d = detailQ.data;
@@ -298,13 +322,25 @@ function KontaktDetailPage() {
               )}
 
               {d.followUp && (
-                <NextStepPanel
-                  className="mt-4"
-                  action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
-                />
-              )}
+              <NextStepPanel
+                className="mt-4"
+                action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
+              />
+            )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
+            <PlanFollowUpPanel
+              className="mt-4"
+              defaultAction={d.followUp?.action ?? ""}
+              existingLabel={
+                d.followUp
+                  ? `${d.followUp.overdue ? "Forsinket · " : ""}${d.followUp.dueLabel}`
+                  : null
+              }
+              busy={scheduleMut.isPending}
+              onSchedule={(input) => scheduleMut.mutate(input)}
+            />
+
+            <div className="mt-3 flex flex-wrap gap-2">
                 {(["cold", "waiting", "warm"] as const).map((w) => (
                   <button
                     key={w}
@@ -345,24 +381,6 @@ function KontaktDetailPage() {
                 </div>
               </div>
             </header>
-
-            {d.followUp && (
-              <section className="mb-5 rounded-2xl border border-border bg-muted/40 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Neste oppfølging
-                </p>
-                <p
-                  className={`mt-1 text-base font-semibold ${d.followUp.overdue ? "text-amber-700 dark:text-amber-400" : ""}`}
-                >
-                  {d.followUp.overdue ? "Følg opp " : ""}
-                  {d.followUp.dueLabel}
-                </p>
-                <p className="mt-0.5 text-sm">{d.followUp.action}</p>
-                <Button className="mt-3 h-11 w-full" variant="outline" asChild>
-                  <Link to="/field">Logg i Felt</Link>
-                </Button>
-              </section>
-            )}
 
             <section className="mb-6">
               <div className="mb-2 flex items-center gap-2">

@@ -1,5 +1,5 @@
-import { Loader2, RefreshCw, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import type {
   MorningMissionItem,
@@ -8,39 +8,8 @@ import type {
   MorningBriefItemAction,
   MorningBriefActionOptions,
 } from "@/lib/morning-mission.types";
-import { WeeklyPlanBoard } from "@/components/platform/mission/WeeklyPlanBoard";
 import { RelationBriefingSection } from "@/components/platform/relation";
 import { projectPayloadToRelationBriefing } from "@/lib/relation/project-briefing";
-
-function CollapsibleSection({
-  title,
-  count,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  count: number;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (count === 0) return null;
-  return (
-    <section className="mt-4">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-lg px-1 py-2 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <span>
-          {title} ({count})
-        </span>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-      {open && <div className="mt-1 space-y-2">{children}</div>}
-    </section>
-  );
-}
 
 export function MorningMissionView({
   data,
@@ -91,7 +60,15 @@ export function MorningMissionView({
       map.set(item.id, item);
     }
     return map;
-  }, [data?.briefDate, data?.generatedAt, data?.payload, payload.today, payload.this_week, payload.waiting, payload.closed]);
+  }, [
+    data?.briefDate,
+    data?.generatedAt,
+    data?.payload,
+    payload.today,
+    payload.this_week,
+    payload.waiting,
+    payload.closed,
+  ]);
 
   if (loading) {
     return (
@@ -172,33 +149,14 @@ export function MorningMissionView({
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
-        <WeeklyPlanBoard
-          summary={payload.weekly_summary}
-          items={payload.this_week}
-          slackStatus={payload.slack_status}
-        />
-
-        <RelationBriefingSection
-          briefing={briefing}
-          itemsById={itemsById}
-          busyItemId={busyItemId}
-          onAction={onAction}
-          onComposeInvoice={onComposeInvoice}
-        />
-      </div>
-
-      <CollapsibleSection title="Lukket i dag" count={payload.closed.length}>
-        {payload.closed.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-lg bg-muted/30 px-3 py-2 text-sm text-muted-foreground"
-          >
-            <span className="font-medium text-foreground">{item.title}</span>
-            {item.explanation && <span> — {item.explanation}</span>}
-          </div>
-        ))}
-      </CollapsibleSection>
+      <RelationBriefingSection
+        briefing={briefing}
+        closedItems={payload.closed}
+        itemsById={itemsById}
+        busyItemId={busyItemId}
+        onAction={onAction}
+        onComposeInvoice={onComposeInvoice}
+      />
     </div>
   );
 }

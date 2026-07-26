@@ -34,12 +34,12 @@ export function GlobalMissionHeader({
   const name = firstName ? firstName : "der";
   const line1 = loadFailed
     ? "Jeg klarte ikke å lese signalene ennå."
-    : "Jeg tok meg av sorteringen.";
+    : "Mission handler om mennesker.";
   const line2 = loadFailed
     ? "Briefen lastet ikke — sjekk oppsettet under før du stoler på det som vises."
     : count === 0
-      ? "Ingenting trenger deg akkurat nå."
-      : `${count} ${count === 1 ? "ting trenger" : "ting trenger"} deg i dag.`;
+      ? "Ingen som trenger deg akkurat nå."
+      : `${count} ${count === 1 ? "relasjon trenger" : "relasjoner trenger"} deg i dag.`;
 
   return (
     <section className="pt-2 pb-8 sm:pt-6 sm:pb-10">

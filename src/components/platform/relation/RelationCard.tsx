@@ -6,6 +6,12 @@ import { RelationStatusBadge } from "@/components/platform/relation/RelationStat
 import { RELATION_SOURCE_LABEL, type RelationCardModel } from "@/lib/relation/types";
 import { cn } from "@/lib/utils";
 
+const PRIORITY_LABEL: Record<RelationCardModel["priority"], string> = {
+  high: "Høy prioritet",
+  medium: "Medium",
+  low: "Lav",
+};
+
 export function RelationCard({
   card,
   featured = false,
@@ -33,11 +39,23 @@ export function RelationCard({
         className,
       )}
     >
-      {featured && (
-        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-          Start her
-        </p>
-      )}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {featured && (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+            Start her
+          </p>
+        )}
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            card.priority === "high"
+              ? "bg-primary/15 text-primary"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {PRIORITY_LABEL[card.priority]}
+        </span>
+      </div>
 
       <div className="flex items-start gap-3">
         <RelationAvatar
@@ -94,12 +112,12 @@ export function RelationCard({
         {card.entityId ? (
           <Button variant="outline" className="h-11 flex-1 rounded-xl text-sm" asChild>
             <Link to="/kontakter/$entityId" params={{ entityId: card.entityId }}>
-              Se detalj
+              Se detaljer
             </Link>
           </Button>
         ) : card.href ? (
           <Button variant="outline" className="h-11 flex-1 rounded-xl text-sm" asChild>
-            <a href={card.href}>Se detalj</a>
+            <a href={card.href}>Se detaljer</a>
           </Button>
         ) : null}
         {onDone && (

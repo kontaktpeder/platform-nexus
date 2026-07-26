@@ -464,6 +464,83 @@ export const cancelFieldFollowUp = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Schedule / reschedule a follow-up on a contact without logging a Felt visit.
+ * Cancels other open follow-ups for the entity.
+ */
+export const scheduleEntityFollowUp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      entityId: string;
+      action: string;
+      preset: FollowUpPreset;
+      followUpDate?: string | null;
+      conditionType?: FollowUpCondition;
+    }) => input,
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (!data.entityId) throw new Error("entityId mangler");
+    const action = String(data.action ?? "").trim().slice(0, 300);
+    if (!action) throw new Error("Skriv hva oppfølgingen gjelder");
+
+    const preset = assertPreset(data.preset);
+    if (preset === "none") throw new Error("Velg når du skal følge opp");
+    const dueAt = resolveDueAt(preset, data.followUpDate);
+    if (!dueAt) throw new Error("Dato mangler");
+    const condition = data.conditionType ?? "always";
+
+    const { data: entity, error: entErr } = await supabase
+      .from("entities")
+      .select("id, metadata")
+      .eq("id", data.entityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (entErr) throw entErr;
+    if (!entity) throw new Error("Kontakt ikke funnet");
+
+    await supabase
+      .from("field_follow_ups")
+      .update({ status: "cancelled" })
+      .eq("user_id", userId)
+      .eq("entity_id", data.entityId)
+      .eq("status", "open");
+
+    const { data: fu, error: fuErr } = await supabase
+      .from("field_follow_ups")
+      .insert({
+        user_id: userId,
+        entity_id: data.entityId,
+        action,
+        due_at: dueAt,
+        condition_type: condition,
+        related_activity_id: null,
+        status: "open",
+      })
+      .select(
+        "id, entity_id, action, due_at, condition_type, related_activity_id, status, created_at, updated_at",
+      )
+      .single();
+    if (fuErr) throw fuErr;
+
+    const meta = {
+      ...((entity.metadata ?? {}) as Record<string, unknown>),
+      relationship_warmth: "waiting",
+      warmth: "waiting",
+    };
+    await supabase
+      .from("entities")
+      .update({ metadata: meta as never })
+      .eq("id", data.entityId)
+      .eq("user_id", userId);
+
+    return normalize({
+      followUp: fu as FieldFollowUp,
+      dueLabel: formatOsloDayLabel(dueAt),
+    });
+  });
+
 /** One-shot import of venue names from the old Notes list. */
 const NOTE_PLACE_SEED = [
   "Hytta",

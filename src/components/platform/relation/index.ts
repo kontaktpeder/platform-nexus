@@ -8,3 +8,5 @@ export { TimelineEvent } from "./TimelineEvent";
 export { NextStepPanel } from "./NextStepPanel";
 export { RelationQuickActions } from "./RelationQuickActions";
 export { RelationBriefingSection } from "./RelationBriefingSection";
+export { RelationFilterChips, type RelationListFilter } from "./RelationFilterChips";
+export { PlanFollowUpPanel } from "./PlanFollowUpPanel";

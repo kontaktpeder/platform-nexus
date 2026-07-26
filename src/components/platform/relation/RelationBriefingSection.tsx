@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { RelationCard } from "@/components/platform/relation";
+import { RelationCard } from "@/components/platform/relation/RelationCard";
+import {
+  RelationFilterChips,
+  type RelationListFilter,
+} from "@/components/platform/relation/RelationFilterChips";
 import { GmailReplyDrawer } from "@/components/platform/mission/GmailReplyDrawer";
 import { parseGmailMessageIdFromKey } from "@/components/platform/mission/useGmailMessageId";
 import { isInvoiceMissionItem } from "@/lib/mission-invoice-action";
@@ -11,41 +14,6 @@ import type {
   MorningBriefActionOptions,
   MorningMissionItem,
 } from "@/lib/morning-mission.types";
-
-function Section({
-  title,
-  count,
-  defaultOpen = true,
-  children,
-}: {
-  title: string;
-  count: number;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  if (count === 0) return null;
-  return (
-    <section className="mt-5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="mb-2 flex w-full items-center justify-between rounded-lg px-1 py-1.5 text-left"
-      >
-        <h2 className="text-sm font-semibold text-foreground">
-          {title}{" "}
-          <span className="font-normal text-muted-foreground">({count})</span>
-        </h2>
-        {open ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
-      </button>
-      {open && <div className="space-y-3">{children}</div>}
-    </section>
-  );
-}
 
 function gmailMessageIdFromItem(item: MorningMissionItem | undefined): string | null {
   if (!item) return null;
@@ -68,14 +36,36 @@ function primaryLabelFor(card: RelationCardModel, item?: MorningMissionItem): st
   return "Gå til handling";
 }
 
+function closedToCards(items: MorningMissionItem[]): RelationCardModel[] {
+  return items.map((item) => ({
+    id: item.id,
+    entityId: item.entity_id ?? null,
+    entityType: item.entity_type ?? null,
+    name: item.relation_name ?? item.title,
+    subtitle: item.relation_subtitle ?? null,
+    whyNow: item.explanation,
+    nextAction: item.recommended_action,
+    status: "quiet" as const,
+    ownerContext: item.owner_context ?? null,
+    sourceKind: item.source_kind ?? null,
+    sourceLabel: item.source_label ?? null,
+    imageUrl: item.image_url ?? null,
+    href: item.href ?? (item.entity_id ? `/kontakter/${item.entity_id}` : null),
+    priority: item.priority,
+    briefItemId: item.id,
+  }));
+}
+
 export function RelationBriefingSection({
   briefing,
+  closedItems = [],
   itemsById,
   busyItemId,
   onAction,
   onComposeInvoice,
 }: {
   briefing: RelationBriefing;
+  closedItems?: MorningMissionItem[];
   itemsById: Map<string, MorningMissionItem>;
   busyItemId: string | null;
   onAction: (
@@ -86,6 +76,7 @@ export function RelationBriefingSection({
   onComposeInvoice?: (item: MorningMissionItem) => void;
 }) {
   const navigate = useNavigate();
+  const [filter, setFilter] = useState<RelationListFilter>("all");
   const [reply, setReply] = useState<{
     messageId: string;
     itemId: string;
@@ -94,6 +85,52 @@ export function RelationBriefingSection({
     sender?: string;
     snippet?: string;
   } | null>(null);
+
+  const doneCards = useMemo(() => closedToCards(closedItems), [closedItems]);
+
+  const activeCards = useMemo(() => {
+    const list: RelationCardModel[] = [];
+    if (briefing.startHere) list.push(briefing.startHere);
+    list.push(...briefing.needsFollowUp, ...briefing.upcoming, ...briefing.unresolved);
+    return list;
+  }, [briefing]);
+
+  const quietCards = useMemo(
+    () => [...briefing.system, ...activeCards.filter((c) => c.status === "quiet")],
+    [briefing.system, activeCards],
+  );
+
+  const counts = useMemo(() => {
+    const waiting = activeCards.filter((c) => c.status === "waiting_on_me").length;
+    const upcoming = activeCards.filter(
+      (c) => c.status === "upcoming" || c.status === "waiting_on_them",
+    ).length;
+    return {
+      all: activeCards.length,
+      waiting_on_me: waiting,
+      upcoming,
+      quiet: quietCards.length,
+      done: doneCards.length,
+    } satisfies Partial<Record<RelationListFilter, number>>;
+  }, [activeCards, quietCards, doneCards]);
+
+  const visible = useMemo(() => {
+    if (filter === "done") return { featured: null as RelationCardModel | null, rest: doneCards };
+    if (filter === "quiet") return { featured: null, rest: quietCards };
+    if (filter === "waiting_on_me") {
+      const rest = activeCards.filter((c) => c.status === "waiting_on_me");
+      return { featured: null, rest };
+    }
+    if (filter === "upcoming") {
+      const rest = activeCards.filter(
+        (c) => c.status === "upcoming" || c.status === "waiting_on_them",
+      );
+      return { featured: null, rest };
+    }
+    // all — keep Start her featured when present
+    const rest = activeCards.filter((c) => c.id !== briefing.startHere?.id);
+    return { featured: briefing.startHere, rest };
+  }, [filter, activeCards, quietCards, doneCards, briefing.startHere]);
 
   function itemFor(card: RelationCardModel): MorningMissionItem | undefined {
     return itemsById.get(card.briefItemId ?? card.id);
@@ -166,24 +203,25 @@ export function RelationBriefingSection({
   function renderCard(card: RelationCardModel, featured = false) {
     const item = itemFor(card);
     const busy = isBusy(card);
+    const canAct = filter !== "done" && !!item && !busy;
     return (
       <RelationCard
         key={card.id}
         card={card}
         featured={featured}
         primaryLabel={primaryLabelFor(card, item)}
-        onPrimary={busy ? undefined : () => handlePrimary(card)}
-        onDone={item && !busy ? () => handleDone(card) : undefined}
+        onPrimary={canAct ? () => handlePrimary(card) : undefined}
+        onDone={canAct ? () => handleDone(card) : undefined}
       />
     );
   }
 
   const empty =
-    !briefing.startHere &&
-    briefing.needsFollowUp.length === 0 &&
-    briefing.upcoming.length === 0 &&
-    briefing.unresolved.length === 0 &&
-    briefing.system.length === 0;
+    !visible.featured &&
+    visible.rest.length === 0 &&
+    filter === "all" &&
+    activeCards.length === 0 &&
+    quietCards.length === 0;
 
   if (empty) {
     return (
@@ -196,9 +234,20 @@ export function RelationBriefingSection({
     );
   }
 
+  const sectionTitle =
+    filter === "all"
+      ? "Viktigste relasjoner i dag"
+      : filter === "waiting_on_me"
+        ? "Venter på meg"
+        : filter === "upcoming"
+          ? "Kommende"
+          : filter === "quiet"
+            ? "Ingen aktivitet"
+            : "Fullført i dag";
+
   return (
     <div className="min-w-0" aria-label="Relasjonsbrief">
-      <header className="mb-4">
+      <header className="mb-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Hvem trenger deg
         </h2>
@@ -207,25 +256,26 @@ export function RelationBriefingSection({
         </p>
       </header>
 
-      {briefing.startHere && renderCard(briefing.startHere, true)}
+      <RelationFilterChips value={filter} onChange={setFilter} counts={counts} />
 
-      <Section title="Trenger oppfølging" count={briefing.needsFollowUp.length}>
-        {briefing.needsFollowUp.map((card) => renderCard(card))}
-      </Section>
+      <h3 className="mb-3 mt-5 text-sm font-semibold text-foreground">{sectionTitle}</h3>
 
-      <Section title="Kommende" count={briefing.upcoming.length} defaultOpen={false}>
-        {briefing.upcoming.map((card) => renderCard(card))}
-      </Section>
+      <div className="space-y-3">
+        {visible.featured && renderCard(visible.featured, true)}
+        {visible.rest.map((card) => renderCard(card))}
+        {visible.featured === null && visible.rest.length === 0 && (
+          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            Ingen i denne listen.
+          </p>
+        )}
+      </div>
 
-      <Section title="Uavklart" count={briefing.unresolved.length} defaultOpen={false}>
-        {briefing.unresolved.map((card) => renderCard(card))}
-      </Section>
-
-      <Section title="System" count={briefing.system.length} defaultOpen={false}>
-        {briefing.system.map((card) => (
-          <RelationCard key={card.id} card={card} />
-        ))}
-      </Section>
+      {filter === "all" && briefing.unresolved.length > 0 && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          {briefing.unresolved.length} uavklart
+          {briefing.unresolved.length === 1 ? "" : "e"} — bruk filter eller Review.
+        </p>
+      )}
 
       {reply && (
         <GmailReplyDrawer
