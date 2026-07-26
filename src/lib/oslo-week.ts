@@ -1,24 +1,45 @@
 /** Calendar helpers in Europe/Oslo. */
 
+/** Oslo Y-M-D parts for a given instant. */
+function osloYmd(date: Date): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  return {
+    y: Number(parts.find((p) => p.type === "year")?.value),
+    m: Number(parts.find((p) => p.type === "month")?.value),
+    d: Number(parts.find((p) => p.type === "day")?.value),
+  };
+}
+
+/**
+ * ISO-8601 week number + week-year for an Oslo calendar date.
+ * Do NOT use Intl `week: "numeric"` — many runtimes ignore it and return
+ * a date string like "7/26/2026", which parseInt turns into 7.
+ */
+function osloIsoWeek(date = new Date()): { weekYear: number; week: number } {
+  const { y, m, d } = osloYmd(date);
+  // Noon UTC on that Oslo calendar day — stable weekday for ISO math.
+  const utc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  // ISO: week starts Monday; week 1 is the week with Jan 4 / first Thursday.
+  const day = utc.getUTCDay() || 7; // Mon=1 … Sun=7
+  utc.setUTCDate(utc.getUTCDate() + 4 - day); // Thursday of this ISO week
+  const weekYear = utc.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(weekYear, 0, 1));
+  const week = Math.ceil(((utc.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return { weekYear, week };
+}
+
 export function osloWeekNumber(date = new Date()): number {
-  return parseInt(
-    new Intl.DateTimeFormat("en-US", {
-      week: "numeric",
-      timeZone: "Europe/Oslo",
-    }).format(date),
-    10,
-  );
+  return osloIsoWeek(date).week;
 }
 
 export function osloWeekKey(date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Oslo",
-    year: "numeric",
-    week: "numeric",
-  }).formatToParts(date);
-  const year = parts.find((p) => p.type === "year")?.value ?? "0000";
-  const week = parts.find((p) => p.type === "week")?.value ?? "0";
-  return `${year}-W${week}`;
+  const { weekYear, week } = osloIsoWeek(date);
+  return `${weekYear}-W${week}`;
 }
 
 export function isSameOsloWeek(isoDate: string | null, ref = new Date()): boolean {
