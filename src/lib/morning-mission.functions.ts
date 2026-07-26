@@ -122,11 +122,16 @@ async function buildMorningMission(
   const { signals: allSignals, slackStatus } = await gatherMorningSignals({
     workspaces,
     userId,
-    forceSlack: true,
+    forceSlack: false,
   });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
-  const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
+  const { forAi, noiseSignals } = prefilterSignals({
+    signals: allSignals,
+    userEmail,
+    actionStates,
+    hints,
+  });
   const {
     loadRelationEntityIndex,
     attachRelationsToPayload,
@@ -140,7 +145,15 @@ async function buildMorningMission(
     slackStatus,
     contacts: entityIndex.catalog,
   });
-  const withRelations = attachRelationsToPayload(payload, forAi, entityIndex);
+  const noiseExtra = noiseSignals.map((s) => ({
+    label: `${s.from}: ${s.subject}`,
+    source_ids: [s.id],
+  }));
+  const withNoise = {
+    ...payload,
+    noise: [...payload.noise, ...noiseExtra].slice(0, 40),
+  };
+  const withRelations = attachRelationsToPayload(withNoise, forAi, entityIndex);
   const sourceSignalIds = forAi.map((s) => s.id);
   return { payload: { ...withRelations, slack_status: slackStatus }, sourceSignalIds };
 }

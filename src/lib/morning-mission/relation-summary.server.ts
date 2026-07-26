@@ -29,12 +29,21 @@ function normalizeForCompare(text: string): string {
     .trim();
 }
 
+/** Weak template we used to dump — not trust-worthy. */
+export function looksLikeWeakTemplate(explanation: string): boolean {
+  const exp = normalizeForCompare(explanation);
+  if (/om «.+» — trenger sannsynligvis et svar/.test(exp)) return true;
+  if (/om «.+» — vurder om/.test(exp)) return true;
+  if (/oppfølging knyttet til «/.test(exp)) return true;
+  if (/situasjon knyttet til «/.test(exp)) return true;
+  return false;
+}
+
 /** True when card text is (or is mostly) a raw signal excerpt. */
 export function looksLikeRawSnippet(explanation: string, signals: MissionSignal[]): boolean {
   const exp = normalizeForCompare(explanation);
   if (!exp || exp.length < 12) return false;
 
-  // Mail-body heuristics even without linked signals (stale cache).
   if (/^(hi|hei|hello|hallo|dear|hej)\b/.test(exp) && exp.length > 90) return true;
   if (/\bwrote:\s/.test(exp) && exp.length > 80) return true;
   if (exp.includes("-----original message-----")) return true;
@@ -54,17 +63,19 @@ export function looksLikeRawSnippet(explanation: string, signals: MissionSignal[
     ) {
       return true;
     }
+    // Explanation is basically just the subject wrapped
+    const subj = normalizeForCompare(s.subject ?? "");
+    if (subj.length > 20 && exp.includes(subj) && exp.length < subj.length + 60) return true;
   }
   return false;
 }
 
 /**
- * Deterministic relation summary for a signal — safe for Mission cards when AI is down.
- * Never returns the raw snippet.
+ * Intent summary when AI is unavailable — never paste subject as the story.
  */
 export function summarizeSignalForCard(signal: MissionSignal): string {
   const who = displayNameFromFrom(signal.from);
-  const topic = shortSubject(signal.subject);
+  const subj = signal.subject.toLowerCase();
 
   if (signal.tags.includes("delivery_failure")) {
     const recipient = signal.snippet.match(/[\w.+-]+@[\w.-]+\.\w+/)?.[0];
@@ -74,7 +85,7 @@ export function summarizeSignalForCard(signal: MissionSignal): string {
   }
 
   if (signal.tags.includes("auto_reply")) {
-    return `${who} sendte automatisk svar — de har registrert henvendelsen, men det er ikke et personlig svar.`;
+    return `${who} sendte automatisk svar — ikke et personlig svar ennå.`;
   }
 
   if (signal.tags.includes("unpaid_invoice") || signal.source === "finance") {
@@ -83,22 +94,34 @@ export function summarizeSignalForCard(signal: MissionSignal): string {
   }
 
   if (signal.source === "slack") {
-    return `${who} i Slack om «${topic}» — vurder om det hører til ukeplanen eller krever svar.`;
+    return `Slack-tråd med ${who} som kan trenge din input.`;
   }
 
   if (signal.source === "work") {
-    return `Work-signal om «${topic}» — sjekk om noe mangler eller haster.`;
+    return "Work-varsel som kan kreve handling.";
+  }
+
+  if (/sign-?in|login|sikkerhetsvarsel|security alert/.test(subj)) {
+    return `Sikkerhetsvarsel fra ${who} — bekreft om det var deg.`;
+  }
+  if (/invoice|faktura|payment|betaling/.test(subj)) {
+    return `Betaling/faktura knyttet til ${who}.`;
+  }
+  if (/offer|tilbud|quote|pris/.test(subj)) {
+    return `${who} har noe om tilbud/pris som venter på deg.`;
+  }
+  if (/meeting|møte|demo|call/.test(subj)) {
+    return `${who} om møte/demo — avklar tid eller svar.`;
+  }
+  if (/leveranse|delivery|order|ordre/.test(subj)) {
+    return `${who} om leveranse/ordre — trenger oppfølging.`;
   }
 
   if (signal.meta?.is_sent === true) {
-    return `Du skrev til ${who} om «${topic}» — avklar om du venter på svar.`;
+    return `Du har skrevet til ${who} — avklar om du venter på svar.`;
   }
 
-  if (signal.tags.includes("unread") || signal.source === "gmail") {
-    return `${who} om «${topic}» — trenger sannsynligvis et svar eller en avgjørelse.`;
-  }
-
-  return `${who}: situasjon knyttet til «${topic}».`;
+  return `${who} har tatt kontakt — les og avgjør neste steg.`;
 }
 
 export function summarizeItemFromSignals(
@@ -109,13 +132,12 @@ export function summarizeItemFromSignals(
     .map((id) => signals.find((s) => s.id === id))
     .filter(Boolean) as MissionSignal[];
   if (linked[0]) return summarizeSignalForCard(linked[0]);
-  if (item.title.trim()) {
-    return `Oppfølging knyttet til «${shortSubject(item.title)}».`;
-  }
+  const name = item.relation_name?.trim() || item.title.trim();
+  if (name) return `${name} trenger din oppmerksomhet — åpne for detaljer.`;
   return "Noe trenger din oppmerksomhet — åpne for detaljer.";
 }
 
-/** Rewrite explanations that dump raw snippets onto the relation card. */
+/** Rewrite explanations that dump raw snippets or weak subject-templates onto the card. */
 export function sanitizePayloadExplanations(
   payload: MorningMissionPayload,
   signals: MissionSignal[],
@@ -126,7 +148,11 @@ export function sanitizePayloadExplanations(
         .map((id) => signals.find((s) => s.id === id))
         .filter(Boolean) as MissionSignal[];
       const exp = (item.explanation ?? "").trim();
-      if (!exp || looksLikeRawSnippet(exp, linked.length ? linked : signals)) {
+      const bad =
+        !exp ||
+        looksLikeWeakTemplate(exp) ||
+        looksLikeRawSnippet(exp, linked.length ? linked : signals);
+      if (bad) {
         return { ...item, explanation: summarizeItemFromSignals(item, signals) };
       }
       return item;

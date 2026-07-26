@@ -18,11 +18,7 @@ import type { MorningBriefItemAction, MorningBriefActionOptions, MorningMissionI
 import { InvoiceComposeSheet } from "@/components/platform/mission/InvoiceComposeSheet";
 import { parseInvoiceFromMissionItem } from "@/lib/mission-invoice-action";
 import { useAuth } from "@/hooks/useAuth";
-import { syncPlatformContacts } from "@/lib/contact-sync.functions";
-import {
-  setLastContactSyncAt,
-  useMissionContactSync,
-} from "@/lib/mission-contact-sync.hooks";
+import { useMissionContactSync } from "@/lib/mission-contact-sync.hooks";
 import { listCustomers, type CustomerListItem } from "@/lib/customers.functions";
 import { WeeklyControlCard } from "@/components/platform/mission/WeeklyControlCard";
 
@@ -57,7 +53,6 @@ function GlobalMission() {
   const queryClient = useQueryClient();
 
   const fetchMorning = useServerFn(getMorningMission);
-  const runContactSync = useServerFn(syncPlatformContacts);
   const query = useQuery({
     queryKey: ["morning-mission"],
     queryFn: () => fetchMorning({ data: {} }),
@@ -104,13 +99,10 @@ function GlobalMission() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      // Fresh contacts first (no AI parse), then rebuild brief.
-      await runContactSync({ data: { max: 800, force: true } });
-      setLastContactSyncAt();
+      // Brief only — contact sync runs in background on Mission open.
       await fetchMorning({ data: { force: true } });
       await queryClient.invalidateQueries({ queryKey: ["morning-mission"] });
-      await queryClient.invalidateQueries({ queryKey: ["customers"] });
-      toast("Brief + kontakter oppdatert");
+      toast("Brief oppdatert");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke oppdatere");
     } finally {

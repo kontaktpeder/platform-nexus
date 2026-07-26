@@ -43,15 +43,27 @@ function isDismissedSignal(id: string, states: MissionActionState[]): boolean {
   return s.status === "dismissed" || s.status === "handled_locally";
 }
 
+/** Product mail / security / newsletters — not relationship follow-ups. */
+export function isSystemNoiseSignal(signal: MissionSignal): boolean {
+  if (signal.source !== "gmail") return false;
+  if (signal.tags.includes("delivery_failure")) return false;
+  if (signal.tags.includes("unpaid_invoice")) return false;
+  if (signal.tags.includes("system_noise")) return true;
+  if (signal.tags.includes("bulk_mail")) return true;
+  if (signal.tags.includes("has_unsubscribe")) return true;
+  return false;
+}
+
 export function prefilterSignals(input: {
   signals: MissionSignal[];
   userEmail: string | null;
   actionStates: MissionActionState[];
   hints?: MissionHint[];
-}): { forAi: MissionSignal[]; dropped: string[] } {
+}): { forAi: MissionSignal[]; dropped: string[]; noiseSignals: MissionSignal[] } {
   const seen = new Set<string>();
   const dropped: string[] = [];
   const forAi: MissionSignal[] = [];
+  const noiseSignals: MissionSignal[] = [];
 
   for (const s of input.signals) {
     if (seen.has(s.id)) {
@@ -67,6 +79,7 @@ export function prefilterSignals(input: {
 
     if (isOwnNoiseMail(s, input.userEmail)) {
       dropped.push(s.id);
+      noiseSignals.push(s);
       continue;
     }
 
@@ -75,8 +88,14 @@ export function prefilterSignals(input: {
       continue;
     }
 
+    if (isSystemNoiseSignal(s)) {
+      dropped.push(s.id);
+      noiseSignals.push(s);
+      continue;
+    }
+
     forAi.push(s);
   }
 
-  return { forAi, dropped };
+  return { forAi, dropped, noiseSignals };
 }

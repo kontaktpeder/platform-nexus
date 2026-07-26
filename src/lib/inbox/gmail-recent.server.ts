@@ -53,7 +53,9 @@ function detectTags(input: {
 }): string[] {
   const tags: string[] = [];
   const fromLower = input.from.toLowerCase();
+  const emailLower = (input.fromEmail ?? "").toLowerCase();
   const subjectLower = input.subject.toLowerCase();
+  const blob = `${fromLower} ${emailLower} ${subjectLower}`;
 
   if (
     fromLower.includes("mailer-daemon") ||
@@ -79,6 +81,38 @@ function detectTags(input: {
   const precedence = headerValue(input.headers, "Precedence").toLowerCase();
   if (precedence === "bulk" || precedence === "list") {
     tags.push("bulk_mail");
+  }
+
+  // Product / security / noreply — not relationship follow-ups.
+  const systemPatterns = [
+    /\bno-?reply@/i,
+    /\bnoreply@/i,
+    /\bnotifications?@/i,
+    /\bsecurity@/i,
+    /\baccounts\.google\.com\b/i,
+    /\bgoogle\.com\b.*\b(sikkerhetsvarsel|security alert|verify|confirmation|bekreftet)\b/i,
+    /\bsikkerhetsvarsel\b/i,
+    /\bsecurity alert\b/i,
+    /\bnew sign-?in\b/i,
+    /\bsign-?in detected\b/i,
+    /\bverify your (email|account|identity)\b/i,
+    /\bpassword reset\b/i,
+    /\btwo-?factor\b/i,
+    /\b2fa\b/i,
+    /\blovable found an issue\b/i,
+    /\bvercel\.com\b/i,
+    /\bgithub\.com\b.*\b(notification|deploy)\b/i,
+    /\bstripe\.com\b/i,
+    /\bnotion\.so\b/i,
+    /\bslack\.com\b.*\b(notification|confirm)\b/i,
+    /\bhusk å akseptere\b/i,
+    /\bstudieplass\b/i,
+    /\bnyhetsbrev\b/i,
+    /\bnewsletter\b/i,
+    /\bunsubscribe\b/i,
+  ];
+  if (systemPatterns.some((re) => re.test(blob))) {
+    tags.push("system_noise");
   }
 
   if (input.labels.includes("SENT")) tags.push("sent");

@@ -130,21 +130,21 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
   const noise: MorningMissionPayload["noise"] = [];
 
   for (const s of signals) {
+    if (s.tags.includes("system_noise") || s.tags.includes("bulk_mail") || s.tags.includes("has_unsubscribe")) {
+      noise.push({ label: `${s.from}: ${s.subject}`, source_ids: [s.id] });
+      continue;
+    }
     if (s.tags.includes("auto_reply")) {
       waiting.push({
         id: `fallback:${s.id}`,
-        title: s.subject,
-        explanation: "Automatisk svar — sannsynligvis venter på oppfølging.",
+        title: displayNameOrSubject(s),
+        explanation: summarizeSignalForCard(s),
         recommended_action: "Ingen handling nå.",
         priority: "low",
         source_ids: [s.id],
         source_label: s.from,
         href: s.href,
       });
-      continue;
-    }
-    if (s.tags.includes("has_unsubscribe") || s.tags.includes("bulk_mail")) {
-      noise.push({ label: `${s.from}: ${s.subject}`, source_ids: [s.id] });
       continue;
     }
     if (s.tags.includes("delivery_failure")) {
@@ -163,14 +163,14 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
     if (s.source !== "gmail" || s.tags.includes("unread")) {
       today.push({
         id: `fallback:${s.id}`,
-        title: s.subject,
+        title: displayNameOrSubject(s),
         explanation: summarizeSignalForCard(s),
         recommended_action:
           s.source === "finance"
             ? "Send purring"
             : s.source === "slack"
               ? "Les tråden"
-              : "Svar eller avgjør",
+              : "Åpne og avgjør",
         priority: s.source === "finance" ? "high" : "medium",
         source_ids: [s.id],
         source_label: s.source,
@@ -188,6 +188,12 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
     hygiene: [],
     weekly_summary: null,
   };
+}
+
+function displayNameOrSubject(s: MissionSignal): string {
+  const before = s.from.split("<")[0]?.trim().replace(/^"|"$/g, "");
+  if (before && !before.includes("@") && before.length > 1) return before;
+  return s.subject.slice(0, 80) || s.from;
 }
 
 export async function generateMorningMissionAi(input: {
@@ -239,10 +245,14 @@ export async function generateMorningMissionAi(input: {
     "title / relation_name: bruk person- eller selskapsnavn når du kjenner det (f.eks. «Maria Rossi»).",
     "explanation (TRUST): 1–2 setninger som OPPSUMMERER situasjonen for relasjonen.",
     "  ALDRI lim inn mail-snippet, Slack-tekst, sitater eller rå signaltekst.",
+    "  ALDRI skriv «X om «emnelinje» — trenger sannsynligvis et svar» — det er ikke et sammendrag.",
     "  GODT: «Spurte om leveranse og pris på 500L ekstra virgin olivenolje.»",
+    "  GODT: «Venter på bekreftelse av pristilbud før de bestiller.»",
     "  DÅRLIG: «Hi Peder, following up on the olive oil quote…»",
+    "  DÅRLIG: «Vercel om «New sign-in detected» — trenger sannsynligvis et svar.»",
     "  Brukeren skal stole på kortet uten å lese innboksen først.",
     "recommended_action: én konkret handling (Svar på e-post, Bekreft kontakt, Send purring …).",
+    "  Ikke anbefal «Svar på e-post» for sikkerhetsvarsel, noreply eller produktvarsler.",
     "entity_id: sett KUN hvis kontakten finnes i contacts-katalogen under — ellers null.",
     "relation_status: waiting_on_me | waiting_on_them | upcoming | quiet | new_unconfirmed.",
     "source_label: diskret metadata (fra Gmail) — aldri hovedoverskrift.",
@@ -261,6 +271,9 @@ export async function generateMorningMissionAi(input: {
     "- tag auto_reply eller «takk, vi har mottatt» → waiting, priority low. Aldri today.",
     "- tag unpaid_invoice eller finance_invoice → today, priority high. Anbefal «Send purring» i Mission.",
     "- Brukerens egne test-e-poster (korte «hei»/«test») → noise, aldri today.",
+    "- tag system_noise / bulk_mail / noreply / sikkerhetsvarsel / sign-in / nyhetsbrev → ALLTID noise.",
+    "  Aldri today/waiting. Aldri «Svar på e-post».",
+    "- Kun ekte mennesker/selskaper du har en relasjon til hører hjemme i today/waiting.",
     "",
     "MYKE REGLER:",
     "Avslag, fullførte saker, irrelevant historikk → closed.",
