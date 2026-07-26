@@ -296,7 +296,12 @@ function KontakterPage() {
                 params={{ entityId: c.entityId }}
                 className="flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-border bg-card p-4 active:bg-muted/60"
               >
-                <RelationAvatar name={c.name} entityType={c.entityType} size="md" />
+                <RelationAvatar
+                  name={c.name}
+                  entityType={c.entityType}
+                  imageUrl={c.imageUrl}
+                  size="md"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-base font-semibold leading-tight">{c.name}</p>

@@ -5,6 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { FIELD_RESULT_LABEL, type FieldResult } from "@/lib/field/field.types";
 import { formatOsloActivityDate, formatOsloDayLabel, osloDateKey } from "@/lib/field/field-dates";
 import { ANCHOR_SLUG_SET, OWNER_CONTEXT_LABEL, type OwnerContext } from "@/lib/knowledge/types";
+import { extractEmailDomain } from "@/lib/knowledge/entity-matcher";
+import { relationImageUrl } from "@/lib/relation/avatar-url";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalize(v: unknown): any {
@@ -87,6 +89,7 @@ export type CustomerListItem = {
   peopleCount: number;
   signalCount: number;
   companyName: string | null;
+  imageUrl: string | null;
 };
 
 export type CustomerPerson = {
@@ -123,6 +126,7 @@ export type CustomerDetail = {
   people: CustomerPerson[];
   timeline: CustomerTimelineItem[];
   relatedCompanies: { entityId: string; name: string; kind: string }[];
+  imageUrl: string | null;
 };
 
 function warmthFromMetaAndFollowUp(
@@ -147,7 +151,7 @@ export const listCustomers = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const todayKey = osloDateKey();
 
-    const [entitiesRes, followRes, actRes, relRes, sigRes] = await Promise.all([
+    const [entitiesRes, followRes, actRes, relRes, sigRes, identityRes] = await Promise.all([
       supabase
         .from("entities")
         .select("id, name, slug, summary, metadata, last_seen_at, type, owner_context")
@@ -172,6 +176,11 @@ export const listCustomers = createServerFn({ method: "POST" })
         .from("entity_signals")
         .select("entity_id")
         .eq("user_id", userId),
+      supabase
+        .from("known_identities")
+        .select("entity_id, email, domain, identity_type, external_key")
+        .eq("user_id", userId)
+        .not("entity_id", "is", null),
     ]);
 
     if (entitiesRes.error) throw entitiesRes.error;
@@ -224,6 +233,22 @@ export const listCustomers = createServerFn({ method: "POST" })
       signalCount.set(s.entity_id, (signalCount.get(s.entity_id) ?? 0) + 1);
     }
 
+    const emailByEntity = new Map<string, string>();
+    const domainByEntity = new Map<string, string>();
+    for (const row of identityRes.data ?? []) {
+      if (!row.entity_id) continue;
+      if (row.email && !emailByEntity.has(row.entity_id)) {
+        emailByEntity.set(row.entity_id, row.email.toLowerCase());
+      }
+      const domain =
+        row.domain ||
+        (row.identity_type === "email_domain" ? row.external_key : null) ||
+        (row.email ? extractEmailDomain(row.email) : null);
+      if (domain && !domainByEntity.has(row.entity_id)) {
+        domainByEntity.set(row.entity_id, domain.toLowerCase());
+      }
+    }
+
     function toListItem(
       c: (typeof entities)[number],
       entityType: "person" | "company",
@@ -249,6 +274,14 @@ export const listCustomers = createServerFn({ method: "POST" })
       );
       const ownerContext = normalizeOwnerContext(c.owner_context ?? fromMeta ?? "unknown");
       const linkedCompanyId = entityType === "person" ? personCompany.get(c.id) : undefined;
+      const email =
+        (typeof meta.email === "string" ? meta.email : null) ||
+        emailByEntity.get(c.id) ||
+        null;
+      const domain =
+        (typeof meta.email_domain === "string" ? meta.email_domain : null) ||
+        domainByEntity.get(c.id) ||
+        (email ? extractEmailDomain(email) : null);
       return {
         entityId: c.id,
         name: c.name,
@@ -264,6 +297,12 @@ export const listCustomers = createServerFn({ method: "POST" })
         peopleCount: entityType === "company" ? (peopleCount.get(c.id) ?? 0) : 0,
         signalCount: signalCount.get(c.id) ?? 0,
         companyName: linkedCompanyId ? (companyNameById.get(linkedCompanyId) ?? null) : null,
+        imageUrl: relationImageUrl({
+          entityType,
+          email,
+          domain,
+          explicitUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+        }),
       };
     }
 
@@ -441,6 +480,22 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
     const fromMeta = ownerContextFromOrgSlug(
       typeof meta.platform_org_slug === "string" ? meta.platform_org_slug : null,
     );
+
+    const { data: linkedIds } = await supabase
+      .from("known_identities")
+      .select("email, domain, identity_type, external_key")
+      .eq("user_id", userId)
+      .eq("entity_id", data.entityId)
+      .limit(8);
+    let email = typeof meta.email === "string" ? meta.email : null;
+    let domain = typeof meta.email_domain === "string" ? meta.email_domain : null;
+    for (const row of linkedIds ?? []) {
+      if (!email && row.email) email = row.email;
+      if (!domain && row.domain) domain = row.domain;
+      if (!domain && row.identity_type === "email_domain") domain = row.external_key;
+    }
+    if (!domain && email) domain = extractEmailDomain(email);
+
     const detail: CustomerDetail = {
       entityId: company.id,
       name: company.name,
@@ -458,6 +513,12 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
       people,
       timeline: timeline.slice(0, 50),
       relatedCompanies,
+      imageUrl: relationImageUrl({
+        entityType,
+        email,
+        domain,
+        explicitUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+      }),
     };
 
     return normalize(detail);

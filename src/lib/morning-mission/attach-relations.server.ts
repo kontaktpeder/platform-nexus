@@ -18,6 +18,7 @@ import {
 import { normalizeOwnerContext } from "@/lib/customers.functions";
 import type { RelationSourceKind, RelationStatus } from "@/lib/relation/types";
 import { projectPayloadToRelationBriefing } from "@/lib/relation/project-briefing";
+import { relationImageUrl } from "@/lib/relation/avatar-url";
 
 type DB = SupabaseClient<Database>;
 
@@ -27,6 +28,9 @@ type ResolvedEntity = {
   type: "person" | "company";
   ownerContext: OwnerContext;
   summary: string | null;
+  email: string | null;
+  domain: string | null;
+  imageUrl: string | null;
 };
 
 function sourceKindFor(signal: MissionSignal | undefined, label: string | null | undefined): RelationSourceKind | null {
@@ -94,18 +98,34 @@ export async function loadRelationEntityIndex(
     if (row.type !== "person" && row.type !== "company") continue;
     const meta = (row.metadata ?? {}) as Record<string, unknown>;
     const ownerContext = normalizeOwnerContext(row.owner_context ?? "unknown");
+    const email = typeof meta.email === "string" ? meta.email.toLowerCase() : null;
+    const domain =
+      typeof meta.email_domain === "string"
+        ? meta.email_domain.toLowerCase()
+        : email
+          ? extractEmailDomain(email)
+          : null;
     const resolved: ResolvedEntity = {
       id: row.id,
       name: row.name,
       type: row.type,
       ownerContext,
       summary: row.summary,
+      email,
+      domain,
+      imageUrl: relationImageUrl({
+        entityType: row.type,
+        email,
+        domain,
+        explicitUrl: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+      }),
     };
     byId.set(row.id, resolved);
     byName.set(normalizeName(row.name), resolved);
-    const domain =
-      typeof meta.email_domain === "string" ? meta.email_domain.toLowerCase() : null;
     if (domain && row.type === "company") byDomain.set(domain, resolved);
+    if (email) {
+      // Will also be set via identities; metadata email is a direct hit.
+    }
     catalog.push({
       id: row.id,
       name: row.name,
@@ -118,7 +138,28 @@ export async function loadRelationEntityIndex(
   for (const [email, ki] of lookups.byEmail) {
     if (!ki.entity_id) continue;
     const e = byId.get(ki.entity_id);
-    if (e) byEmail.set(email.toLowerCase(), e);
+    if (!e) continue;
+    byEmail.set(email.toLowerCase(), e);
+    if (!e.email) {
+      e.email = email.toLowerCase();
+      e.imageUrl =
+        relationImageUrl({
+          entityType: e.type,
+          email: e.email,
+          domain: e.domain,
+          explicitUrl: e.imageUrl,
+        }) ?? e.imageUrl;
+    }
+  }
+
+  // Domain identities → company logo when metadata lacked domain
+  for (const [domain, entity] of byDomain) {
+    if (!entity.imageUrl) {
+      entity.imageUrl = relationImageUrl({
+        entityType: "company",
+        domain,
+      });
+    }
   }
 
   catalog.sort((a, b) => a.name.localeCompare(b.name, "nb"));
@@ -183,12 +224,25 @@ function enrichItem(
   const relationStatus = item.relation_status ?? statusForBucket(bucket);
 
   if (!resolved) {
-    // Still set status/source for relation cards; keep title as name proxy.
+    // Try Gravatar from signal email even without entity.
+    const signalEmail =
+      linkedSignals
+        .map(
+          (s) =>
+            (typeof s.meta?.from_email === "string" && s.meta.from_email) ||
+            extractEmailAddress(s.from),
+        )
+        .find((e): e is string => !!e) ?? null;
+    const looseImage = relationImageUrl({
+      entityType: "person",
+      email: signalEmail,
+    });
     return {
       ...item,
       relation_status: relationStatus,
       source_kind: sourceKind,
       relation_name: item.relation_name ?? item.title,
+      image_url: item.image_url ?? looseImage,
     };
   }
 
@@ -197,6 +251,20 @@ function enrichItem(
     resolved.ownerContext !== "unknown" ? OWNER_CONTEXT_LABEL[resolved.ownerContext] : null,
     resolved.summary,
   ].filter(Boolean);
+
+  // Prefer entity image; else signal email gravatar.
+  let imageUrl = item.image_url ?? resolved.imageUrl;
+  if (!imageUrl) {
+    for (const s of linkedSignals) {
+      const email =
+        (typeof s.meta?.from_email === "string" && s.meta.from_email) ||
+        extractEmailAddress(s.from);
+      if (email) {
+        imageUrl = relationImageUrl({ entityType: resolved.type, email, domain: resolved.domain });
+        if (imageUrl) break;
+      }
+    }
+  }
 
   return {
     ...item,
@@ -208,6 +276,7 @@ function enrichItem(
     owner_context: item.owner_context ?? resolved.ownerContext,
     source_kind: sourceKind,
     href: item.href ?? `/kontakter/${resolved.id}`,
+    image_url: imageUrl,
   };
 }
 

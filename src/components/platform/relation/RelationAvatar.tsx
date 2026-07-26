@@ -31,15 +31,28 @@ export function RelationAvatar({
       className={cn(
         SIZE[size],
         isCompany ? "rounded-xl" : "rounded-full",
+        "bg-muted",
         className,
       )}
     >
-      {imageUrl ? <AvatarImage src={imageUrl} alt="" /> : null}
+      {imageUrl ? (
+        <AvatarImage
+          src={imageUrl}
+          alt=""
+          className={cn("object-cover", isCompany ? "rounded-xl" : "rounded-full")}
+        />
+      ) : null}
       <AvatarFallback
         className={cn(isCompany ? "rounded-xl" : "rounded-full", "font-semibold")}
         style={style}
       >
-        {isCompany ? <Building2 className="h-1/2 w-1/2 opacity-80" /> : initialsFromName(name)}
+        {isCompany ? (
+          <span className="flex flex-col items-center gap-0.5">
+            <Building2 className="h-[45%] w-[45%] opacity-80" />
+          </span>
+        ) : (
+          initialsFromName(name)
+        )}
       </AvatarFallback>
     </Avatar>
   );

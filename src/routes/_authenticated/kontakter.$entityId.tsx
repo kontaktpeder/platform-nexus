@@ -261,6 +261,7 @@ function KontaktDetailPage() {
                   <RelationAvatar
                     name={d.name}
                     entityType={d.entityType}
+                    imageUrl={d.imageUrl}
                     size="lg"
                   />
                   <div className="min-w-0 flex-1">
