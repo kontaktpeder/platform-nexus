@@ -11,12 +11,14 @@ export function RelationCard({
   featured = false,
   primaryLabel = "Neste steg",
   onPrimary,
+  onDone,
   className,
 }: {
   card: RelationCardModel;
   featured?: boolean;
   primaryLabel?: string;
   onPrimary?: () => void;
+  onDone?: () => void;
   className?: string;
 }) {
   const source =
@@ -83,7 +85,7 @@ export function RelationCard({
         {onPrimary && (
           <Button
             type="button"
-            className="h-11 flex-1 rounded-xl text-sm"
+            className="h-11 min-w-[8rem] flex-1 rounded-xl text-sm"
             onClick={onPrimary}
           >
             {primaryLabel}
@@ -100,6 +102,16 @@ export function RelationCard({
             <a href={card.href}>Se detalj</a>
           </Button>
         ) : null}
+        {onDone && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 rounded-xl text-sm text-muted-foreground"
+            onClick={onDone}
+          >
+            Ferdig
+          </Button>
+        )}
       </div>
     </article>
   );

@@ -4,31 +4,21 @@ import type { RelationCardModel } from "@/lib/relation/types";
 export function StartHereBlock({
   card,
   onPrimary,
+  onDone,
   primaryLabel,
 }: {
   card: RelationCardModel;
   onPrimary?: () => void;
-  primaryLabel?: string;
-}) {
-  return (
-    <StartHereBlockInner
-      card={card}
-      onPrimary={onPrimary}
-      primaryLabel={primaryLabel}
-    />
-  );
-}
-
-function StartHereBlockInner(props: {
-  card: RelationCardModel;
-  onPrimary?: () => void;
+  onDone?: () => void;
   primaryLabel?: string;
 }) {
   return (
     <RelationCard
-      {...props}
+      card={card}
       featured
-      primaryLabel={props.primaryLabel ?? "Gå til handling"}
+      primaryLabel={primaryLabel ?? "Gå til handling"}
+      onPrimary={onPrimary}
+      onDone={onDone}
     />
   );
 }
