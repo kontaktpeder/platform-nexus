@@ -1,6 +1,7 @@
 // v1 trust rules — deterministic corrections after AI (and pre-filter helpers).
 import type { MorningMissionPayload, MorningMissionItem } from "@/lib/morning-mission.types";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
+import { sanitizePayloadExplanations } from "@/lib/morning-mission/relation-summary.server";
 
 const TEST_SUBJECTS = new Set(["hei", "test", "testing", "demo"]);
 
@@ -55,9 +56,9 @@ function buildDeliveryFailureItem(signal: MissionSignal): MorningMissionItem {
     title: recipientHint
       ? `E-post til ${recipientHint} kom aldri fram`
       : "E-post kom ikke fram",
-    explanation:
-      signal.snippet ||
-      "Levering feilet. Mottakeren har sannsynligvis ikke fått meldingen din — du kan tro du venter på svar uten at de har sett den.",
+    explanation: recipientHint
+      ? `Levering til ${recipientHint} feilet — de har sannsynligvis ikke sett meldingen din.`
+      : "Levering feilet — mottakeren har sannsynligvis ikke sett meldingen din.",
     recommended_action: recipientHint
       ? `Bekreft riktig adresse for ${recipientHint} og send på nytt.`
       : "Finn riktig mottakeradresse og send på nytt.",
@@ -155,11 +156,14 @@ export function applyTrustRules(
     }
   }
 
-  return {
-    ...payload,
-    today: today.slice(0, 5),
-    this_week,
-    waiting,
-    noise,
-  };
+  return sanitizePayloadExplanations(
+    {
+      ...payload,
+      today: today.slice(0, 5),
+      this_week,
+      waiting,
+      noise,
+    },
+    signals,
+  );
 }

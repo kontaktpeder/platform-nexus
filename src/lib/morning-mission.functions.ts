@@ -11,6 +11,7 @@ import {
   rebuildRelationsOnPayload,
   refreshRelationAvatarsOnPayload,
 } from "@/lib/morning-mission/attach-relations.server";
+import { sanitizePayloadExplanations } from "@/lib/morning-mission/relation-summary.server";
 
 type DB = SupabaseClient<Database>;
 
@@ -216,7 +217,9 @@ export const getMorningMission = createServerFn({ method: "POST" })
     );
     const entityIndex = await loadRelationEntityIndex(supabase, userId);
     const withAvatars = refreshRelationAvatarsOnPayload(cached.payload, entityIndex);
-    const filtered = filterPayloadByStates(withAvatars, actionStates);
+    // Stale briefs may still dump mail snippets on cards — rewrite to relation summaries.
+    const trusted = sanitizePayloadExplanations(withAvatars, []);
+    const filtered = filterPayloadByStates(trusted, actionStates);
 
     return {
       briefDate,

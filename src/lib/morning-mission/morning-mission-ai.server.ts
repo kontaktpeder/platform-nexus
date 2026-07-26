@@ -7,6 +7,7 @@ import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import { applyTrustRules } from "@/lib/morning-mission/morning-mission-trust.server";
 import { stripHallucinatedSlackItems, ensureSlackWeeklyItems } from "@/lib/morning-mission/slack-mission.server";
+import { summarizeSignalForCard } from "@/lib/morning-mission/relation-summary.server";
 
 const ItemSchema = z.object({
   id: z.string(),
@@ -150,7 +151,7 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
       today.push({
         id: `fallback:${s.id}`,
         title: "E-post kom ikke fram",
-        explanation: s.snippet || s.subject,
+        explanation: summarizeSignalForCard(s),
         recommended_action: "Sjekk mottakeradresse og send på nytt.",
         priority: "high",
         source_ids: [s.id],
@@ -163,8 +164,13 @@ function fallbackPayload(signals: MissionSignal[]): MorningMissionPayload {
       today.push({
         id: `fallback:${s.id}`,
         title: s.subject,
-        explanation: s.snippet,
-        recommended_action: "Åpne og vurder.",
+        explanation: summarizeSignalForCard(s),
+        recommended_action:
+          s.source === "finance"
+            ? "Send purring"
+            : s.source === "slack"
+              ? "Les tråden"
+              : "Svar eller avgjør",
         priority: s.source === "finance" ? "high" : "medium",
         source_ids: [s.id],
         source_label: s.source,
@@ -231,7 +237,11 @@ export async function generateMorningMissionAi(input: {
     "Hvert kort eies av en person eller et selskap — ikke av Gmail/Slack/Finance.",
     "Spørsmål du svarer på: Hvem trenger noe nå, hvorfor, og hva er neste handling?",
     "title / relation_name: bruk person- eller selskapsnavn når du kjenner det (f.eks. «Maria Rossi»).",
-    "explanation: hva som skjedde + hvorfor det betyr noe for relasjonen.",
+    "explanation (TRUST): 1–2 setninger som OPPSUMMERER situasjonen for relasjonen.",
+    "  ALDRI lim inn mail-snippet, Slack-tekst, sitater eller rå signaltekst.",
+    "  GODT: «Spurte om leveranse og pris på 500L ekstra virgin olivenolje.»",
+    "  DÅRLIG: «Hi Peder, following up on the olive oil quote…»",
+    "  Brukeren skal stole på kortet uten å lese innboksen først.",
     "recommended_action: én konkret handling (Svar på e-post, Bekreft kontakt, Send purring …).",
     "entity_id: sett KUN hvis kontakten finnes i contacts-katalogen under — ellers null.",
     "relation_status: waiting_on_me | waiting_on_them | upcoming | quiet | new_unconfirmed.",

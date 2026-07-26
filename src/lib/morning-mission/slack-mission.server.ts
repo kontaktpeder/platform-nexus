@@ -2,6 +2,7 @@
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import { isSameOsloWeek, isSlackTsThisWeek, osloWeekNumber, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
+import { summarizeSignalForCard } from "@/lib/morning-mission/relation-summary.server";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/slack/api";
 const SLACK_CACHE_MS = 5 * 60_000;
@@ -336,7 +337,7 @@ export function ensureSlackWeeklyItems(
     .map((s) => ({
       id: `slack-week:${s.id}`,
       title: s.subject,
-      explanation: s.snippet,
+      explanation: summarizeSignalForCard(s),
       recommended_action: "Les tråden og vurder om det hører til ukeplanen.",
       priority: "medium" as const,
       source_ids: [s.id],
