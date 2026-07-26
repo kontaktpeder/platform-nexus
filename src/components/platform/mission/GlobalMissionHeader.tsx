@@ -1,5 +1,3 @@
-import { ArrowRight } from "lucide-react";
-
 function greeting(hour: number): string {
   if (hour < 5) return "God natt";
   if (hour < 12) return "God morgen";
@@ -17,6 +15,15 @@ function osloHour(): number {
   return parseInt(h, 10);
 }
 
+function osloWeekday(): string {
+  return new Intl.DateTimeFormat("nb-NO", {
+    timeZone: "Europe/Oslo",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+}
+
 export function GlobalMissionHeader({
   firstName,
   count,
@@ -32,32 +39,28 @@ export function GlobalMissionHeader({
 }) {
   const hello = greeting(osloHour());
   const name = firstName ? firstName : "der";
-  const line1 = loadFailed
-    ? "Jeg klarte ikke å lese signalene ennå."
-    : "Mission handler om mennesker.";
-  const line2 = loadFailed
-    ? "Briefen lastet ikke — sjekk oppsettet under før du stoler på det som vises."
-    : count === 0
-      ? "Ingen som trenger deg akkurat nå."
-      : `${count} ${count === 1 ? "relasjon trenger" : "relasjoner trenger"} deg i dag.`;
+  const dateLine = osloWeekday();
 
   return (
-    <section className="pt-2 pb-8 sm:pt-6 sm:pb-10">
-      <h1 className="font-heading text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-        {hello}, {name}.
+    <section className="pb-5 pt-1 sm:pb-6 sm:pt-2">
+      <p className="text-xs font-medium capitalize text-muted-foreground">{dateLine}</p>
+      <h1 className="mt-1 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
+        {hello}, {name} 👋
       </h1>
-      <div className="mt-5 space-y-1 text-base text-muted-foreground sm:text-lg">
-        <p>{line1}</p>
-        <p>{line2}</p>
-      </div>
-      {canStart && (
+      <p className="mt-2 max-w-xl text-sm text-muted-foreground sm:text-base">
+        {loadFailed
+          ? "Briefen lastet ikke — sjekk oppsettet før du stoler på det som vises."
+          : count === 0
+            ? "Ingen som trenger deg akkurat nå."
+            : "Dette er dine viktigste relasjoner i dag."}
+      </p>
+      {canStart && !loadFailed && (
         <button
           type="button"
           onClick={onStart}
-          className="mt-7 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+          className="mt-4 text-sm font-medium text-primary underline-offset-4 hover:underline"
         >
-          Start
-          <ArrowRight className="h-4 w-4" />
+          Gå til Start her
         </button>
       )}
     </section>

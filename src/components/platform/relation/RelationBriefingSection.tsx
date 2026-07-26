@@ -29,7 +29,7 @@ function primaryLabelFor(card: RelationCardModel, item?: MorningMissionItem): st
   if (gmailMessageIdFromItem(item) || card.sourceKind === "gmail") return "Svar på e-post";
   if (card.sourceKind === "finance") return "Åpne Finance";
   if (card.sourceKind === "slack") return "Åpne Slack";
-  if (card.sourceKind === "felt") return "Logg i Felt";
+  if (card.sourceKind === "felt") return "Logg besøk";
   if (card.sourceKind === "work") return "Åpne Work";
   if (card.status === "new_unconfirmed") return "Bekreft kontakt";
   if (card.entityId) return "Åpne kontakt";
@@ -88,11 +88,28 @@ export function RelationBriefingSection({
 
   const doneCards = useMemo(() => closedToCards(closedItems), [closedItems]);
 
+  const followUpCards = useMemo(
+    () =>
+      briefing.needsFollowUp.filter((c) => c.id !== briefing.startHere?.id),
+    [briefing.needsFollowUp, briefing.startHere?.id],
+  );
+
+  const upcomingCards = useMemo(
+    () => briefing.upcoming.filter((c) => c.id !== briefing.startHere?.id),
+    [briefing.upcoming, briefing.startHere?.id],
+  );
+
   const activeCards = useMemo(() => {
     const list: RelationCardModel[] = [];
     if (briefing.startHere) list.push(briefing.startHere);
     list.push(...briefing.needsFollowUp, ...briefing.upcoming, ...briefing.unresolved);
-    return list;
+    // de-dupe by id
+    const seen = new Set<string>();
+    return list.filter((c) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
   }, [briefing]);
 
   const quietCards = useMemo(
@@ -113,24 +130,6 @@ export function RelationBriefingSection({
       done: doneCards.length,
     } satisfies Partial<Record<RelationListFilter, number>>;
   }, [activeCards, quietCards, doneCards]);
-
-  const visible = useMemo(() => {
-    if (filter === "done") return { featured: null as RelationCardModel | null, rest: doneCards };
-    if (filter === "quiet") return { featured: null, rest: quietCards };
-    if (filter === "waiting_on_me") {
-      const rest = activeCards.filter((c) => c.status === "waiting_on_me");
-      return { featured: null, rest };
-    }
-    if (filter === "upcoming") {
-      const rest = activeCards.filter(
-        (c) => c.status === "upcoming" || c.status === "waiting_on_them",
-      );
-      return { featured: null, rest };
-    }
-    // all — keep Start her featured when present
-    const rest = activeCards.filter((c) => c.id !== briefing.startHere?.id);
-    return { featured: briefing.startHere, rest };
-  }, [filter, activeCards, quietCards, doneCards, briefing.startHere]);
 
   function itemFor(card: RelationCardModel): MorningMissionItem | undefined {
     return itemsById.get(card.briefItemId ?? card.id);
@@ -216,66 +215,86 @@ export function RelationBriefingSection({
     );
   }
 
-  const empty =
-    !visible.featured &&
-    visible.rest.length === 0 &&
-    filter === "all" &&
-    activeCards.length === 0 &&
+  const filteredList = useMemo(() => {
+    if (filter === "done") return doneCards;
+    if (filter === "quiet") return quietCards;
+    if (filter === "waiting_on_me") {
+      return activeCards.filter((c) => c.status === "waiting_on_me");
+    }
+    if (filter === "upcoming") {
+      return activeCards.filter(
+        (c) => c.status === "upcoming" || c.status === "waiting_on_them",
+      );
+    }
+    return null; // "all" uses sectioned layout
+  }, [filter, doneCards, quietCards, activeCards]);
+
+  const emptyAll =
+    !briefing.startHere &&
+    followUpCards.length === 0 &&
+    upcomingCards.length === 0 &&
+    briefing.unresolved.length === 0 &&
     quietCards.length === 0 &&
     doneCards.length === 0;
 
-  const sectionTitle =
-    filter === "all"
-      ? "Viktigste relasjoner i dag"
-      : filter === "waiting_on_me"
-        ? "Venter på meg"
-        : filter === "upcoming"
-          ? "Kommende"
-          : filter === "quiet"
-            ? "Ingen aktivitet"
-            : "Fullført i dag";
-
   return (
     <div className="min-w-0" aria-label="Relasjonsbrief">
-      <header className="mb-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Hvem trenger deg
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Relasjonen eier kortet — trykk for å handle, ikke bare se.
-        </p>
-      </header>
-
-      <div className="sticky top-0 z-10 -mx-1 mb-4 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="sticky top-0 z-10 -mx-1 mb-5 bg-background/95 px-1 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <RelationFilterChips value={filter} onChange={setFilter} counts={counts} />
       </div>
 
-      <h3 className="mb-3 text-base font-semibold text-foreground">{sectionTitle}</h3>
+      {filter === "all" ? (
+        emptyAll ? (
+          <div className="rounded-2xl border border-border/60 bg-card p-6 text-center shadow-sm">
+            <p className="text-sm font-medium">Ingen som trenger deg akkurat nå.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Når mail, Slack eller Felt knyttes til en kontakt, lander det her.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {briefing.startHere && (
+              <section id="morning-start-here">{renderCard(briefing.startHere, true)}</section>
+            )}
 
-      {empty ? (
-        <div className="rounded-2xl border border-border/60 bg-card p-6 text-center shadow-sm">
-          <p className="text-sm font-medium">Ingen som trenger deg akkurat nå.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Når mail, Slack eller Felt knyttes til en kontakt, lander det her.
-          </p>
-        </div>
+            {followUpCards.length > 0 && (
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-foreground">
+                  Andre som trenger oppfølging
+                </h3>
+                <div className="space-y-3">{followUpCards.map((c) => renderCard(c))}</div>
+              </section>
+            )}
+
+            {upcomingCards.length > 0 && (
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-foreground">
+                  Kommende oppfølging
+                </h3>
+                <div className="space-y-3">{upcomingCards.map((c) => renderCard(c))}</div>
+              </section>
+            )}
+
+            {briefing.unresolved.length > 0 && (
+              <section>
+                <h3 className="mb-3 text-sm font-semibold text-foreground">Uavklart</h3>
+                <div className="space-y-3">
+                  {briefing.unresolved.map((c) => renderCard(c))}
+                </div>
+              </section>
+            )}
+          </div>
+        )
       ) : (
         <div className="space-y-3">
-          {visible.featured && renderCard(visible.featured, true)}
-          {visible.rest.map((card) => renderCard(card))}
-          {visible.featured === null && visible.rest.length === 0 && (
+          {(filteredList ?? []).length === 0 ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
               Ingen i denne listen.
             </p>
+          ) : (
+            (filteredList ?? []).map((c) => renderCard(c))
           )}
         </div>
-      )}
-
-      {filter === "all" && briefing.unresolved.length > 0 && (
-        <p className="mt-4 text-xs text-muted-foreground">
-          {briefing.unresolved.length} uavklart
-          {briefing.unresolved.length === 1 ? "" : "e"} — bruk filter eller Review.
-        </p>
       )}
 
       {reply && (

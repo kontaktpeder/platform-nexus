@@ -1,4 +1,4 @@
-/** Mission list filters — relationship status, not source (Gmail/Slack). */
+/** Mission list filters — tab style like the product mockup. */
 
 export type RelationListFilter =
   | "all"
@@ -25,8 +25,8 @@ export function RelationFilterChips({
   counts?: Partial<Record<RelationListFilter, number>>;
 }) {
   return (
-    <div className="-mx-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex gap-2 pb-1">
+    <div className="-mx-1 overflow-x-auto border-b border-border px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-1 pb-0">
         {CHIPS.map((c) => {
           const active = c.value === value;
           const count = counts?.[c.value];
@@ -35,17 +35,20 @@ export function RelationFilterChips({
               key={c.value}
               type="button"
               onClick={() => onChange(c.value)}
-              className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors ${
+              className={`relative whitespace-nowrap px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {c.label}
-              {typeof count === "number" && count > 0 && (
-                <span className={`ml-1.5 text-[10px] ${active ? "opacity-80" : "opacity-60"}`}>
-                  {count}
+              {typeof count === "number" && (
+                <span className={`ml-1.5 text-xs ${active ? "text-primary/80" : "opacity-60"}`}>
+                  ({count})
                 </span>
+              )}
+              {active && (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />
               )}
             </button>
           );

@@ -194,7 +194,7 @@ function GlobalMission() {
           canStart={todayCount > 0}
           loadFailed={!!query.error && !data}
           onStart={() => {
-            document.getElementById("morning-today")?.scrollIntoView({ behavior: "smooth" });
+            document.getElementById("morning-start-here")?.scrollIntoView({ behavior: "smooth" });
           }}
         />
 

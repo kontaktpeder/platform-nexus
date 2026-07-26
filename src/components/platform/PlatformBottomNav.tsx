@@ -3,7 +3,7 @@ import { Inbox, MapPin, Menu, Sparkles, Users } from "lucide-react";
 import { useReviewInboxCount } from "@/lib/review.hooks";
 
 const ITEMS = [
-  { to: "/mission" as const, label: "I dag", icon: Sparkles, exact: true },
+  { to: "/mission" as const, label: "Mission", icon: Sparkles, exact: true },
   { to: "/kontakter" as const, label: "Kontakter", icon: Users, exact: false },
   { to: "/field" as const, label: "Felt", icon: MapPin, exact: false },
   { to: "/review" as const, label: "Innboks", icon: Inbox, exact: false, showBadge: true },
