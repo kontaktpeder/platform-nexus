@@ -24,6 +24,7 @@ import {
   useMissionContactSync,
 } from "@/lib/mission-contact-sync.hooks";
 import { listCustomers, type CustomerListItem } from "@/lib/customers.functions";
+import { WeeklyControlCard } from "@/components/platform/mission/WeeklyControlCard";
 
 export const Route = createFileRoute("/_authenticated/mission")({
   head: () => ({ meta: [{ title: "I dag — Platform Core" }] }),
@@ -194,6 +195,7 @@ function GlobalMission() {
           }}
         />
 
+        <WeeklyControlCard />
         <CustomerFollowUps />
         <ReviewInboxTeaser />
 

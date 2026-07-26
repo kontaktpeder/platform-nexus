@@ -487,6 +487,33 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_plans: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json
+          updated_at: string
+          user_id: string
+          week_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          updated_at?: string
+          user_id: string
+          week_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          updated_at?: string
+          user_id?: string
+          week_key?: string
+        }
+        Relationships: []
+      }
       module_connection_secrets: {
         Row: {
           api_key_ciphertext: string
