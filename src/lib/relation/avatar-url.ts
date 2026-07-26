@@ -1,4 +1,4 @@
-/** Avatar URLs for relation faces — Gravatar (person) + Logo.dev (company). */
+/** Avatar URLs for relation faces — Gravatar (person) + same-origin Logo.dev proxy (company). */
 
 import { createHash } from "node:crypto";
 
@@ -10,8 +10,8 @@ export function gravatarUrl(email: string, size = 128): string {
 }
 
 /**
- * Company logo via Logo.dev (Clearbit Logo API shut down Dec 2025).
- * Publishable key: https://www.logo.dev — set LOGO_DEV_PUBLISHABLE_KEY.
+ * Company logo via our `/api/logo` proxy (server reads LOGO_DEV_PUBLISHABLE_KEY).
+ * No VITE_ env needed — Lovable Secrets stay server-side; browser only hits same-origin.
  */
 export function companyLogoUrl(domain: string, size = 128): string | null {
   const host = domain
@@ -22,18 +22,11 @@ export function companyLogoUrl(domain: string, size = 128): string | null {
     .split("/")[0];
   if (!host || !host.includes(".")) return null;
 
-  const token =
-    process.env.LOGO_DEV_PUBLISHABLE_KEY?.trim() ||
-    process.env.VITE_LOGO_DEV_PUBLISHABLE_KEY?.trim() ||
-    "";
-  if (!token) return null;
-
   const params = new URLSearchParams({
-    token,
+    domain: host,
     size: String(size),
-    format: "png",
   });
-  return `https://img.logo.dev/${encodeURIComponent(host)}?${params.toString()}`;
+  return `/api/logo?${params.toString()}`;
 }
 
 export function relationImageUrl(input: {

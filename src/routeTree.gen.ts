@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthUpdatePasswordRouteImport } from './routes/auth.update-password'
+import { Route as ApiLogoRouteImport } from './routes/api/logo'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
 import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
@@ -53,6 +54,11 @@ const AuthUpdatePasswordRoute = AuthUpdatePasswordRouteImport.update({
   id: '/update-password',
   path: '/update-password',
   getParentRoute: () => AuthRoute,
+} as any)
+const ApiLogoRoute = ApiLogoRouteImport.update({
+  id: '/api/logo',
+  path: '/api/logo',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/modules': typeof AuthenticatedModulesRoute
   '/review': typeof AuthenticatedReviewRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/_authenticated/modules': typeof AuthenticatedModulesRoute
   '/_authenticated/review': typeof AuthenticatedReviewRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/_authenticated/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/review'
     | '/settings'
+    | '/api/logo'
     | '/auth/update-password'
     | '/kontakter/$entityId'
     | '/kunder/$entityId'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/modules'
     | '/review'
     | '/settings'
+    | '/api/logo'
     | '/auth/update-password'
     | '/kontakter/$entityId'
     | '/kunder/$entityId'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/_authenticated/modules'
     | '/_authenticated/review'
     | '/_authenticated/settings'
+    | '/api/logo'
     | '/auth/update-password'
     | '/_authenticated/kontakter/$entityId'
     | '/_authenticated/kunder/$entityId'
@@ -332,6 +344,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
+  ApiLogoRoute: typeof ApiLogoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -363,6 +376,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/update-password'
       preLoaderRoute: typeof AuthUpdatePasswordRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/api/logo': {
+      id: '/api/logo'
+      path: '/api/logo'
+      fullPath: '/api/logo'
+      preLoaderRoute: typeof ApiLogoRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -617,6 +637,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
+  ApiLogoRoute: ApiLogoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
