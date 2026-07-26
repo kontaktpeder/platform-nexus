@@ -16,6 +16,21 @@ const ItemSchema = z.object({
   priority: z.enum(["high", "medium", "low"]),
   source_ids: z.array(z.string()),
   source_label: z.string().nullable().optional(),
+  /** Prefer known contact id from contacts catalog when sure. */
+  entity_id: z.string().nullable().optional(),
+  /** Person or company name when known — owns the card. */
+  relation_name: z.string().nullable().optional(),
+  relation_status: z
+    .enum([
+      "waiting_on_me",
+      "waiting_on_them",
+      "upcoming",
+      "quiet",
+      "new_unconfirmed",
+      "confirmed",
+    ])
+    .nullable()
+    .optional(),
 });
 
 const NoiseSchema = z.object({
@@ -69,6 +84,9 @@ function enrichPayload(
       ...item,
       href: hrefForSignalIds(item.source_ids, signals),
       source_label: item.source_label ?? labelForSignalIds(item.source_ids, signals),
+      entity_id: item.entity_id ?? null,
+      relation_name: item.relation_name ?? null,
+      relation_status: item.relation_status ?? null,
     }));
 
   const cleaned = {
@@ -172,6 +190,12 @@ export async function generateMorningMissionAi(input: {
   userEmail?: string | null;
   hints?: import("@/lib/mission-hints.types").MissionHint[];
   slackStatus?: SlackMissionStatus;
+  contacts?: Array<{
+    id: string;
+    name: string;
+    type: "person" | "company";
+    owner_context: string;
+  }>;
 }): Promise<MorningMissionPayload> {
   if (input.signals.length === 0) {
     return {
@@ -203,9 +227,20 @@ export async function generateMorningMissionAi(input: {
 
   const system = [
     `Du er ${input.userName ?? "brukerens"} daglige arbeidsassistent på norsk.`,
+    "RELASJONSDREVET BRIEF (viktigst):",
+    "Hvert kort eies av en person eller et selskap — ikke av Gmail/Slack/Finance.",
+    "Spørsmål du svarer på: Hvem trenger noe nå, hvorfor, og hva er neste handling?",
+    "title / relation_name: bruk person- eller selskapsnavn når du kjenner det (f.eks. «Maria Rossi»).",
+    "explanation: hva som skjedde + hvorfor det betyr noe for relasjonen.",
+    "recommended_action: én konkret handling (Svar på e-post, Bekreft kontakt, Send purring …).",
+    "entity_id: sett KUN hvis kontakten finnes i contacts-katalogen under — ellers null.",
+    "relation_status: waiting_on_me | waiting_on_them | upcoming | quiet | new_unconfirmed.",
+    "source_label: diskret metadata (fra Gmail) — aldri hovedoverskrift.",
+    "Ukjent avsender / ingen kontakt → relation_status new_unconfirmed, ikke finn på entity_id.",
+    "",
     "Les signalene nedenfor og sorter dem i seksjoner.",
     "Slå sammen beslektede signaler (f.eks. delivery failure + opprinnelig utgående mail til samme person).",
-    "Ikke vis hver e-post som eget kort — grupper etter hva som faktisk betyr noe.",
+    "Ikke vis hver e-post som eget kort — grupper etter hvem det gjelder.",
     "",
     hintLines.length > 0
       ? ["BRUKERENS LÆRTE REGLER (må følges — ikke vis som handling):", ...hintLines, ""].join("\n")
@@ -227,7 +262,6 @@ export async function generateMorningMissionAi(input: {
     input.slackStatus?.activity_this_week === 0
       ? "Det finnes INGEN Slack-signaler denne uken — ikke lag this_week-elementer om Slack, mentions eller DM-er."
       : "",
-    "For viktige elementer: skriv hva som skjedde, hvorfor det betyr noe, og én konkret neste handling.",
     "Bruk source_ids fra input — ikke finn på nye ID-er.",
     "Item id: bruk kort slug basert på tema, f.eks. 'marco-email-failure'.",
     "Maks 5 elementer i today.",
@@ -249,11 +283,16 @@ export async function generateMorningMissionAi(input: {
     ? { slack_status: input.slackStatus }
     : {};
 
+  const contactsContext =
+    input.contacts && input.contacts.length > 0
+      ? { contacts: input.contacts }
+      : {};
+
   try {
     const { output } = await generateText({
       model,
       system,
-      prompt: JSON.stringify({ signals: compact, ...slackContext }),
+      prompt: JSON.stringify({ signals: compact, ...slackContext, ...contactsContext }),
       output: Output.object({ schema: PayloadSchema }),
     });
     return applyTrustRules(

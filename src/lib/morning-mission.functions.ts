@@ -7,6 +7,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import type { MorningMissionPayload, MorningMissionResponse } from "@/lib/morning-mission.types";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import { snoozeUntil } from "@/lib/mission-snooze";
+import { rebuildRelationsOnPayload } from "@/lib/morning-mission/attach-relations.server";
 
 type DB = SupabaseClient<Database>;
 
@@ -47,13 +48,14 @@ function filterPayloadByStates(
   const filterItems = <T extends { id: string; source_ids: string[] }>(items: T[]) =>
     items.filter((i) => !hide(i));
 
-  return {
+  const filtered = {
     ...payload,
     today: filterItems(payload.today),
     this_week: filterItems(payload.this_week),
     waiting: filterItems(payload.waiting),
     closed: filterItems(payload.closed),
   };
+  return rebuildRelationsOnPayload(filtered);
 }
 
 async function loadWorkspacesForUser(supabase: DB, userId: string) {
@@ -121,15 +123,22 @@ async function buildMorningMission(
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
   const { forAi } = prefilterSignals({ signals: allSignals, userEmail, actionStates, hints });
+  const {
+    loadRelationEntityIndex,
+    attachRelationsToPayload,
+  } = await import("@/lib/morning-mission/attach-relations.server");
+  const entityIndex = await loadRelationEntityIndex(supabase, userId);
   const payload = await generateMorningMissionAi({
     signals: forAi,
     userName,
     userEmail,
     hints,
     slackStatus,
+    contacts: entityIndex.catalog,
   });
+  const withRelations = attachRelationsToPayload(payload, forAi, entityIndex);
   const sourceSignalIds = forAi.map((s) => s.id);
-  return { payload: { ...payload, slack_status: slackStatus }, sourceSignalIds };
+  return { payload: { ...withRelations, slack_status: slackStatus }, sourceSignalIds };
 }
 
 async function resolveUserEmail(supabase: DB, claims: Record<string, unknown>): Promise<string | null> {

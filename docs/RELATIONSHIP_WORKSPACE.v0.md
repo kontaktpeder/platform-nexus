@@ -78,8 +78,14 @@ Mobil-first stacked sections (tabs senere):
 ## Payload-retning
 
 `MorningMissionItem` får valgfrie relasjonsfelt (`entity_id`, `entity_type`, `relation_status`, …).  
-Ny valgfri `payload.relations` kan etter hvert erstatte kilde-gruppering.  
-UI projiserer legacy `today`/`waiting` til relasjonskort til AI-briefen returnerer entity-lenker.
+Ny valgfri `payload.relations` bygges alltid ved brief-generering.
+
+**Entity-linking (server):**
+1. AI får `contacts`-katalog og kan sette `entity_id` / `relation_name` når sikker.
+2. `attachRelationsToPayload` resolver deterministisk via `known_identities` (e-post), domenet → company, og eksakt navnematch.
+3. UI projiserer legacy buckets til Start her / oppfølging / uavklart / system.
+
+Trykk **Oppdater** på Mission for å regenerere brief med entity-lenker.
 
 ## Filplassering
 
