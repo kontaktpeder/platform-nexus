@@ -1055,6 +1055,42 @@ export type Database = {
           },
         ]
       }
+      sso_handoff_codes: {
+        Row: {
+          access_token: string
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          refresh_token: string
+          return_origin: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          refresh_token: string
+          return_origin: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          refresh_token?: string
+          return_origin?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       themes: {
         Row: {
           background: string
