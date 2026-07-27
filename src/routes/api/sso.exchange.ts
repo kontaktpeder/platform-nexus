@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { hashSsoCode } from "@/lib/sso-crypto";
-import { parseSsoReturnAllowlist } from "@/lib/sso-allowlist";
+import { resolveSsoReturnAllowlist } from "@/lib/sso-allowlist";
 
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin") ?? "";
-  const allowlist = parseSsoReturnAllowlist(process.env.SSO_RETURN_ALLOWLIST);
+  const allowlist = resolveSsoReturnAllowlist(process.env.SSO_RETURN_ALLOWLIST);
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",

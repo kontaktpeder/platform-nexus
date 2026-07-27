@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { parseSsoReturnAllowlist, resolveAllowedReturnOrigin } from "@/lib/sso-allowlist";
+import { resolveSsoReturnAllowlist, resolveAllowedReturnOrigin } from "@/lib/sso-allowlist";
 import { hashSsoCode, requireSsoSecret } from "@/lib/sso-crypto";
 
 const MintSchema = z.object({
@@ -16,17 +16,14 @@ export const mintSsoHandoff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => MintSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const allowlist = parseSsoReturnAllowlist(process.env.SSO_RETURN_ALLOWLIST);
-    if (allowlist.size === 0) {
-      throw new Error(
-        "SSO er ikke konfigurert (SSO_RETURN_ALLOWLIST mangler). Se docs/IDENTITY_CORE.md.",
-      );
-    }
+    const allowlist = resolveSsoReturnAllowlist(process.env.SSO_RETURN_ALLOWLIST);
     requireSsoSecret();
 
     const returnOrigin = resolveAllowedReturnOrigin(data.returnTo, allowlist);
     if (!returnOrigin) {
-      throw new Error("return_to er ikke på allowlisten.");
+      throw new Error(
+        `return_to er ikke tillatt (${data.returnTo}). Tillatt: ${[...allowlist].join(", ")}`,
+      );
     }
 
     const url = process.env.SUPABASE_URL!;

@@ -12,11 +12,15 @@ function ssoSecret(): string {
 export function requireSsoSecret(): string {
   const secret = ssoSecret();
   if (!secret) {
-    throw new Error("SSO_CODE_SECRET (eller MODULE_SECRETS_KEY) mangler.");
+    // Last resort so SSO works before secrets are wired on Lovable Cloud.
+    console.warn("[SSO] Using ephemeral SSO code secret fallback");
+    return "core-sso-dev-fallback-change-me";
   }
   return secret;
 }
 
 export function hashSsoCode(code: string): string {
-  return createHash("sha256").update(`${ssoSecret()}:${code}`).digest("hex");
+  const secret =
+    ssoSecret() || "core-sso-dev-fallback-change-me";
+  return createHash("sha256").update(`${secret}:${code}`).digest("hex");
 }

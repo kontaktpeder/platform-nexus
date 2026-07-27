@@ -41,14 +41,18 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [redirectStuck, setRedirectStuck] = useState(false);
+  const [ssoError, setSsoError] = useState<string | null>(null);
   const redirectedRef = useRef(false);
+  const ssoFailedRef = useRef(false);
 
   const goHome = useCallback(
     async (signedInUser?: { id: string; email?: string | null }) => {
       if (redirectedRef.current) return;
+      if (returnTo && ssoFailedRef.current) return;
       redirectedRef.current = true;
       setRedirecting(true);
       setRedirectStuck(false);
+      setSsoError(null);
       if (signedInUser?.id) {
         sessionStorage.setItem("platform:auth:userIdBefore", signedInUser.id);
       }
@@ -69,8 +73,11 @@ function AuthPage() {
           return;
         } catch (err) {
           redirectedRef.current = false;
+          ssoFailedRef.current = true;
           setRedirecting(false);
-          toast.error(err instanceof Error ? err.message : "SSO-handoff feilet");
+          const msg = err instanceof Error ? err.message : "SSO-handoff feilet";
+          setSsoError(msg);
+          toast.error(msg);
           return;
         }
       }
@@ -202,6 +209,36 @@ function AuthPage() {
         : mode === "signin"
           ? "Fortsett til dine arbeidsflater."
           : "Har du allerede Google-konto? Bruk «Glemt passord» i stedet — ikke opprett ny konto.";
+
+  if (ssoError && returnTo) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
+        <div className="flex w-full max-w-md flex-col items-center gap-3 text-center">
+          <p className="text-sm font-medium text-destructive">SSO feilet</p>
+          <p className="text-sm text-muted-foreground break-words">{ssoError}</p>
+          <Button
+            className="w-full"
+            onClick={() => {
+              ssoFailedRef.current = false;
+              setSsoError(null);
+              void goHome(user ?? undefined);
+            }}
+          >
+            Prøv igjen
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              window.location.assign("/mission");
+            }}
+          >
+            Gå til Nexus uten modul
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   if (redirectStuck) {
     return (

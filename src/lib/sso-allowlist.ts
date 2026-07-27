@@ -1,3 +1,12 @@
+/** Production CORE modules — used when Lovable Secrets are not yet injected into process.env. */
+export const DEFAULT_SSO_RETURN_ORIGINS = [
+  "https://financecore.lovable.app",
+  "https://work-heart-engine.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:5173",
+] as const;
+
 /** Parse SSO_RETURN_ALLOWLIST (comma-separated origins) into a Set. */
 export function parseSsoReturnAllowlist(raw: string | undefined | null): Set<string> {
   const set = new Set<string>();
@@ -13,6 +22,15 @@ export function parseSsoReturnAllowlist(raw: string | undefined | null): Set<str
     }
   }
   return set;
+}
+
+/** Env allowlist, or built-in CORE production/localhost defaults. */
+export function resolveSsoReturnAllowlist(
+  raw: string | undefined | null = process.env.SSO_RETURN_ALLOWLIST,
+): Set<string> {
+  const fromEnv = parseSsoReturnAllowlist(raw);
+  if (fromEnv.size > 0) return fromEnv;
+  return new Set(DEFAULT_SSO_RETURN_ORIGINS);
 }
 
 /**
