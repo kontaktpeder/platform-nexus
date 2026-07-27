@@ -52,7 +52,8 @@ Uten `MODULE_SECRETS_KEY` faller kryptering tilbake til base64 og logger en adva
 
 - Live widget-data: se [LIVE_WIDGETS.md](./LIVE_WIDGETS.md).
 
-## Ikke i scope
+## Ikke i scope (verify)
 
-- SSO
 - Automatisk opprettelse av org i modulen
+
+**User SSO** is Identity Core (separate from module verify keys). See [IDENTITY_CORE.md](./IDENTITY_CORE.md).

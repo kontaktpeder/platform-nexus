@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +10,7 @@ import { redirectAfterLogin } from "@/lib/auth-redirect";
 import { isPasswordRecoveryPending, clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 import { hasRecoveryLinkInUrl, redirectRecoveryLinkToUpdatePassword } from "@/lib/auth-recovery";
 import { listAuthProviders } from "@/lib/auth-helpers";
+import { mintSsoHandoff } from "@/lib/sso.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +18,9 @@ import { Label } from "@/components/ui/label";
 type AuthMode = "signin" | "signup" | "forgot";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    return_to: typeof search.return_to === "string" ? search.return_to : undefined,
+  }),
   head: () => ({ meta: [{ title: "Logg inn — Platform Core" }] }),
   component: AuthPage,
 });
@@ -27,6 +32,8 @@ function authRedirectUrl(path: string): string {
 function AuthPage() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { return_to: returnTo } = Route.useSearch();
+  const mintSso = useServerFn(mintSsoHandoff);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,6 +52,29 @@ function AuthPage() {
       if (signedInUser?.id) {
         sessionStorage.setItem("platform:auth:userIdBefore", signedInUser.id);
       }
+
+      // Identity Core: hand off session to Finance/Work when return_to is set.
+      if (returnTo) {
+        try {
+          const { data: sess } = await supabase.auth.getSession();
+          const accessToken = sess.session?.access_token;
+          const refreshToken = sess.session?.refresh_token;
+          if (!accessToken || !refreshToken) {
+            throw new Error("Mangler sesjon for SSO-handoff");
+          }
+          const res = await mintSso({
+            data: { returnTo, accessToken, refreshToken },
+          });
+          window.location.assign(res.redirectUrl);
+          return;
+        } catch (err) {
+          redirectedRef.current = false;
+          setRedirecting(false);
+          toast.error(err instanceof Error ? err.message : "SSO-handoff feilet");
+          return;
+        }
+      }
+
       try {
         await redirectAfterLogin((opts) => navigate(opts as never));
       } catch {
@@ -59,7 +89,7 @@ function AuthPage() {
         }
       }, 1500);
     },
-    [navigate],
+    [navigate, returnTo, mintSso],
   );
 
   useEffect(() => {
@@ -167,9 +197,11 @@ function AuthPage() {
   const subtitle =
     mode === "forgot"
       ? "Vi sender en lenke til e-posten din. Bruk samme adresse som Google-kontoen for å beholde eksisterende bruker-ID."
-      : mode === "signin"
-        ? "Fortsett til dine arbeidsflater."
-        : "Har du allerede Google-konto? Bruk «Glemt passord» i stedet — ikke opprett ny konto.";
+      : returnTo
+        ? "Logg inn for å fortsette til modulen."
+        : mode === "signin"
+          ? "Fortsett til dine arbeidsflater."
+          : "Har du allerede Google-konto? Bruk «Glemt passord» i stedet — ikke opprett ny konto.";
 
   if (redirectStuck) {
     return (

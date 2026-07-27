@@ -227,9 +227,9 @@ When moving data between orgs **inside a module** (e.g. pre-company → GoS):
 ✅ Platform + Finance + Work + Contract v1 + Verify + Widgets + Work→Finance export
 → ARCHITECTURE.md freeze (this document)
 → MODULE_CONTRACT.v1.md — add /module/widgets row (non-breaking)
+→ Identity Core / SSO (Nexus authority) — in progress; see IDENTITY_CORE.md
 → Booking Core pakke 1 (first module built only against frozen standard)
 → @platform/module-sdk (after Booking proves reuse)
-→ Identity Core / SSO (last — does not block modules today)
 ```
 
 **Booking Core pakke 1** = Supabase + booking domain + full Module Contract v1 (including `/module/widgets` when ready). Optional Finance/Work links later; not in pakke 1.

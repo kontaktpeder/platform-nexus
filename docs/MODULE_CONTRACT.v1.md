@@ -529,7 +529,7 @@ En modul er **Platform-klar v1** når alle punkter er oppfylt:
 - [ ] Kobling testet via Platform «Test kobling» (når implementert)
 
 ### Ikke i scope v1
-- [ ] SSO / felles innlogging
+- [x] SSO / felles innlogging — tracked as Identity Core (see `docs/IDENTITY_CORE.md`); not part of Module Contract HTTP
 - [ ] Live widget-data i Platform
 - [ ] Workspace-tema injisert i modul
 - [ ] Automatisk org-opprettelse fra Platform
