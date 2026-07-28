@@ -104,10 +104,39 @@ function slackInterpretedDraft(signal: MissionSignal): {
   const lower = raw.toLowerCase();
 
   if (/timeliste|timesheet|timef[øo]ring/.test(lower)) {
+    const email = raw.match(/[\w.+-]+@[\w.-]+\.\w+/i)?.[0] ?? null;
+    const period =
+      raw.match(/\b(?:fra\s+)?(januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|aug|sep|okt|nov|des)\b/i)?.[1] ??
+      raw.match(/\b(20\d{2}-\d{2}|uke\s*\d{1,2})\b/i)?.[1] ??
+      null;
+    const deadlineMatch =
+      raw.match(/innen\s+([^.,;\n]+?(?:\d{1,2}[:.]\d{2}|\d{1,2}\s*(?:\.|:)\s*\d{2}|kl(?:okken)?\s*\d{1,2}))/i) ||
+      raw.match(/innen\s+(fredag|mandag|tirsdag|onsdag|torsdag|l[øo]rdag|s[øo]ndag)[^.,;\n]{0,40}/i) ||
+      raw.match(/frist[:\s]+([^.,;\n]{3,40})/i);
+    const deadline = deadlineMatch?.[0]?.replace(/^innen\s+/i, "").trim() ?? null;
+    const viaMail = /mail|e-?post/i.test(raw);
+
+    const bits: string[] = [];
+    bits.push(
+      period
+        ? `Fyll inn timer for ${period.charAt(0).toUpperCase()}${period.slice(1).toLowerCase()}`
+        : "Fyll inn prosjekt-timelisten",
+    );
+    if (viaMail && email) bits.push(`send på e-post til ${email}`);
+    else if (viaMail) bits.push("send på e-post");
+    else if (email) bits.push(`lever til ${email}`);
+    if (deadline) bits.push(`frist ${deadline}`);
+
+    const explanation = `I ${channel}: ${bits.join(" — ")}.`;
+    const action =
+      viaMail && email
+        ? `Fyll timene${period ? ` for ${period}` : ""}, send e-post til ${email}${deadline ? ` innen ${deadline}` : ""}, og marker ferdig her.`
+        : `Fyll og lever timelisten${deadline ? ` innen ${deadline}` : ""}, og marker ferdig her.`;
+
     return {
-      title: `Lever timeliste (${channel})`,
-      explanation: `I ${channel} blir du bedt om å levere timeliste. Fullfør i Work og marker ferdig her når det er sendt.`,
-      action: "Åpne Work, lever timelisten, og kryss av i Mission.",
+      title: deadline ? `Timeliste innen ${deadline}` : `Lever timeliste (${channel})`,
+      explanation,
+      action,
     };
   }
   if (/faktura|invoice|purring/.test(lower)) {
@@ -127,7 +156,7 @@ function slackInterpretedDraft(signal: MissionSignal): {
   if (raw.length > 6) {
     return {
       title: shortSubject(`${channel}: ${raw}`, 64),
-      explanation: `Utkast fra ${channel}: «${shortSubject(raw, 140)}». Avgjør om du må svare eller gjøre noe.`,
+      explanation: `Utkast fra ${channel}: «${shortSubject(raw, 160)}». Avgjør om du må svare eller gjøre noe.`,
       action: "Les utkastet og gjør neste steg — åpne Slack bare om du trenger mer kontekst.",
     };
   }
