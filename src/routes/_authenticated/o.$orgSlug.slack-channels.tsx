@@ -174,8 +174,12 @@ function SlackChannelsPage() {
         </section>
 
         <p className="text-xs text-muted-foreground">
-          Signaler fra whitelistede kanaler dukker opp i <Link className="underline" to="/review">Review</Link>.
-          Mission viser bare relevante meldinger (nevninger, oppgaver, frister, driftshendelser).
+          Signaler fra whitelistede kanaler dukker opp i{" "}
+          <Link className="underline" to="/review">
+            Review
+          </Link>
+          . Mission leser også ops-kanaler (f.eks. #drift) og meldinger om timeliste — whitelist
+          anbefales fortsatt for stabile kanaler.
         </p>
       </main>
     </div>

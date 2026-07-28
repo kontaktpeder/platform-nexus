@@ -2,7 +2,7 @@
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
 import type { SlackMissionStatus } from "@/lib/morning-mission.types";
 import { isSameOsloWeek, isSlackTsThisWeek, osloWeekNumber, osloWeekStartUnix, slackTsToIso } from "@/lib/oslo-week";
-import { summarizeSignalForCard } from "@/lib/morning-mission/relation-summary.server";
+import { slackCardDraft } from "@/lib/morning-mission/relation-summary.server";
 
 const GATEWAY = "https://connector-gateway.lovable.dev/slack/api";
 const SLACK_CACHE_MS = 5 * 60_000;
@@ -10,6 +10,9 @@ const DM_CHANNEL_LIMIT = 8;
 const MENTION_LIMIT = 15;
 const WHITELIST_CHANNEL_LIMIT = 12;
 const WHITELIST_HISTORY_LIMIT = 25;
+/** Auto-pick common ops channel names when no (or incomplete) whitelist. */
+const OPS_CHANNEL_NAME =
+  /^(drift|ops|vakt|operasjon|operations|team-drift|timelister?)$/i;
 
 /** Nudge Mission when channel posts look like actionable ops asks. */
 const ACTION_HINT =
@@ -121,6 +124,110 @@ async function resolveDisplayNames(
   );
 }
 
+type ChannelTarget = {
+  slack_channel_id: string;
+  slack_channel_name: string | null;
+  ingest_mode: string;
+};
+
+async function discoverOpsChannels(opts: {
+  shared: { apiKey: string; lovableKey: string };
+  errors: string[];
+}): Promise<ChannelTarget[]> {
+  try {
+    const listed = await slackCall<{
+      channels?: Array<{ id: string; name?: string; is_archived?: boolean; is_member?: boolean }>;
+    }>("conversations.list", {
+      ...opts.shared,
+      query: "types=public_channel,private_channel&exclude_archived=true&limit=200",
+    });
+    return (listed.channels ?? [])
+      .filter((c) => c.id && c.name && OPS_CHANNEL_NAME.test(c.name) && !c.is_archived)
+      .slice(0, 6)
+      .map((c) => ({
+        slack_channel_id: c.id,
+        slack_channel_name: c.name ?? null,
+        ingest_mode: "new_messages",
+      }));
+  } catch (err) {
+    opts.errors.push(err instanceof Error ? err.message : "channel list failed");
+    return [];
+  }
+}
+
+async function fetchKeywordChannelSignals(opts: {
+  shared: { apiKey: string; lovableKey: string };
+  meUserId: string;
+  teamHome: string;
+  nameCache: Map<string, string>;
+  errors: string[];
+}): Promise<MissionSignal[]> {
+  const signals: MissionSignal[] = [];
+  try {
+    const search = await slackCall<{
+      results?: {
+        messages?: {
+          items?: Array<{
+            text?: string;
+            ts: string;
+            channel?: { id: string; name?: string };
+            user?: string;
+          }>;
+        };
+      };
+    }>("assistant.search.context", {
+      ...opts.shared,
+      body: {
+        query: "timeliste OR timesheet OR timeføring OR lever timeliste",
+        content_types: ["messages"],
+        channel_types: ["public_channel", "private_channel"],
+        sort: "timestamp",
+        sort_dir: "desc",
+        limit: 15,
+      },
+    });
+    const items = (search.results?.messages?.items ?? []).filter(
+      (it) => it.ts && isSlackTsThisWeek(it.ts) && it.channel?.id && it.user !== opts.meUserId,
+    );
+    const userIds = items.map((it) => it.user).filter(Boolean) as string[];
+    await resolveDisplayNames(userIds, opts.shared, opts.nameCache);
+    const seen = new Set<string>();
+    for (const it of items) {
+      const channelId = it.channel!.id;
+      const key = `${channelId}:${it.ts}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const text = (it.text ?? "").trim();
+      if (!text) continue;
+      const ch = channelLabel(it.channel?.name);
+      const sender = it.user ? (opts.nameCache.get(it.user) ?? "Ukjent") : "Ukjent";
+      const action = ACTION_HINT.test(text);
+      signals.push({
+        id: `slack:search:${channelId}:${it.ts}`,
+        source: "slack",
+        subject: action ? `${ch}: ${text.slice(0, 80)}` : `${ch}: melding fra ${sender}`,
+        from: `Slack · ${ch}`,
+        snippet: text.slice(0, 200),
+        occurred_at: slackTsToIso(it.ts),
+        href: `${opts.teamHome}/archives/${channelId}/p${it.ts.replace(".", "")}`,
+        tags: action
+          ? ["slack_channel", "slack_week", "slack_action", "ops", "slack_search"]
+          : ["slack_channel", "slack_week", "slack_search"],
+        meta: {
+          channel_id: channelId,
+          channel_name: it.channel?.name ?? null,
+          ts: it.ts,
+          kind: "channel_search",
+          action_hint: action,
+        },
+      });
+    }
+  } catch (err) {
+    opts.errors.push(err instanceof Error ? err.message : "timeliste search failed");
+  }
+  return signals;
+}
+
 async function fetchWhitelistedChannelSignals(opts: {
   shared: { apiKey: string; lovableKey: string };
   meUserId: string;
@@ -131,21 +238,36 @@ async function fetchWhitelistedChannelSignals(opts: {
   errors: string[];
 }): Promise<MissionSignal[]> {
   const signals: MissionSignal[] = [];
-  if (!opts.organizationIds.length) return signals;
+  const targets = new Map<string, ChannelTarget>();
 
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: rules, error } = await supabaseAdmin
-    .from("slack_channel_ingest_rules")
-    .select("id, slack_channel_id, slack_channel_name, ingest_mode")
-    .eq("enabled", true)
-    .in("organization_id", opts.organizationIds)
-    .limit(WHITELIST_CHANNEL_LIMIT);
+  if (opts.organizationIds.length) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rules, error } = await supabaseAdmin
+      .from("slack_channel_ingest_rules")
+      .select("id, slack_channel_id, slack_channel_name, ingest_mode")
+      .eq("enabled", true)
+      .in("organization_id", opts.organizationIds)
+      .limit(WHITELIST_CHANNEL_LIMIT);
 
-  if (error) {
-    opts.errors.push(`slack channel rules: ${error.message}`);
-    return signals;
+    if (error) {
+      opts.errors.push(`slack channel rules: ${error.message}`);
+    } else {
+      for (const rule of rules ?? []) {
+        targets.set(rule.slack_channel_id, {
+          slack_channel_id: rule.slack_channel_id,
+          slack_channel_name: rule.slack_channel_name,
+          ingest_mode: rule.ingest_mode ?? "new_messages",
+        });
+      }
+    }
   }
-  const list = rules ?? [];
+
+  // Always try ops channel names (e.g. #drift) so Mission works before whitelist is configured.
+  for (const ch of await discoverOpsChannels({ shared: opts.shared, errors: opts.errors })) {
+    if (!targets.has(ch.slack_channel_id)) targets.set(ch.slack_channel_id, ch);
+  }
+
+  const list = [...targets.values()];
   if (!list.length) return signals;
 
   const histories = await Promise.allSettled(
@@ -192,7 +314,6 @@ async function fetchWhitelistedChannelSignals(opts: {
         if (!text.includes(`<@${opts.meUserId}>`)) continue;
       }
       if (mode === "manual_only") continue;
-      // thread_replies: still include top-level + replies from history (history has both)
 
       const key = `${rule.slack_channel_id}:${m.ts}`;
       if (seen.has(key)) continue;
@@ -256,7 +377,7 @@ async function fetchSlackMissionSignalsUncached(opts?: {
     const me = await slackCall<AuthTest>("auth.test", shared);
     const teamHome = me.url?.replace(/\/$/, "") ?? "https://slack.com";
 
-    const [mentionResult, dmListResult, channelSignals] = await Promise.all([
+    const [mentionResult, dmListResult, channelSignals, searchSignals] = await Promise.all([
       slackCall<{
         results?: {
           messages?: {
@@ -298,9 +419,23 @@ async function fetchSlackMissionSignalsUncached(opts?: {
         nameCache,
         errors,
       }),
+      fetchKeywordChannelSignals({
+        shared,
+        meUserId: me.user_id,
+        teamHome,
+        nameCache,
+        errors,
+      }),
     ]);
 
-    signals.push(...channelSignals);
+    const seenSignalKeys = new Set<string>();
+    for (const s of [...channelSignals, ...searchSignals]) {
+      const meta = s.meta as { channel_id?: string; ts?: string } | undefined;
+      const key = meta?.channel_id && meta?.ts ? `${meta.channel_id}:${meta.ts}` : s.id;
+      if (seenSignalKeys.has(key)) continue;
+      seenSignalKeys.add(key);
+      signals.push(s);
+    }
 
     // Mentions — only this week
     if (mentionResult.status === "fulfilled") {
@@ -488,17 +623,17 @@ export function ensureSlackWeeklyItems(
     .slice(0, 12)
     .map((s) => {
       const action = s.tags.includes("slack_action");
+      const draft = slackCardDraft(s);
       return {
         id: `slack-week:${s.id}`,
-        title: s.subject,
-        explanation: summarizeSignalForCard(s),
-        recommended_action: action
-          ? "Følg opp (f.eks. lever timeliste) og kryss av når det er gjort."
-          : "Les tråden og vurder om det hører til ukeplanen.",
+        title: draft.title,
+        explanation: draft.explanation,
+        recommended_action: draft.action,
         priority: action ? ("high" as const) : ("medium" as const),
         source_ids: [s.id],
         source_label: s.from,
         href: s.href,
+        relation_status: "waiting_on_me" as const,
       };
     });
 

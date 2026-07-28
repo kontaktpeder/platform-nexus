@@ -109,6 +109,7 @@ async function buildMorningMission(
   userId: string,
   userEmail: string | null,
   userName: string | null,
+  forceSlack = false,
 ): Promise<{ payload: MorningMissionPayload; sourceSignalIds: string[] }> {
   const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
   const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
@@ -122,7 +123,7 @@ async function buildMorningMission(
   const { signals: allSignals, slackStatus } = await gatherMorningSignals({
     workspaces,
     userId,
-    forceSlack: false,
+    forceSlack,
   });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
@@ -205,7 +206,13 @@ export const getMorningMission = createServerFn({ method: "POST" })
     if (!cached) {
       // Contacts are synced separately on Mission open / Oppdater (syncPlatformContacts).
       // Brief rebuild stays focused on AI + live Gmail/Slack action cards.
-      const built = await buildMorningMission(supabase, userId, userEmail, userName);
+      const built = await buildMorningMission(
+        supabase,
+        userId,
+        userEmail,
+        userName,
+        !!data?.force,
+      );
       const { error } = await supabase.from("morning_mission_briefs").upsert(
         {
           user_id: userId,

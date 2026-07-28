@@ -36,6 +36,8 @@ export function looksLikeWeakTemplate(explanation: string): boolean {
   if (/om «.+» — vurder om/.test(exp)) return true;
   if (/oppfølging knyttet til «/.test(exp)) return true;
   if (/situasjon knyttet til «/.test(exp)) return true;
+  if (/slack-tr[aå]d med .+ som kan trenge din input/.test(exp)) return true;
+  if (/venter på meg/.test(exp) && exp.length < 40) return true;
   return false;
 }
 
@@ -70,6 +72,72 @@ export function looksLikeRawSnippet(explanation: string, signals: MissionSignal[
   return false;
 }
 
+function cleanSlackMarkup(text: string): string {
+  return text
+    .replace(/<@[A-Z0-9]+>/gi, "")
+    .replace(/<#[A-Z0-9]+\|([^>]+)>/gi, "#$1")
+    .replace(/<([^|>]+)\|([^>]+)>/g, "$2")
+    .replace(/<([^>]+)>/g, "$1")
+    .replace(/:[\w+-]+:/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function slackChannelLabel(signal: MissionSignal): string {
+  const fromMeta = signal.meta?.channel_name;
+  if (typeof fromMeta === "string" && fromMeta.trim()) {
+    return fromMeta.startsWith("#") ? fromMeta : `#${fromMeta}`;
+  }
+  const from = signal.from.replace(/^Slack\s*[·•-]\s*/i, "").trim();
+  if (from) return from.startsWith("#") ? from : from;
+  return "#slack";
+}
+
+/** Short human draft from Slack body — enough to act without opening Slack. */
+function slackInterpretedDraft(signal: MissionSignal): {
+  title: string;
+  explanation: string;
+  action: string;
+} {
+  const channel = slackChannelLabel(signal);
+  const raw = cleanSlackMarkup(signal.snippet || signal.subject || "");
+  const lower = raw.toLowerCase();
+
+  if (/timeliste|timesheet|timef[øo]ring/.test(lower)) {
+    return {
+      title: `Lever timeliste (${channel})`,
+      explanation: `I ${channel} blir du bedt om å levere timeliste. Fullfør i Work og marker ferdig her når det er sendt.`,
+      action: "Åpne Work, lever timelisten, og kryss av i Mission.",
+    };
+  }
+  if (/faktura|invoice|purring/.test(lower)) {
+    return {
+      title: `Følg opp faktura (${channel})`,
+      explanation: `I ${channel} nevnes faktura/purring: «${shortSubject(raw, 100)}».`,
+      action: "Sjekk Finance og svar i tråden om nødvendig.",
+    };
+  }
+  if (/møte|meeting|standup|avklar/.test(lower)) {
+    return {
+      title: `Avklar møte/plan (${channel})`,
+      explanation: `I ${channel}: «${shortSubject(raw, 110)}».`,
+      action: "Bekreft eller svar i Slack-tråden.",
+    };
+  }
+  if (raw.length > 6) {
+    return {
+      title: shortSubject(`${channel}: ${raw}`, 64),
+      explanation: `Utkast fra ${channel}: «${shortSubject(raw, 140)}». Avgjør om du må svare eller gjøre noe.`,
+      action: "Les utkastet og gjør neste steg — åpne Slack bare om du trenger mer kontekst.",
+    };
+  }
+  return {
+    title: `Ny melding i ${channel}`,
+    explanation: `Det er aktivitet i ${channel} som kan kreve handling.`,
+    action: "Åpne tråden og vurder neste steg.",
+  };
+}
+
 /**
  * Intent summary when AI is unavailable — never paste subject as the story.
  */
@@ -94,7 +162,7 @@ export function summarizeSignalForCard(signal: MissionSignal): string {
   }
 
   if (signal.source === "slack") {
-    return `Slack-tråd med ${who} som kan trenge din input.`;
+    return slackInterpretedDraft(signal).explanation;
   }
 
   if (signal.source === "work") {
@@ -122,6 +190,15 @@ export function summarizeSignalForCard(signal: MissionSignal): string {
   }
 
   return `${who} har tatt kontakt — les og avgjør neste steg.`;
+}
+
+/** Title/action draft for Slack Mission cards (deterministic, no AI). */
+export function slackCardDraft(signal: MissionSignal): {
+  title: string;
+  explanation: string;
+  action: string;
+} {
+  return slackInterpretedDraft(signal);
 }
 
 export function summarizeItemFromSignals(

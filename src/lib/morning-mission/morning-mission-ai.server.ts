@@ -281,9 +281,15 @@ export async function generateMorningMissionAi(input: {
     "Avslag, fullførte saker, irrelevant historikk → closed.",
     "Reklame, nyhetsbrev, varsler uten handling → noise eller hygiene.",
     "Modul-alerts fra Finance/Work med mangler → today eller this_week etter alvor.",
-    "Slack-signaler (source=slack, tags slack_week): planlegging og koordinering → this_week.",
-    "  Kun Slack med tydelig hast (ASAP, i dag, haster) → today.",
+    "Slack-signaler (source=slack):",
+    "  - title: hva de ber om (f.eks. «Lever timeliste (#drift)»), ikke bare kanalnavn.",
+    "  - explanation: 1–2 setninger som tolker innholdet slik at brukeren slipper å åpne Slack.",
+    "    GODT: «I #drift blir du bedt om å levere timeliste.»",
+    "    DÅRLIG: «Slack-tråd med Slack · #drift som kan trenge din input.»",
+    "  - tag slack_action / timeliste / frist → today, priority high.",
+    "  - Øvrig Slack-planlegging → this_week.",
     "  Ikke finn på Slack-meldinger — bruk KUN signaler med source slack i input.",
+    "  Bruk snippet/subject til å tolke — lim ikke inn hele råteksten.",
     input.slackStatus?.activity_this_week === 0
       ? "Det finnes INGEN Slack-signaler denne uken — ikke lag this_week-elementer om Slack, mentions eller DM-er."
       : "",
