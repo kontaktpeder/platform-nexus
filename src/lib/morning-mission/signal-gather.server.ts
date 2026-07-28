@@ -165,10 +165,11 @@ export async function gatherMorningSignals(input: {
   slackStatus: import("@/lib/morning-mission.types").SlackMissionStatus;
 }> {
   const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
+  const organizationIds = [...new Set(input.workspaces.map((w) => w.orgId).filter(Boolean))];
 
   const [gmailRaw, slackResult, workspaceSignals] = await Promise.all([
     fetchRecentGmailSignals({ hours: 72, max: 40 }),
-    fetchSlackMissionSignals({ force: input.forceSlack }),
+    fetchSlackMissionSignals({ force: input.forceSlack, organizationIds }),
     gatherWorkspaceSignals(input.workspaces, input.userId),
   ]);
 
