@@ -99,6 +99,19 @@ export type CustomerPerson = {
   summary: string | null;
 };
 
+/** One relation edge as seen from the viewed contact. */
+export type ContactRelation = {
+  relationshipId: string;
+  kind: string;
+  /** out = viewed contact is from_entity, in = viewed contact is to_entity. */
+  direction: "out" | "in";
+  role: string | null;
+  source: string;
+  otherEntityId: string;
+  otherName: string;
+  otherType: string;
+};
+
 export type CustomerTimelineItem = {
   id: string;
   kind: "field" | "signal";
@@ -126,6 +139,8 @@ export type CustomerDetail = {
   people: CustomerPerson[];
   timeline: CustomerTimelineItem[];
   relatedCompanies: { entityId: string; name: string; kind: string }[];
+  relations: ContactRelation[];
+  email: string | null;
   imageUrl: string | null;
 };
 
@@ -172,10 +187,7 @@ export const listCustomers = createServerFn({ method: "POST" })
         .from("entity_relationships")
         .select("from_entity_id, to_entity_id, kind")
         .eq("user_id", userId),
-      supabase
-        .from("entity_signals")
-        .select("entity_id")
-        .eq("user_id", userId),
+      supabase.from("entity_signals").select("entity_id").eq("user_id", userId),
       supabase
         .from("known_identities")
         .select("entity_id, email, domain, identity_type, external_key")
@@ -192,10 +204,7 @@ export const listCustomers = createServerFn({ method: "POST" })
     const personIdSet = new Set(persons.map((p) => p.id));
     const companyNameById = new Map(companies.map((c) => [c.id, c.name]));
 
-    const followByEntity = new Map<
-      string,
-      { id: string; action: string; due_at: string }
-    >();
+    const followByEntity = new Map<string, { id: string; action: string; due_at: string }>();
     for (const row of followRes.data ?? []) {
       const existing = followByEntity.get(row.entity_id);
       if (existing && existing.due_at <= row.due_at) continue;
@@ -224,7 +233,8 @@ export const listCustomers = createServerFn({ method: "POST" })
       }
       if (companyIds.has(e.to_entity_id) && personIdSet.has(e.from_entity_id)) {
         peopleCount.set(e.to_entity_id, (peopleCount.get(e.to_entity_id) ?? 0) + 1);
-        if (!personCompany.has(e.from_entity_id)) personCompany.set(e.from_entity_id, e.to_entity_id);
+        if (!personCompany.has(e.from_entity_id))
+          personCompany.set(e.from_entity_id, e.to_entity_id);
       }
     }
 
@@ -264,20 +274,14 @@ export const listCustomers = createServerFn({ method: "POST" })
             overdue: osloDateKey(new Date(fu.due_at)) <= todayKey,
           }
         : null;
-      const warmth = warmthFromMetaAndFollowUp(
-        meta,
-        followUp,
-        recentActivity.has(c.id),
-      );
+      const warmth = warmthFromMetaAndFollowUp(meta, followUp, recentActivity.has(c.id));
       const fromMeta = ownerContextFromOrgSlug(
         typeof meta.platform_org_slug === "string" ? meta.platform_org_slug : null,
       );
       const ownerContext = normalizeOwnerContext(c.owner_context ?? fromMeta ?? "unknown");
       const linkedCompanyId = entityType === "person" ? personCompany.get(c.id) : undefined;
       const email =
-        (typeof meta.email === "string" ? meta.email : null) ||
-        emailByEntity.get(c.id) ||
-        null;
+        (typeof meta.email === "string" ? meta.email : null) || emailByEntity.get(c.id) || null;
       const domain =
         (typeof meta.email_domain === "string" ? meta.email_domain : null) ||
         domainByEntity.get(c.id) ||
@@ -365,7 +369,7 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
     const [relsRes, signalsRes, actsRes, followRes] = await Promise.all([
       supabase
         .from("entity_relationships")
-        .select("id, from_entity_id, to_entity_id, kind")
+        .select("id, from_entity_id, to_entity_id, kind, metadata, source")
         .eq("user_id", userId)
         .or(`from_entity_id.eq.${data.entityId},to_entity_id.eq.${data.entityId}`),
       supabase
@@ -416,10 +420,23 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
 
     const people: CustomerPerson[] = [];
     const relatedCompanies: CustomerDetail["relatedCompanies"] = [];
+    const relations: ContactRelation[] = [];
     for (const r of relsRes.data ?? []) {
+      const direction: "out" | "in" = r.from_entity_id === data.entityId ? "out" : "in";
       const otherId = r.from_entity_id === data.entityId ? r.to_entity_id : r.from_entity_id;
       const other = byId.get(otherId);
       if (!other) continue;
+      const relMeta = (r.metadata ?? {}) as Record<string, unknown>;
+      relations.push({
+        relationshipId: r.id,
+        kind: r.kind,
+        direction,
+        role: typeof relMeta.role === "string" && relMeta.role.trim() ? relMeta.role.trim() : null,
+        source: r.source ?? "auto",
+        otherEntityId: other.id,
+        otherName: other.name,
+        otherType: other.type,
+      });
       if (other.type === "person") {
         people.push({
           entityId: other.id,
@@ -513,6 +530,8 @@ export const getCustomerDetail = createServerFn({ method: "POST" })
       people,
       timeline: timeline.slice(0, 50),
       relatedCompanies,
+      relations,
+      email,
       imageUrl: relationImageUrl({
         entityType,
         email,
@@ -620,7 +639,9 @@ export const renameCustomer = createServerFn({ method: "POST" })
   .inputValidator((input: { entityId: string; name: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const name = String(data.name ?? "").trim().slice(0, 200);
+    const name = String(data.name ?? "")
+      .trim()
+      .slice(0, 200);
     if (!name) throw new Error("Navn kan ikke være tomt");
 
     const { data: row, error } = await supabase
@@ -785,4 +806,154 @@ export const mergeCustomers = createServerFn({ method: "POST" })
       keepName: keep.name as string,
       absorbedName: absorb.name as string,
     };
+  });
+
+const RELATION_KINDS = [
+  "works_on",
+  "customer_of",
+  "member_of",
+  "owns",
+  "blocked_by",
+  "related_to",
+] as const;
+
+/**
+ * Manually link two contacts, e.g. «Fredrik jobber i Oslo Bowling og Bar
+ * (Daglig leder)» or «Holding AS eier Oslo Bowling og Bar».
+ * Role is free text stored in metadata.role.
+ */
+export const addContactRelation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      entityId: string;
+      otherEntityId: string;
+      kind: string;
+      direction: "out" | "in";
+      role?: string | null;
+    }) => input,
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (!(RELATION_KINDS as readonly string[]).includes(data.kind)) {
+      throw new Error("Ugyldig relasjonstype");
+    }
+    if (!data.entityId || !data.otherEntityId) throw new Error("Kontakt mangler");
+    if (data.entityId === data.otherEntityId) {
+      throw new Error("Kan ikke koble en kontakt til seg selv");
+    }
+
+    const { data: ents, error } = await supabase
+      .from("entities")
+      .select("id")
+      .eq("user_id", userId)
+      .in("id", [data.entityId, data.otherEntityId]);
+    if (error) throw error;
+    if ((ents ?? []).length !== 2) throw new Error("Kontakt ikke funnet");
+
+    const fromId = data.direction === "in" ? data.otherEntityId : data.entityId;
+    const toId = data.direction === "in" ? data.entityId : data.otherEntityId;
+    const role = typeof data.role === "string" ? data.role.trim().slice(0, 120) : "";
+
+    const { data: row, error: upErr } = await supabase
+      .from("entity_relationships")
+      .upsert(
+        {
+          user_id: userId,
+          from_entity_id: fromId,
+          to_entity_id: toId,
+          kind: data.kind as never,
+          source: "manual",
+          metadata: (role ? { role } : {}) as never,
+        },
+        { onConflict: "user_id,from_entity_id,to_entity_id,kind" },
+      )
+      .select("id")
+      .single();
+    if (upErr) throw upErr;
+    return { ok: true, relationshipId: row.id as string };
+  });
+
+export const removeContactRelation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { relationshipId: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { error } = await supabase
+      .from("entity_relationships")
+      .delete()
+      .eq("id", data.relationshipId)
+      .eq("user_id", userId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/**
+ * Set a contact's email address manually. Writes both entity metadata and a
+ * known_identities row so future inbound mail auto-links to this contact.
+ */
+export const setContactEmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { entityId: string; email: string }) => input)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const email = String(data.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Ugyldig e-postadresse");
+    }
+    const domain = extractEmailDomain(email);
+
+    const { data: row, error } = await supabase
+      .from("entities")
+      .select("id, metadata")
+      .eq("id", data.entityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Kontakt ikke funnet");
+
+    const meta: Record<string, unknown> = {
+      ...((row.metadata ?? {}) as Record<string, unknown>),
+      email,
+    };
+    if (domain) meta.email_domain = domain;
+    const { error: upErr } = await supabase
+      .from("entities")
+      .update({ metadata: meta as never })
+      .eq("id", data.entityId)
+      .eq("user_id", userId);
+    if (upErr) throw upErr;
+
+    const now = new Date().toISOString();
+    const { data: existing } = await supabase
+      .from("known_identities")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("identity_type", "email_address")
+      .eq("external_key", email)
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) {
+      await supabase
+        .from("known_identities")
+        .update({ entity_id: data.entityId, ignored_at: null, last_seen_at: now })
+        .eq("id", existing.id)
+        .eq("user_id", userId);
+    } else {
+      await supabase.from("known_identities").insert({
+        user_id: userId,
+        provider: "manual",
+        identity_type: "email_address",
+        external_key: email,
+        email,
+        domain: domain ?? null,
+        entity_id: data.entityId,
+        first_seen_at: now,
+        last_seen_at: now,
+      });
+    }
+
+    return { ok: true, email };
   });

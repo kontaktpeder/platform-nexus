@@ -12,3 +12,5 @@ export { RelationFilterChips, type RelationListFilter } from "./RelationFilterCh
 export { PlanFollowUpPanel } from "./PlanFollowUpPanel";
 export { ContactAboutCard } from "./ContactAboutCard";
 export { ContactDetailPanel } from "./ContactDetailPanel";
+export { ContactEmailSection } from "./ContactEmailSection";
+export { ContactRelationsSection } from "./ContactRelationsSection";

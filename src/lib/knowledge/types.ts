@@ -5,18 +5,9 @@
 export type EntityType = "person" | "company" | "project" | "goal" | "commitment";
 
 export type EntityRelationshipKind =
-  | "works_on"
-  | "customer_of"
-  | "member_of"
-  | "owns"
-  | "blocked_by"
-  | "related_to";
+  "works_on" | "customer_of" | "member_of" | "owns" | "blocked_by" | "related_to";
 
-export type OwnerContext =
-  | "personal"
-  | "peder-enk"
-  | "gold-of-sicily"
-  | "unknown";
+export type OwnerContext = "personal" | "peder-enk" | "gold-of-sicily" | "unknown";
 
 export const ANCHOR_SLUGS = ["personal", "peder-enk", "gold-of-sicily"] as const;
 export type AnchorSlug = (typeof ANCHOR_SLUGS)[number];
@@ -89,13 +80,7 @@ export type EntityGraph = {
   signals: EntitySignal[];
 };
 
-export const ENTITY_TYPES: EntityType[] = [
-  "person",
-  "company",
-  "project",
-  "goal",
-  "commitment",
-];
+export const ENTITY_TYPES: EntityType[] = ["person", "company", "project", "goal", "commitment"];
 
 export const RELATIONSHIP_KINDS: EntityRelationshipKind[] = [
   "works_on",
@@ -122,3 +107,22 @@ export const RELATIONSHIP_LABEL: Record<EntityRelationshipKind, string> = {
   blocked_by: "blocked by",
   related_to: "related to",
 };
+
+/**
+ * Norwegian, direction-aware labels for showing a relation from one side.
+ * `out` = the viewed entity is from_entity ("Fredrik jobber i …"),
+ * `in`  = the viewed entity is to_entity ("… har ansatt Fredrik").
+ */
+export const RELATIONSHIP_LABEL_NO: Record<EntityRelationshipKind, { out: string; in: string }> = {
+  works_on: { out: "jobber med", in: "involverer" },
+  customer_of: { out: "kunde av", in: "har kunde" },
+  member_of: { out: "jobber i", in: "har ansatt" },
+  owns: { out: "eier", in: "eies av" },
+  blocked_by: { out: "blokkert av", in: "blokkerer" },
+  related_to: { out: "relatert til", in: "relatert til" },
+};
+
+export function relationshipLabelNo(kind: string, direction: "out" | "in"): string {
+  const entry = RELATIONSHIP_LABEL_NO[kind as EntityRelationshipKind];
+  return entry ? entry[direction] : kind;
+}

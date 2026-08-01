@@ -2,18 +2,12 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  GitMerge,
-  Loader2,
-  MapPin,
-  Pencil,
-  Users,
-  X,
-} from "lucide-react";
+import { ArrowLeft, GitMerge, Loader2, MapPin, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   ContactAboutCard,
+  ContactEmailSection,
+  ContactRelationsSection,
   NextStepPanel,
   RelationAvatar,
   OwnerContextChip,
@@ -40,20 +34,16 @@ import {
 import { scheduleEntityFollowUp } from "@/lib/field.functions";
 import { FIELD_RESULT_LABEL, type FollowUpPreset } from "@/lib/field/field.types";
 import { rejectWrongEntity } from "@/lib/known-identities.functions";
-import { RELATIONSHIP_LABEL, type OwnerContext } from "@/lib/knowledge/types";
+import type { OwnerContext } from "@/lib/knowledge/types";
 import type { RelationSourceKind, RelationStatus } from "@/lib/relation/types";
 import { formatOsloActivityDate } from "@/lib/field/field-dates";
 import { cn } from "@/lib/utils";
 
-const OWNER_OPTIONS: OwnerContext[] = [
-  "gold-of-sicily",
-  "peder-enk",
-  "personal",
-  "unknown",
-];
+const OWNER_OPTIONS: OwnerContext[] = ["gold-of-sicily", "peder-enk", "personal", "unknown"];
 
 const SECTION_CHIPS = [
   { id: "oversikt", label: "Oversikt" },
+  { id: "epost", label: "E-post" },
   { id: "historikk", label: "Historikk" },
   { id: "oppfolging", label: "Oppfølging" },
   { id: "relasjoner", label: "Relasjoner" },
@@ -94,31 +84,6 @@ function scrollToSection(id: string) {
   document.getElementById(`kontakt-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function EntityJump({
-  entityId,
-  onOpenEntity,
-  className,
-  children,
-}: {
-  entityId: string;
-  onOpenEntity?: (id: string) => void;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  if (onOpenEntity) {
-    return (
-      <button type="button" className={className} onClick={() => onOpenEntity(entityId)}>
-        {children}
-      </button>
-    );
-  }
-  return (
-    <Link to="/kontakter/$entityId" params={{ entityId }} className={className}>
-      {children}
-    </Link>
-  );
-}
-
 export function ContactDetailPanel({
   entityId,
   variant = "page",
@@ -155,14 +120,12 @@ export function ContactDetailPanel({
 
   const detailQ = useQuery({
     queryKey: ["customer", entityId],
-    queryFn: () =>
-      fetchDetail({ data: { entityId } }) as Promise<CustomerDetail>,
+    queryFn: () => fetchDetail({ data: { entityId } }) as Promise<CustomerDetail>,
   });
 
   const customersQ = useQuery({
     queryKey: ["customers"],
-    queryFn: () =>
-      fetchCustomers() as Promise<{ items: CustomerListItem[] }>,
+    queryFn: () => fetchCustomers() as Promise<{ items: CustomerListItem[] }>,
     staleTime: 5 * 60_000,
     enabled: mergeOpen,
   });
@@ -177,8 +140,7 @@ export function ContactDetailPanel({
   }, [customersQ.data?.items, entityId, mergeQuery]);
 
   const warmthMut = useMutation({
-    mutationFn: (warmth: CustomerWarmth) =>
-      runWarmth({ data: { entityId, warmth } }),
+    mutationFn: (warmth: CustomerWarmth) => runWarmth({ data: { entityId, warmth } }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
@@ -187,8 +149,7 @@ export function ContactDetailPanel({
   });
 
   const ownerMut = useMutation({
-    mutationFn: (ownerContext: OwnerContext) =>
-      runOwner({ data: { entityId, ownerContext } }),
+    mutationFn: (ownerContext: OwnerContext) => runOwner({ data: { entityId, ownerContext } }),
     onSuccess: async () => {
       toast.success("Org oppdatert");
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
@@ -268,16 +229,14 @@ export function ContactDetailPanel({
   const d = detailQ.data;
   const lastEvent = d?.timeline[0] ?? null;
   const metaEmail = typeof d?.metadata.email === "string" ? d.metadata.email : null;
-  const metaDomain =
-    typeof d?.metadata.email_domain === "string" ? d.metadata.email_domain : null;
+  const metaDomain = typeof d?.metadata.email_domain === "string" ? d.metadata.email_domain : null;
   const metaRole =
     typeof d?.metadata.role === "string"
       ? d.metadata.role
       : typeof d?.metadata.title === "string"
         ? d.metadata.title
         : null;
-  const metaIndustry =
-    typeof d?.metadata.industry === "string" ? d.metadata.industry : null;
+  const metaIndustry = typeof d?.metadata.industry === "string" ? d.metadata.industry : null;
 
   return (
     <div
@@ -326,9 +285,7 @@ export function ContactDetailPanel({
 
         {detailQ.isError && (
           <p className="text-sm text-destructive">
-            {detailQ.error instanceof Error
-              ? detailQ.error.message
-              : "Kunne ikke hente kontakt"}
+            {detailQ.error instanceof Error ? detailQ.error.message : "Kunne ikke hente kontakt"}
           </p>
         )}
 
@@ -571,6 +528,12 @@ export function ContactDetailPanel({
               </div>
             </section>
 
+            <ContactEmailSection
+              entityId={entityId}
+              contactName={d.name}
+              email={d.email ?? metaEmail}
+            />
+
             <section id="kontakt-historikk" className="mb-8 scroll-mt-4">
               <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Historikk ({d.timeline.length})
@@ -621,68 +584,12 @@ export function ContactDetailPanel({
               )}
             </section>
 
-            <section id="kontakt-relasjoner" className="mb-8 scroll-mt-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Relasjoner
-                </h2>
-              </div>
-
-              <h3 className="mb-2 text-sm font-semibold">Personer ({d.people.length})</h3>
-              {d.people.length === 0 ? (
-                <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                  Ingen personer koblet ennå. De dukker opp fra mail/Slack og Innboks.
-                </p>
-              ) : (
-                <ul className="mb-4 space-y-2">
-                  {d.people.map((p) => (
-                    <li key={p.entityId}>
-                      <EntityJump
-                        entityId={p.entityId}
-                        onOpenEntity={onOpenEntity}
-                        className="block w-full rounded-xl border border-border bg-card px-4 py-3 text-left active:bg-muted/60"
-                      >
-                        <p className="font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {RELATIONSHIP_LABEL[
-                            p.relationshipKind as keyof typeof RELATIONSHIP_LABEL
-                          ] ?? p.relationshipKind}
-                          {p.summary ? ` · ${p.summary}` : ""}
-                        </p>
-                      </EntityJump>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <h3 className="mb-2 text-sm font-semibold">
-                Selskaper ({d.relatedCompanies.length})
-              </h3>
-              {d.relatedCompanies.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                  Ingen selskapskobling ennå.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {d.relatedCompanies.map((c) => (
-                    <li key={c.entityId}>
-                      <EntityJump
-                        entityId={c.entityId}
-                        onOpenEntity={onOpenEntity}
-                        className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left active:bg-muted/60"
-                      >
-                        <RelationAvatar name={c.name} entityType="company" size="sm" />
-                        <div className="min-w-0">
-                          <p className="font-medium">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">{c.kind}</p>
-                        </div>
-                      </EntityJump>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <ContactRelationsSection
+              entityId={entityId}
+              contactName={d.name}
+              relations={d.relations ?? []}
+              onOpenEntity={onOpenEntity}
+            />
 
             <section className="mb-5 rounded-2xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
@@ -761,9 +668,7 @@ export function ContactDetailPanel({
                       className="h-11 flex-1 rounded-xl"
                       disabled={!mergeTargetId || mergeMut.isPending}
                       onClick={() => {
-                        const target = mergeCandidates.find(
-                          (c) => c.entityId === mergeTargetId,
-                        );
+                        const target = mergeCandidates.find((c) => c.entityId === mergeTargetId);
                         if (
                           !window.confirm(
                             `Slå «${target?.name ?? "kontakten"}» inn i «${d.name}»?\n\n«${target?.name ?? "Den andre"}» slettes.`,

@@ -68,9 +68,7 @@ export type FetchGmailResult = {
   error: string | null;
 };
 
-export async function fetchGmailActions(opts?: {
-  max?: number;
-}): Promise<InboxAction[]> {
+export async function fetchGmailActions(opts?: { max?: number }): Promise<InboxAction[]> {
   const result = await fetchGmailActionsWithMeta(opts);
   return result.actions;
 }
@@ -96,13 +94,15 @@ export async function fetchGmailActionsWithMeta(opts?: {
     if (ids.length === 0) return { actions: [], error: null };
 
     const metas = await Promise.all(
-      ids.slice(0, 25).map((id) =>
-        gmailFetch<MessageMeta>(
-          `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
-          apiKey,
-          lovableKey,
-        ).catch(() => null),
-      ),
+      ids
+        .slice(0, 25)
+        .map((id) =>
+          gmailFetch<MessageMeta>(
+            `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+            apiKey,
+            lovableKey,
+          ).catch(() => null),
+        ),
     );
 
     const actions: InboxAction[] = [];
@@ -219,9 +219,7 @@ function parseEmail(from: string): { name: string; email: string } {
   return { name: from.trim(), email: from.trim() };
 }
 
-export async function getGmailReplyContext(
-  messageId: string,
-): Promise<GmailReplyContext> {
+export async function getGmailReplyContext(messageId: string): Promise<GmailReplyContext> {
   const { apiKey, lovableKey } = gmailKeys();
   const meta = await gmailFetch<MessageMeta>(
     `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To`,
@@ -235,10 +233,7 @@ export async function getGmailReplyContext(
   const prevRefs = headerValue(headers, "References");
   const inReplyTo = headerValue(headers, "In-Reply-To");
   const sender = parseEmail(from);
-  const references = [prevRefs, inReplyTo, rfcMessageId]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  const references = [prevRefs, inReplyTo, rfcMessageId].filter(Boolean).join(" ").trim();
   return {
     messageId,
     threadId: meta.threadId,
@@ -266,9 +261,7 @@ function buildReplyRaw(opts: {
   inReplyTo: string;
   references: string;
 }): string {
-  const subject = opts.subject.startsWith("Re:")
-    ? opts.subject
-    : `Re: ${opts.subject}`;
+  const subject = opts.subject.startsWith("Re:") ? opts.subject : `Re: ${opts.subject}`;
   const lines = [
     `To: ${opts.to}`,
     `Subject: ${subject}`,
@@ -367,6 +360,65 @@ export async function sendGmailWithAttachment(opts: {
   return { messageId: sent.id, threadId: sent.threadId };
 }
 
+/** RFC 2047 encode a header value when it contains non-ASCII (æøå etc.). */
+function encodeHeaderValue(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  const b64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(value, "utf-8").toString("base64")
+      : btoa(unescape(encodeURIComponent(value)));
+  return `=?UTF-8?B?${b64}?=`;
+}
+
+function buildComposeRaw(opts: { to: string; subject: string; body: string }): string {
+  const lines = [
+    `To: ${opts.to}`,
+    `Subject: ${encodeHeaderValue(opts.subject)}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "MIME-Version: 1.0",
+    "",
+    opts.body,
+  ];
+  return base64UrlEncode(lines.join("\r\n"));
+}
+
+/** Send a brand-new plain-text email (not a reply). */
+export async function sendGmailMessage(opts: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<SentGmailMessage> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const raw = buildComposeRaw(opts);
+  const sent = await gmailPost<{ id: string; threadId: string }>(
+    `/users/me/messages/send`,
+    apiKey,
+    lovableKey,
+    { raw },
+  );
+  return { messageId: sent.id, threadId: sent.threadId };
+}
+
+/** Save a brand-new plain-text email as a Gmail draft. */
+export async function createGmailComposeDraft(opts: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<SavedGmailDraft> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const raw = buildComposeRaw(opts);
+  const draft = await gmailPost<{
+    id: string;
+    message: { id: string; threadId: string };
+  }>(`/users/me/drafts`, apiKey, lovableKey, { message: { raw } });
+  return {
+    draftId: draft.id,
+    messageId: draft.message.id,
+    threadId: draft.message.threadId,
+    openUrl: `https://mail.google.com/mail/u/0/#drafts/${draft.message.id}`,
+  };
+}
+
 export async function createGmailReplyDraft(opts: {
   context: GmailReplyContext;
   body: string;
@@ -392,4 +444,3 @@ export async function createGmailReplyDraft(opts: {
     openUrl: `https://mail.google.com/mail/u/0/#drafts/${draft.message.id}`,
   };
 }
-
