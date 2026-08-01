@@ -5,10 +5,10 @@ import type { LanguageModel } from "ai";
 export type GeminiTier = "flash" | "flash-lite";
 
 const MODEL_IDS: Record<GeminiTier, string> = {
-  /** Morning brief, replies, richer generation */
-  flash: "gemini-2.5-flash",
+  /** Morning brief, replies, assistant — richer generation */
+  flash: "gemini-3.6-flash",
   /** Parse, classify, extract — high volume / cheap */
-  "flash-lite": "gemini-2.5-flash-lite",
+  "flash-lite": "gemini-3.5-flash-lite",
 };
 
 /** Prefer GOOGLE_GENERATIVE_AI_API_KEY (AI SDK default); GEMINI_API_KEY also accepted. */
