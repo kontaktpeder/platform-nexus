@@ -246,6 +246,162 @@ export async function getGmailReplyContext(messageId: string): Promise<GmailRepl
   };
 }
 
+// ── Assistant helpers: free-form search + full thread reading ──────────────
+
+export type GmailSearchHit = {
+  messageId: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  date: string | null;
+  snippet: string;
+};
+
+/** Search Gmail with full query syntax (from:, to:, subject:, "fritekst", after:YYYY/MM/DD). */
+export async function searchGmailMessages(query: string, max = 8): Promise<GmailSearchHit[]> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const capped = Math.min(Math.max(max, 1), 20);
+  const list = await gmailFetch<ListResponse>(
+    `/users/me/messages?maxResults=${capped}&q=${encodeURIComponent(query)}`,
+    apiKey,
+    lovableKey,
+  );
+  const ids = (list.messages ?? []).map((m) => m.id);
+  if (ids.length === 0) return [];
+
+  const metas = await Promise.all(
+    ids.map((id) =>
+      gmailFetch<MessageMeta>(
+        `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+        apiKey,
+        lovableKey,
+      ).catch(() => null),
+    ),
+  );
+
+  const seenThreads = new Set<string>();
+  const hits: GmailSearchHit[] = [];
+  for (const meta of metas) {
+    if (!meta) continue;
+    // One hit per thread keeps the tool output small for the model.
+    if (seenThreads.has(meta.threadId)) continue;
+    seenThreads.add(meta.threadId);
+    hits.push({
+      messageId: meta.id,
+      threadId: meta.threadId,
+      subject: headerValue(meta.payload?.headers, "Subject") || "(uten emne)",
+      from: headerValue(meta.payload?.headers, "From") || "",
+      date: meta.internalDate ? new Date(Number(meta.internalDate)).toISOString() : null,
+      snippet: (meta.snippet ?? "").slice(0, 300),
+    });
+  }
+  return hits;
+}
+
+type MessagePart = {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string; attachmentId?: string; size?: number };
+  parts?: MessagePart[];
+};
+
+type FullMessage = {
+  id: string;
+  threadId: string;
+  snippet?: string;
+  internalDate?: string;
+  payload?: MessagePart & { headers?: Header[] };
+};
+
+function base64UrlDecode(data: string): string {
+  const b64 = data.replace(/-/g, "+").replace(/_/g, "/");
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(b64, "base64").toString("utf-8");
+  }
+  return decodeURIComponent(escape(atob(b64)));
+}
+
+function collectParts(
+  part: MessagePart | undefined,
+  out: { texts: string[]; htmls: string[]; attachments: string[] },
+) {
+  if (!part) return;
+  if (part.filename && part.filename.trim()) out.attachments.push(part.filename);
+  if (part.mimeType === "text/plain" && part.body?.data) {
+    out.texts.push(base64UrlDecode(part.body.data));
+  } else if (part.mimeType === "text/html" && part.body?.data) {
+    out.htmls.push(base64UrlDecode(part.body.data));
+  }
+  for (const child of part.parts ?? []) collectParts(child, out);
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export type GmailThreadMessage = {
+  messageId: string;
+  from: string;
+  to: string;
+  date: string | null;
+  subject: string;
+  body: string;
+  attachments: string[];
+};
+
+/** Read every message in a thread with decoded plain-text bodies. */
+export async function readGmailThread(
+  threadId: string,
+  opts?: { maxCharsPerMessage?: number },
+): Promise<GmailThreadMessage[]> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const maxChars = opts?.maxCharsPerMessage ?? 4000;
+  const thread = await gmailFetch<{ id: string; messages?: FullMessage[] }>(
+    `/users/me/threads/${encodeURIComponent(threadId)}?format=full`,
+    apiKey,
+    lovableKey,
+  );
+  const out: GmailThreadMessage[] = [];
+  for (const msg of thread.messages ?? []) {
+    const headers = msg.payload?.headers;
+    const collected = {
+      texts: [] as string[],
+      htmls: [] as string[],
+      attachments: [] as string[],
+    };
+    collectParts(msg.payload, collected);
+    let body = collected.texts.join("\n\n").trim();
+    if (!body && collected.htmls.length) {
+      body = htmlToText(collected.htmls.join("\n"));
+    }
+    if (!body) body = msg.snippet ?? "";
+    out.push({
+      messageId: msg.id,
+      from: headerValue(headers, "From"),
+      to: headerValue(headers, "To"),
+      date: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : null,
+      subject: headerValue(headers, "Subject"),
+      body: body.slice(0, maxChars),
+      attachments: collected.attachments,
+    });
+  }
+  return out;
+}
+
 function base64UrlEncode(input: string): string {
   const b64 =
     typeof Buffer !== "undefined"

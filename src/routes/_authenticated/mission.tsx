@@ -8,13 +8,18 @@ import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { GlobalMissionHeader } from "@/components/platform/mission/GlobalMissionHeader";
+import { InboxAssistantCard } from "@/components/platform/mission/InboxAssistantCard";
 import { MorningMissionView } from "@/components/platform/mission/MorningMissionView";
 import {
   getMorningMission,
   actOnMorningItem,
   undoMorningItem,
 } from "@/lib/morning-mission.functions";
-import type { MorningBriefItemAction, MorningBriefActionOptions, MorningMissionItem } from "@/lib/morning-mission.types";
+import type {
+  MorningBriefItemAction,
+  MorningBriefActionOptions,
+  MorningMissionItem,
+} from "@/lib/morning-mission.types";
 import { InvoiceComposeSheet } from "@/components/platform/mission/InvoiceComposeSheet";
 import { parseInvoiceFromMissionItem } from "@/lib/mission-invoice-action";
 import { useAuth } from "@/hooks/useAuth";
@@ -181,10 +186,7 @@ function GlobalMission() {
 
   return (
     <PlatformShell>
-      <GlobalTopBar
-        title="Mission"
-        subtitle="Husk, følg opp og bygg sterke relasjoner"
-      />
+      <GlobalTopBar title="Mission" subtitle="Husk, følg opp og bygg sterke relasjoner" />
       <div className="flex min-h-0 flex-1">
         <main
           className={cn(
@@ -192,16 +194,22 @@ function GlobalMission() {
             panelEntityId && !isMobile && "xl:max-w-none",
           )}
         >
-          <div className={cn("mx-auto w-full", panelEntityId && !isMobile ? "max-w-3xl" : "max-w-6xl")}>
+          <div
+            className={cn("mx-auto w-full", panelEntityId && !isMobile ? "max-w-3xl" : "max-w-6xl")}
+          >
             <GlobalMissionHeader
               firstName={firstName}
               count={activeCount}
               canStart={todayCount > 0}
               loadFailed={!!query.error && !data}
               onStart={() => {
-                document.getElementById("morning-start-here")?.scrollIntoView({ behavior: "smooth" });
+                document
+                  .getElementById("morning-start-here")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
             />
+
+            <InboxAssistantCard />
 
             <div id="morning-today">
               <MorningMissionView
@@ -334,9 +342,7 @@ function CustomerFollowUps() {
 
   const followUps = (query.data?.items ?? [])
     .filter((customer) => customer.followUp)
-    .sort((a, b) =>
-      (a.followUp?.dueAt ?? "").localeCompare(b.followUp?.dueAt ?? ""),
-    )
+    .sort((a, b) => (a.followUp?.dueAt ?? "").localeCompare(b.followUp?.dueAt ?? ""))
     .slice(0, 4);
 
   return (
@@ -382,9 +388,7 @@ function CustomerFollowUps() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-medium">Ingen planlagte oppfølginger</p>
-            <p className="text-sm text-muted-foreground">
-              Legg inn neste steg etter et besøk.
-            </p>
+            <p className="text-sm text-muted-foreground">Legg inn neste steg etter et besøk.</p>
           </div>
           <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
         </Link>
