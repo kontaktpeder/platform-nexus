@@ -144,7 +144,7 @@ function ProfilPage() {
     {
       to: "/mission" as const,
       label: "Mission / varsler",
-      hint: "Oppfølginger og assistent",
+      hint: "Oppfølginger og brief",
       icon: Sparkles,
     },
     {

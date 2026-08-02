@@ -26,6 +26,8 @@ const PLACEHOLDER =
   "F.eks: Søk Brygg i Storgata Oslo på nett, finn daglig leder og opprett kontakt. " +
   "Eller: se mailene jeg har sendt om nettsider — hva bør jeg gjøre?";
 
+const PLACEHOLDER_FULLSCREEN = "Spør om hva som helst…";
+
 function suggestionKey(c: SuggestedContact): string {
   return c.email ?? `name:${c.entityType}:${c.name.toLowerCase()}:${c.orgNr ?? ""}`;
 }
@@ -50,7 +52,13 @@ const KIND_LABEL: Record<SuggestedRelation["kind"], string> = {
   related_to: "relatert til",
 };
 
-export function InboxAssistantCard() {
+export function InboxAssistantCard({
+  variant = "card",
+}: {
+  /** Full-screen ask flow on /hjem/spor — large field, app-like. */
+  variant?: "card" | "fullscreen";
+}) {
+  const fullscreen = variant === "fullscreen";
   const qc = useQueryClient();
   const runAssistant = useServerFn(runInboxAssistant);
   const runCreate = useServerFn(createContactFromSuggestion);
@@ -213,38 +221,62 @@ export function InboxAssistantCard() {
     result?.suggestedContacts.filter((c) => !createdIds[suggestionKey(c)]) ?? [];
 
   return (
-    <section className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-2 flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary">
-          <Sparkles className="h-4 w-4" />
+    <section
+      className={
+        fullscreen
+          ? "flex flex-1 flex-col gap-3"
+          : "mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm"
+      }
+    >
+      {!fullscreen && (
+        <div className="mb-2 flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-primary/10 text-primary">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Assistent</h2>
+            <p className="text-xs text-muted-foreground">
+              Innboks, Brreg og nett. Utkast vises her — du sender selv.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-sm font-semibold">Assistent</h2>
-          <p className="text-xs text-muted-foreground">
-            Innboks, Brreg og nett. Utkast vises her — du sender selv.
-          </p>
-        </div>
-      </div>
+      )}
+
+      {fullscreen && (
+        <p className="text-sm text-muted-foreground">
+          Innboks, Brreg og nett. Utkast vises her — du sender selv.
+        </p>
+      )}
 
       <Textarea
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
-        placeholder={PLACEHOLDER}
-        rows={3}
+        placeholder={fullscreen ? PLACEHOLDER_FULLSCREEN : PLACEHOLDER}
+        rows={fullscreen ? 10 : 3}
         maxLength={2000}
-        className="rounded-xl text-base"
+        className={
+          fullscreen
+            ? "min-h-[40dvh] flex-1 resize-none rounded-2xl border-border bg-card p-4 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70"
+            : "rounded-xl text-base"
+        }
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
         }}
       />
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">
-          {mut.isPending ? "Søker, leser tråder og skriver …" : "⌘+Enter for å kjøre"}
-        </p>
+      <div
+        className={`mt-2 flex items-center gap-2 ${fullscreen ? "justify-stretch" : "justify-between"}`}
+      >
+        {!fullscreen && (
+          <p className="text-[11px] text-muted-foreground">
+            {mut.isPending ? "Søker, leser tråder og skriver …" : "⌘+Enter for å kjøre"}
+          </p>
+        )}
         <Button
           type="button"
-          className="h-10 gap-2 rounded-xl px-4"
+          className={
+            fullscreen ? "h-14 w-full gap-2 rounded-2xl text-base" : "h-10 gap-2 rounded-xl px-4"
+          }
           disabled={!instruction.trim() || mut.isPending}
           onClick={submit}
         >
@@ -253,7 +285,7 @@ export function InboxAssistantCard() {
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          Kjør
+          {mut.isPending ? "Søker…" : "Spør"}
         </Button>
       </div>
 

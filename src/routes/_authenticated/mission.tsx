@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { GlobalMissionHeader } from "@/components/platform/mission/GlobalMissionHeader";
-import { InboxAssistantCard } from "@/components/platform/mission/InboxAssistantCard";
 import { NoteCaptureCard } from "@/components/platform/mission/NoteCaptureCard";
 import { MorningMissionView } from "@/components/platform/mission/MorningMissionView";
 import {
@@ -210,7 +209,6 @@ function GlobalMission() {
               }}
             />
 
-            <InboxAssistantCard />
             <NoteCaptureCard />
 
             <div id="morning-today">
