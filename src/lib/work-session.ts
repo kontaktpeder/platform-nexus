@@ -350,6 +350,13 @@ export function readPendingEntries(): PendingTimeEntry[] {
   }
 }
 
+export function markPendingSynced(id: string, status: "synced" | "failed" = "synced") {
+  if (typeof window === "undefined") return;
+  const pending = readPendingEntries();
+  const next = pending.map((e) => (e.id === id ? { ...e, sync_status: status } : e));
+  window.localStorage.setItem(PENDING_KEY, JSON.stringify(next.slice(0, 50)));
+}
+
 export function formatElapsed(startedAt: string, nowMs = Date.now()): string {
   const ms = Math.max(0, nowMs - Date.parse(startedAt));
   const totalSec = Math.floor(ms / 1000);
