@@ -4,14 +4,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   GitMerge,
   Loader2,
   Mail,
   MapPin,
+  MoreHorizontal,
   Pencil,
   Phone,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -20,13 +21,13 @@ import {
   ContactRelationsSection,
   NextStepPanel,
   RelationAvatar,
-  OwnerContextChip,
   PlanFollowUpPanel,
-  RelationStatusBadge,
   TimelineEvent,
 } from "@/components/platform/relation";
+import { PlatformSheet } from "@/components/platform/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { tryOpenSheet } from "@/lib/sheetGate";
 import {
   CUSTOMER_ORG_FILTER_LABEL,
   CUSTOMER_WARMTH_LABEL,
@@ -46,19 +47,19 @@ import { scheduleEntityFollowUp } from "@/lib/field.functions";
 import { FIELD_RESULT_LABEL, type FollowUpPreset } from "@/lib/field/field.types";
 import { rejectWrongEntity } from "@/lib/known-identities.functions";
 import type { OwnerContext } from "@/lib/knowledge/types";
-import type { RelationSourceKind, RelationStatus } from "@/lib/relation/types";
+import type { RelationSourceKind } from "@/lib/relation/types";
 import { formatOsloActivityDate } from "@/lib/field/field-dates";
 import { cn } from "@/lib/utils";
 
 const OWNER_OPTIONS: OwnerContext[] = ["gold-of-sicily", "peder-enk", "personal", "unknown"];
 
-const SECTION_CHIPS = [
-  { id: "oversikt", label: "Oversikt" },
-  { id: "epost", label: "E-post" },
-  { id: "historikk", label: "Historikk" },
+const TABS = [
+  { id: "aktivitet", label: "Aktivitet" },
   { id: "oppfolging", label: "Oppfølging" },
-  { id: "relasjoner", label: "Relasjoner" },
+  { id: "om", label: "Om" },
 ] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 function warmthClass(w: CustomerWarmth): string {
   switch (w) {
@@ -73,14 +74,6 @@ function warmthClass(w: CustomerWarmth): string {
   }
 }
 
-function relationStatusFromDetail(d: CustomerDetail): RelationStatus {
-  if (d.followUp?.overdue) return "waiting_on_me";
-  if (d.warmth === "waiting") return "waiting_on_them";
-  if (d.warmth === "warm") return "waiting_on_me";
-  if (d.warmth === "cold") return "quiet";
-  return "confirmed";
-}
-
 function timelineSourceKind(source: string): RelationSourceKind | null {
   const raw = source.toLowerCase();
   if (raw.includes("gmail") || raw.includes("mail") || raw.includes("email")) return "gmail";
@@ -89,10 +82,6 @@ function timelineSourceKind(source: string): RelationSourceKind | null {
   if (raw.includes("finance") || raw.includes("faktura")) return "finance";
   if (raw.includes("work")) return "work";
   return "manual";
-}
-
-function scrollToSection(id: string) {
-  document.getElementById(`kontakt-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export function ContactDetailPanel({
@@ -121,6 +110,8 @@ export function ContactDetailPanel({
   const runEnsureField = useServerFn(ensureFieldPlace);
   const runScheduleFollowUp = useServerFn(scheduleEntityFollowUp);
 
+  const [tab, setTab] = useState<TabId>("aktivitet");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -136,7 +127,8 @@ export function ContactDetailPanel({
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeQuery, setMergeQuery] = useState("");
   const [mergeTargetId, setMergeTargetId] = useState("");
-  const [activeChip, setActiveChip] = useState<(typeof SECTION_CHIPS)[number]["id"]>("oversikt");
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [relationsOpen, setRelationsOpen] = useState(false);
 
   const isPanel = variant === "panel";
 
@@ -223,6 +215,7 @@ export function ContactDetailPanel({
       setMergeOpen(false);
       setMergeTargetId("");
       setMergeQuery("");
+      setMoreOpen(false);
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
       await qc.invalidateQueries({ queryKey: ["field-board"] });
@@ -263,6 +256,7 @@ export function ContactDetailPanel({
       }),
     onSuccess: async (res) => {
       toast.success(`Oppfølging planlagt ${res.dueLabel}`);
+      setTab("oppfolging");
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
       await qc.invalidateQueries({ queryKey: ["field-board"] });
@@ -272,7 +266,6 @@ export function ContactDetailPanel({
   });
 
   const d = detailQ.data;
-  const lastEvent = d?.timeline[0] ?? null;
   const metaEmail = typeof d?.metadata.email === "string" ? d.metadata.email : null;
   const metaDomain = typeof d?.metadata.email_domain === "string" ? d.metadata.email_domain : null;
   const metaRole =
@@ -287,6 +280,23 @@ export function ContactDetailPanel({
   const metaOrgNr = typeof d?.metadata.org_nr === "string" ? d.metadata.org_nr : null;
   const metaAddress = typeof d?.metadata.address === "string" ? d.metadata.address : null;
   const lastContactedDate = typeof d?.lastSeenAt === "string" ? d.lastSeenAt.slice(0, 10) : "";
+  const notesFacts =
+    Array.isArray(d?.metadata.notes_facts) &&
+    (d.metadata.notes_facts as unknown[]).filter((x): x is string => typeof x === "string");
+
+  function openProfileEdit() {
+    if (!d) return;
+    setProfileDraft({
+      role: metaRole ?? "",
+      phone: metaPhone ?? "",
+      website: metaWebsite ?? "",
+      orgNr: metaOrgNr ?? "",
+      address: metaAddress ?? "",
+      industry: metaIndustry ?? "",
+      lastContactedAt: lastContactedDate,
+    });
+    tryOpenSheet(() => setEditingProfile(true));
+  }
 
   return (
     <div
@@ -296,27 +306,11 @@ export function ContactDetailPanel({
         className,
       )}
     >
-      {isPanel && (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
-          <p className="text-sm font-semibold truncate">{d?.name ?? "Kontakt"}</p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-xl"
-            onClick={onClose}
-            aria-label="Lukk panel"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-
       <div
         data-sheet-scroll={isPanel ? true : undefined}
         className={cn(
           "min-h-0 flex-1 overflow-y-auto overscroll-contain",
-          isPanel ? "px-4 py-3" : "mx-auto w-full max-w-lg flex-1 px-4 pb-8 pt-3",
+          isPanel ? "px-4 pb-6 pt-1" : "mx-auto w-full max-w-lg flex-1 px-4 pb-8 pt-3",
         )}
       >
         {!isPanel && (
@@ -342,506 +336,374 @@ export function ContactDetailPanel({
 
         {d && (
           <>
+            {/* Hero */}
             <header className="mb-4">
-              {editingName ? (
-                <form
-                  className="flex flex-col gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    renameMut.mutate(nameDraft);
-                  }}
-                >
-                  <Input
-                    value={nameDraft}
-                    autoFocus
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    className="h-12 rounded-xl text-lg font-semibold"
-                    maxLength={200}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      className="h-11 flex-1 rounded-xl"
-                      disabled={renameMut.isPending || !nameDraft.trim()}
-                    >
-                      {renameMut.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Lagre navn"
-                      )}
-                    </Button>
+              <div className="flex items-start gap-3">
+                <RelationAvatar
+                  name={d.name}
+                  entityType={d.entityType}
+                  imageUrl={d.imageUrl}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
                     <Button
                       type="button"
                       variant="ghost"
-                      className="h-11 rounded-xl"
-                      onClick={() => {
-                        setEditingName(false);
-                        setNameDraft(d.name);
-                      }}
+                      size="icon"
+                      className="h-9 w-9 shrink-0 rounded-xl"
+                      onClick={() => tryOpenSheet(() => setMoreOpen(true))}
+                      aria-label="Mer"
                     >
-                      Avbryt
+                      <MoreHorizontal className="h-5 w-5" />
                     </Button>
                   </div>
-                </form>
-              ) : (
-                <div className="flex items-start gap-3">
-                  <RelationAvatar
-                    name={d.name}
-                    entityType={d.entityType}
-                    imageUrl={d.imageUrl}
-                    size="lg"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
-                      <RelationStatusBadge status={relationStatusFromDetail(d)} />
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
-                      >
-                        {CUSTOMER_WARMTH_LABEL[d.warmth]}
-                      </span>
-                      <OwnerContextChip ownerContext={d.ownerContext} />
-                      {d.relatedCompanies[0] && (
-                        <span className="text-sm text-muted-foreground">
-                          {d.relatedCompanies[0].name}
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 h-8 gap-1.5 px-2 text-xs text-muted-foreground"
-                      onClick={() => {
-                        setNameDraft(d.name);
-                        setEditingName(true);
-                      }}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase ${warmthClass(d.warmth)}`}
                     >
-                      <Pencil className="h-3 w-3" />
-                      Endre navn
-                    </Button>
-                    {(metaPhone || metaEmail || metaWebsite) && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {metaPhone && (
-                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
-                            <a href={`tel:${metaPhone.replace(/\s+/g, "")}`}>
-                              <Phone className="h-4 w-4" />
-                              Ring
-                            </a>
-                          </Button>
-                        )}
-                        {metaEmail && (
-                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
-                            <a href={`mailto:${metaEmail}`}>
-                              <Mail className="h-4 w-4" />
-                              Mail
-                            </a>
-                          </Button>
-                        )}
-                        {metaWebsite && (
-                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
-                            <a href={metaWebsite} target="_blank" rel="noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                              Nettside
-                            </a>
-                          </Button>
-                        )}
-                      </div>
+                      {CUSTOMER_WARMTH_LABEL[d.warmth]}
+                    </span>
+                    {d.relatedCompanies[0] && (
+                      <span className="text-sm text-muted-foreground">
+                        {d.relatedCompanies[0].name}
+                      </span>
+                    )}
+                    {metaRole && !d.relatedCompanies[0] && (
+                      <span className="text-sm text-muted-foreground">{metaRole}</span>
                     )}
                   </div>
                 </div>
-              )}
-            </header>
-
-            <nav className="-mx-1 mb-5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex gap-2">
-                {SECTION_CHIPS.map((chip) => (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveChip(chip.id);
-                      scrollToSection(chip.id);
-                    }}
-                    className={`whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors ${
-                      activeChip === chip.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card text-muted-foreground"
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
               </div>
-            </nav>
 
-            <section id="kontakt-oversikt" className="mb-8 scroll-mt-4 space-y-4">
-              <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Oversikt
-              </h2>
-
-              {d.followUp ? (
-                <NextStepPanel
-                  action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
-                />
-              ) : (
-                <NextStepPanel action="Ingen planlagt oppfølging — sett en under Oppfølging." />
-              )}
-
-              <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                <h3 className="text-sm font-semibold">Siste kontakt</h3>
-                {lastEvent ? (
-                  <>
-                    <p className="mt-2 text-sm font-medium leading-snug">{lastEvent.title}</p>
-                    {lastEvent.detail && (
-                      <p className="mt-1 text-sm text-muted-foreground">{lastEvent.detail}</p>
-                    )}
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {lastEvent.atLabel} · {lastEvent.source}
-                    </p>
-                  </>
-                ) : d.lastFieldResult ? (
-                  <>
-                    <p className="mt-2 text-sm font-medium">
-                      {FIELD_RESULT_LABEL[d.lastFieldResult]}
-                    </p>
-                    {d.lastFieldNote && (
-                      <p className="mt-1 text-sm text-muted-foreground">{d.lastFieldNote}</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Ingen aktivitet ennå. Mail, Slack og Felt lander her.
-                  </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {metaPhone && (
+                  <Button asChild variant="outline" className="h-11 flex-1 gap-1.5 rounded-xl">
+                    <a href={`tel:${metaPhone.replace(/\s+/g, "")}`}>
+                      <Phone className="h-4 w-4" />
+                      Ring
+                    </a>
+                  </Button>
                 )}
-                {d.lastSeenAt && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Sist sett {formatOsloActivityDate(d.lastSeenAt)}
-                  </p>
-                )}
-              </section>
-
-              <ContactAboutCard
-                name={d.name}
-                entityType={d.entityType}
-                warmth={d.warmth}
-                ownerContext={d.ownerContext}
-                companyName={d.relatedCompanies[0]?.name ?? null}
-                email={metaEmail}
-                domain={metaDomain}
-                role={metaRole}
-                industry={metaIndustry}
-                phone={metaPhone}
-                website={metaWebsite}
-                orgNr={metaOrgNr}
-                address={metaAddress}
-                lastSeenAtLabel={d.lastSeenAt ? formatOsloActivityDate(d.lastSeenAt) : null}
-              />
-
-              {editingProfile ? (
-                <section className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <h3 className="text-sm font-semibold">Rediger profil</h3>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Input
-                      value={profileDraft.role}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({ ...p, role: e.target.value.slice(0, 120) }))
-                      }
-                      placeholder="Rolle / tittel"
-                      className="h-10 rounded-xl"
-                    />
-                    <Input
-                      value={profileDraft.phone}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({ ...p, phone: e.target.value.slice(0, 40) }))
-                      }
-                      placeholder="Telefon"
-                      className="h-10 rounded-xl"
-                    />
-                    <Input
-                      value={profileDraft.website}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({ ...p, website: e.target.value.slice(0, 200) }))
-                      }
-                      placeholder="Nettside"
-                      className="h-10 rounded-xl"
-                    />
-                    {d.entityType === "company" ? (
-                      <Input
-                        value={profileDraft.orgNr}
-                        onChange={(e) =>
-                          setProfileDraft((p) => ({
-                            ...p,
-                            orgNr: e.target.value.replace(/\D/g, "").slice(0, 9),
-                          }))
-                        }
-                        placeholder="Org.nr"
-                        inputMode="numeric"
-                        className="h-10 rounded-xl"
-                      />
-                    ) : null}
-                    <Input
-                      value={profileDraft.industry}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({
-                          ...p,
-                          industry: e.target.value.slice(0, 120),
-                        }))
-                      }
-                      placeholder="Bransje"
-                      className="h-10 rounded-xl"
-                    />
-                    <Input
-                      value={profileDraft.address}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({
-                          ...p,
-                          address: e.target.value.slice(0, 200),
-                        }))
-                      }
-                      placeholder="Adresse"
-                      className="h-10 rounded-xl sm:col-span-2"
-                    />
-                    <Input
-                      type="date"
-                      value={profileDraft.lastContactedAt}
-                      onChange={(e) =>
-                        setProfileDraft((p) => ({ ...p, lastContactedAt: e.target.value }))
-                      }
-                      className="h-10 rounded-xl"
-                      aria-label="Kontaktet sist"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      type="button"
-                      className="h-10 flex-1 rounded-xl"
-                      disabled={profileMut.isPending}
-                      onClick={() => profileMut.mutate()}
-                    >
-                      {profileMut.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Lagre profil"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-10 rounded-xl"
-                      onClick={() => setEditingProfile(false)}
-                    >
-                      Avbryt
-                    </Button>
-                  </div>
-                </section>
-              ) : (
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 w-full gap-1.5 rounded-xl"
+                  className="h-11 flex-1 gap-1.5 rounded-xl"
                   onClick={() => {
-                    setProfileDraft({
-                      role: metaRole ?? "",
-                      phone: metaPhone ?? "",
-                      website: metaWebsite ?? "",
-                      orgNr: metaOrgNr ?? "",
-                      address: metaAddress ?? "",
-                      industry: metaIndustry ?? "",
-                      lastContactedAt: lastContactedDate,
-                    });
-                    setEditingProfile(true);
+                    if (metaEmail) {
+                      window.location.href = `mailto:${metaEmail}`;
+                      return;
+                    }
+                    tryOpenSheet(() => setEmailOpen(true));
                   }}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Rediger profil (org.nr, tlf, nettside …)
+                  <Mail className="h-4 w-4" />
+                  Mail
                 </Button>
-              )}
+                {metaWebsite && (
+                  <Button asChild variant="outline" className="h-11 flex-1 gap-1.5 rounded-xl">
+                    <a href={metaWebsite} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                      Web
+                    </a>
+                  </Button>
+                )}
+              </div>
 
-              {Array.isArray(d.metadata.notes_facts) &&
-                d.metadata.notes_facts.some((x) => typeof x === "string") && (
-                  <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="mt-4">
+                {d.followUp ? (
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    onClick={() => setTab("oppfolging")}
+                  >
+                    <NextStepPanel
+                      action={`${d.followUp.overdue ? "Følg opp " : ""}${d.followUp.dueLabel}${d.followUp.action ? ` · ${d.followUp.action}` : ""}`}
+                    />
+                  </button>
+                ) : (
+                  <Button
+                    type="button"
+                    className="h-11 w-full rounded-xl"
+                    onClick={() => setTab("oppfolging")}
+                  >
+                    Planlegg oppfølging
+                  </Button>
+                )}
+              </div>
+            </header>
+
+            {/* Tabs */}
+            <div className="mb-4 flex gap-1 rounded-xl bg-muted/50 p-1">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "flex-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors",
+                    tab === t.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {tab === "aktivitet" && (
+              <section className="space-y-3">
+                {d.timeline.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                    {d.lastFieldResult
+                      ? `${FIELD_RESULT_LABEL[d.lastFieldResult]}${d.lastFieldNote ? ` — ${d.lastFieldNote}` : ""}`
+                      : "Ingen aktivitet ennå. Mail, Slack og Felt lander her."}
+                  </p>
+                ) : (
+                  <ol className="relative ml-2 space-y-0 border-l border-border">
+                    {d.timeline.map((t) => (
+                      <TimelineEvent
+                        key={t.id}
+                        atLabel={t.atLabel}
+                        title={t.title}
+                        detail={t.detail}
+                        sourceKind={timelineSourceKind(t.source)}
+                      />
+                    ))}
+                  </ol>
+                )}
+                {notesFacts && notesFacts.length > 0 && (
+                  <section className="rounded-2xl border border-border bg-card p-4">
                     <h3 className="text-sm font-semibold">Fra notater</h3>
                     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
-                      {(d.metadata.notes_facts as unknown[])
-                        .filter((x): x is string => typeof x === "string")
-                        .slice(0, 12)
-                        .map((fact, i) => (
-                          <li key={i}>{fact}</li>
-                        ))}
+                      {notesFacts.slice(0, 8).map((fact, i) => (
+                        <li key={i}>{fact}</li>
+                      ))}
                     </ul>
                   </section>
                 )}
+              </section>
+            )}
 
-              <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                <h3 className="text-sm font-semibold">Aktive saker</h3>
-                {d.followUp ? (
-                  <ul className="mt-3 space-y-2">
-                    <li className="flex items-start justify-between gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{d.followUp.action}</p>
-                        <p className="text-xs text-muted-foreground">{d.followUp.dueLabel}</p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                          d.followUp.overdue
-                            ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
-                            : "bg-sky-500/15 text-sky-800 dark:text-sky-300"
-                        }`}
-                      >
-                        {d.followUp.overdue ? "Forsinket" : "Planlagt"}
-                      </span>
-                    </li>
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">Ingen åpne saker.</p>
+            {tab === "oppfolging" && (
+              <section className="space-y-3">
+                <PlanFollowUpPanel
+                  defaultAction={d.followUp?.action ?? ""}
+                  existingLabel={
+                    d.followUp
+                      ? `${d.followUp.overdue ? "Forsinket · " : ""}${d.followUp.dueLabel}`
+                      : null
+                  }
+                  busy={scheduleMut.isPending}
+                  onSchedule={(input) => scheduleMut.mutate(input)}
+                />
+                {!d.isFieldPlace && (
+                  <Button
+                    variant="outline"
+                    className="h-12 w-full gap-2 rounded-xl"
+                    disabled={fieldMut.isPending}
+                    onClick={() => fieldMut.mutate()}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Vis i Felt-tavlen
+                  </Button>
                 )}
               </section>
+            )}
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Relasjonsstatus
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {(["cold", "waiting", "warm"] as const).map((w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      disabled={warmthMut.isPending}
-                      onClick={() => warmthMut.mutate(w)}
-                      className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
-                        d.warmth === w
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card"
-                      }`}
-                    >
-                      {CUSTOMER_WARMTH_LABEL[w]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Org
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {OWNER_OPTIONS.map((o) => (
-                    <button
-                      key={o}
-                      type="button"
-                      disabled={ownerMut.isPending}
-                      onClick={() => ownerMut.mutate(o)}
-                      className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
-                        d.ownerContext === o
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card"
-                      }`}
-                    >
-                      {CUSTOMER_ORG_FILTER_LABEL[o]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <ContactEmailSection
-              entityId={entityId}
-              contactName={d.name}
-              email={d.email ?? metaEmail}
-            />
-
-            <section id="kontakt-historikk" className="mb-8 scroll-mt-4">
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Historikk ({d.timeline.length})
-              </h2>
-              {d.timeline.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                  Ingen signaler ennå. Mail, Slack og Felt-besøk lander her.
-                </p>
-              ) : (
-                <ol className="relative ml-2 space-y-0 border-l border-border">
-                  {d.timeline.map((t) => (
-                    <TimelineEvent
-                      key={t.id}
-                      atLabel={t.atLabel}
-                      title={t.title}
-                      detail={t.detail}
-                      sourceKind={timelineSourceKind(t.source)}
-                    />
-                  ))}
-                </ol>
-              )}
-            </section>
-
-            <section id="kontakt-oppfolging" className="mb-8 scroll-mt-4">
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Oppfølging
-              </h2>
-              <PlanFollowUpPanel
-                defaultAction={d.followUp?.action ?? ""}
-                existingLabel={
-                  d.followUp
-                    ? `${d.followUp.overdue ? "Forsinket · " : ""}${d.followUp.dueLabel}`
-                    : null
-                }
-                busy={scheduleMut.isPending}
-                onSchedule={(input) => scheduleMut.mutate(input)}
-              />
-              {!d.isFieldPlace && (
+            {tab === "om" && (
+              <section className="space-y-3">
+                <ContactAboutCard
+                  name={d.name}
+                  entityType={d.entityType}
+                  warmth={d.warmth}
+                  ownerContext={d.ownerContext}
+                  companyName={d.relatedCompanies[0]?.name ?? null}
+                  email={metaEmail}
+                  domain={metaDomain}
+                  role={metaRole}
+                  industry={metaIndustry}
+                  phone={metaPhone}
+                  website={metaWebsite}
+                  orgNr={metaOrgNr}
+                  address={metaAddress}
+                  lastSeenAtLabel={d.lastSeenAt ? formatOsloActivityDate(d.lastSeenAt) : null}
+                />
                 <Button
+                  type="button"
                   variant="outline"
-                  className="mt-3 h-12 w-full gap-2 rounded-xl"
-                  disabled={fieldMut.isPending}
-                  onClick={() => fieldMut.mutate()}
+                  className="h-11 w-full gap-1.5 rounded-xl"
+                  onClick={openProfileEdit}
                 >
-                  <MapPin className="h-4 w-4" />
-                  Vis i Felt-tavlen
+                  <Pencil className="h-3.5 w-3.5" />
+                  Rediger profil
                 </Button>
-              )}
-            </section>
+              </section>
+            )}
+          </>
+        )}
+      </div>
 
-            <ContactRelationsSection
-              entityId={entityId}
-              contactName={d.name}
-              relations={d.relations ?? []}
-              onOpenEntity={onOpenEntity}
-            />
+      {/* Mer */}
+      {moreOpen && d && (
+        <PlatformSheet
+          onClose={() => setMoreOpen(false)}
+          size="sheet"
+          detents={["full"]}
+          zClassName="z-[70]"
+          nest
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 pb-8" data-sheet-scroll>
+            <h2 className="text-lg font-semibold">Mer</h2>
 
-            <section className="mb-5 rounded-2xl border border-border bg-card p-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Relasjonsstatus
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(["cold", "waiting", "warm"] as const).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    disabled={warmthMut.isPending}
+                    onClick={() => warmthMut.mutate(w)}
+                    className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
+                      d.warmth === w
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    {CUSTOMER_WARMTH_LABEL[w]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Org
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {OWNER_OPTIONS.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    disabled={ownerMut.isPending}
+                    onClick={() => ownerMut.mutate(o)}
+                    className={`min-h-10 rounded-full border px-3 text-sm font-medium ${
+                      d.ownerContext === o
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    {CUSTOMER_ORG_FILTER_LABEL[o]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full justify-between rounded-xl"
+                onClick={() => {
+                  setNameDraft(d.name);
+                  setEditingName(true);
+                }}
+              >
+                Endre navn
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full justify-between rounded-xl"
+                onClick={() => tryOpenSheet(() => setEmailOpen(true))}
+              >
+                E-post
+                <Mail className="h-4 w-4 text-muted-foreground" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full justify-between rounded-xl"
+                onClick={() => tryOpenSheet(() => setRelationsOpen(true))}
+              >
+                Relasjoner
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </div>
+
+            {editingName && (
+              <form
+                className="space-y-2 rounded-2xl border border-border p-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  renameMut.mutate(nameDraft);
+                }}
+              >
+                <Input
+                  value={nameDraft}
+                  autoFocus
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  className="h-11 rounded-xl"
+                  maxLength={200}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    className="h-11 flex-1 rounded-xl"
+                    disabled={renameMut.isPending || !nameDraft.trim()}
+                  >
+                    {renameMut.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Lagre"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-11 rounded-xl"
+                    onClick={() => setEditingName(false)}
+                  >
+                    Avbryt
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            <section className="rounded-2xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Duplikat
-                  </p>
-                  <h2 className="text-base font-semibold">Slå sammen med annen kontakt</h2>
+                  <h3 className="text-base font-semibold">Slå sammen</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Behold denne. Den andre slettes — identiteter, felt og signaler følger med.
+                    Behold denne. Den andre slettes.
                   </p>
                 </div>
                 <GitMerge className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
               </div>
-
               {!mergeOpen ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="mt-4 h-11 w-full rounded-xl"
+                  className="mt-3 h-11 w-full rounded-xl"
                   onClick={() => setMergeOpen(true)}
                 >
-                  Velg kontakt å slå sammen
+                  Velg kontakt
                 </Button>
               ) : (
-                <div className="mt-4 space-y-3">
+                <div className="mt-3 space-y-3">
                   <Input
                     placeholder="Søk kontakt…"
                     value={mergeQuery}
                     onChange={(e) => setMergeQuery(e.target.value)}
                     className="h-11 rounded-xl"
                   />
-                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
                     {customersQ.isLoading && (
                       <p className="px-2 py-3 text-sm text-muted-foreground">Laster…</p>
                     )}
@@ -911,7 +773,7 @@ export function ContactDetailPanel({
 
             <Button
               variant="ghost"
-              className="mb-5 h-10 w-full text-sm text-muted-foreground"
+              className="h-10 w-full text-sm text-muted-foreground"
               disabled={rejectMut.isPending}
               onClick={() => {
                 if (
@@ -930,22 +792,144 @@ export function ContactDetailPanel({
               )}
             </Button>
 
-            <div className="rounded-xl bg-muted/30 px-3 py-2 font-mono text-[10px] text-muted-foreground">
-              entity_id: {d.entityId}
-              <br />
-              slug: {d.slug}
-              <br />
-              owner_context: {d.ownerContext}
-              {metaDomain && (
-                <>
-                  <br />
-                  email_domain: {metaDomain}
-                </>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+            <details className="rounded-xl bg-muted/30 px-3 py-2 text-[10px] text-muted-foreground">
+              <summary className="cursor-pointer font-medium">Teknisk</summary>
+              <pre className="mt-2 whitespace-pre-wrap font-mono">
+                {`entity_id: ${d.entityId}
+slug: ${d.slug}
+owner_context: ${d.ownerContext}${metaDomain ? `\nemail_domain: ${metaDomain}` : ""}`}
+              </pre>
+            </details>
+          </div>
+        </PlatformSheet>
+      )}
+
+      {editingProfile && d && (
+        <PlatformSheet
+          onClose={() => setEditingProfile(false)}
+          size="sheet"
+          detents={["full"]}
+          zClassName="z-[70]"
+          nest
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-5 pb-8" data-sheet-scroll>
+            <h2 className="text-lg font-semibold">Rediger profil</h2>
+            <Input
+              value={profileDraft.role}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, role: e.target.value.slice(0, 120) }))
+              }
+              placeholder="Rolle / tittel"
+              className="h-11 rounded-xl"
+            />
+            <Input
+              value={profileDraft.phone}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, phone: e.target.value.slice(0, 40) }))
+              }
+              placeholder="Telefon"
+              className="h-11 rounded-xl"
+            />
+            <Input
+              value={profileDraft.website}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, website: e.target.value.slice(0, 200) }))
+              }
+              placeholder="Nettside"
+              className="h-11 rounded-xl"
+            />
+            {d.entityType === "company" && (
+              <Input
+                value={profileDraft.orgNr}
+                onChange={(e) =>
+                  setProfileDraft((p) => ({
+                    ...p,
+                    orgNr: e.target.value.replace(/\D/g, "").slice(0, 9),
+                  }))
+                }
+                placeholder="Org.nr"
+                inputMode="numeric"
+                className="h-11 rounded-xl"
+              />
+            )}
+            <Input
+              value={profileDraft.industry}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, industry: e.target.value.slice(0, 120) }))
+              }
+              placeholder="Bransje"
+              className="h-11 rounded-xl"
+            />
+            <Input
+              value={profileDraft.address}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, address: e.target.value.slice(0, 200) }))
+              }
+              placeholder="Adresse"
+              className="h-11 rounded-xl"
+            />
+            <Input
+              type="date"
+              value={profileDraft.lastContactedAt}
+              onChange={(e) =>
+                setProfileDraft((p) => ({ ...p, lastContactedAt: e.target.value }))
+              }
+              className="h-11 rounded-xl"
+              aria-label="Kontaktet sist"
+            />
+            <Button
+              type="button"
+              className="mt-2 h-12 w-full rounded-xl"
+              disabled={profileMut.isPending}
+              onClick={() => profileMut.mutate()}
+            >
+              {profileMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Lagre"}
+            </Button>
+          </div>
+        </PlatformSheet>
+      )}
+
+      {emailOpen && d && (
+        <PlatformSheet
+          onClose={() => setEmailOpen(false)}
+          size="sheet"
+          detents={["full"]}
+          zClassName="z-[70]"
+          nest
+        >
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-6" data-sheet-scroll>
+            <ContactEmailSection
+              entityId={entityId}
+              contactName={d.name}
+              email={d.email ?? metaEmail}
+            />
+          </div>
+        </PlatformSheet>
+      )}
+
+      {relationsOpen && d && (
+        <PlatformSheet
+          onClose={() => setRelationsOpen(false)}
+          size="sheet"
+          detents={["full"]}
+          zClassName="z-[70]"
+          nest
+        >
+          <div className="flex min-h-0 flex-1 flex-col px-4 pb-6" data-sheet-scroll>
+            <ContactRelationsSection
+              entityId={entityId}
+              contactName={d.name}
+              relations={d.relations ?? []}
+              onOpenEntity={(id) => {
+                setRelationsOpen(false);
+                setMoreOpen(false);
+                if (onOpenEntity) onOpenEntity(id);
+                else void navigate({ to: "/kontakter/$entityId", params: { entityId: id } });
+              }}
+            />
+          </div>
+        </PlatformSheet>
+      )}
     </div>
   );
 }
