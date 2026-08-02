@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { KEYBOARD_PAD_TRANSITION } from "@/lib/sheetKeyboard";
@@ -149,28 +157,31 @@ export function PlatformSheet({
   const multiDetentRef = useRef(false);
   const nestIdRef = useRef<number | null>(null);
   const yRef = useRef(
-    typeof window !== 'undefined' ? window.innerHeight : 640,
+    typeof window !== "undefined" ? window.innerHeight : 640,
   );
   const settleDragRef = useRef<(vy: number) => void>(() => {});
   const cancelSpringRef = useRef<(() => void) | null>(null);
   const animatingRef = useRef(false);
 
   const nestDepth = useSyncExternalStore(subscribeNest, getNestDepth, () => 0);
+  /** State so nest index re-renders with depth (ref alone is not reactive). */
+  const [nestId, setNestId] = useState<number | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
-  const detents = normalizeDetents(detentsProp ?? ['full']);
-  const multiDetent = detents.length > 1 && size === 'sheet';
+  const detents = normalizeDetents(detentsProp ?? ["full"]);
+  const multiDetent = detents.length > 1 && size === "sheet";
   const startDetent: SheetDetent =
     initialDetent && detents.includes(initialDetent)
       ? initialDetent
-      : detents.includes('half') && multiDetent
-        ? 'half'
-        : 'full';
+      : detents.includes("half") && multiDetent
+        ? "half"
+        : "full";
 
   const [frameH, setFrameH] = useState(() =>
-    typeof window !== 'undefined' ? window.innerHeight : 700,
+    typeof window !== "undefined" ? window.innerHeight : 700,
   );
 
-  const maxDim = backdrop === 'solid' ? (multiDetent ? 0.28 : 0.4) : 0;
+  const maxDim = backdrop === "solid" ? (multiDetent ? 0.28 : 0.4) : 0;
   const [backdropOpen, setBackdropOpen] = useState(false);
   const [padReady, setPadReady] = useState(false);
   const [flyingOut, setFlyingOut] = useState(false);
@@ -178,15 +189,21 @@ export function PlatformSheet({
   const enteredRef = useRef(false);
   const dismissLockedRef = useRef(false);
 
+  // Portal to body so nested sheets escape parent transform (fixed containing block).
+  useLayoutEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
+
   // Before paint so under-sheets recess in the same frame the cover appears.
   useLayoutEffect(() => {
     if (!nestEnabled) return;
-    nestIdRef.current = nestPush();
+    const id = nestPush();
+    nestIdRef.current = id;
+    setNestId(id);
     return () => {
-      if (nestIdRef.current != null) {
-        nestPop(nestIdRef.current);
-        nestIdRef.current = null;
-      }
+      nestPop(id);
+      if (nestIdRef.current === id) nestIdRef.current = null;
+      setNestId(null);
     };
   }, [nestEnabled]);
 
@@ -194,11 +211,11 @@ export function PlatformSheet({
     if (nestIdRef.current != null) {
       nestPop(nestIdRef.current);
       nestIdRef.current = null;
+      setNestId(null);
     }
   };
 
-  const myNestIndex =
-    nestIdRef.current != null ? getNestIndex(nestIdRef.current) : -1;
+  const myNestIndex = nestId != null ? getNestIndex(nestId) : -1;
   const isRecessed =
     nestEnabled && myNestIndex >= 0 && nestDepth > myNestIndex + 1;
 
@@ -607,14 +624,16 @@ export function PlatformSheet({
 
   const recessTransform = isRecessed
     ? `translate3d(0, ${NEST_RECESS_Y_PX}px, 0) scale(${NEST_RECESS_SCALE})`
-    : 'translate3d(0, 0, 0) scale(1)';
+    : "translate3d(0, 0, 0) scale(1)";
 
-  return (
+  if (!portalTarget) return null;
+
+  return createPortal(
     <div
       className={cn(
-        'fixed inset-0',
+        "fixed inset-0",
         zClassName,
-        (flyingOut || isRecessed) && 'pointer-events-none',
+        (flyingOut || isRecessed) && "pointer-events-none",
       )}
       aria-hidden={isRecessed || undefined}
     >
@@ -710,7 +729,8 @@ export function PlatformSheet({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    portalTarget,
   );
 }
 
