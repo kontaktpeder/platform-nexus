@@ -104,10 +104,9 @@ export async function scanReceiptWithGemini(input: {
 
   const result = await generateText({
     model: getGeminiModel("flash"),
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: content as never },
-    ],
+    // Gemini rejects role:"system" in messages — use top-level system like rest of Nexus.
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: content as never }],
   });
 
   let parsed: unknown;
