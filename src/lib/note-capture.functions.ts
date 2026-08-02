@@ -442,11 +442,13 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
       .filter((i) => i.selected && i.text.trim())
       .map((i) => i.text.trim().slice(0, 280));
 
+    // raw_signals.source is constrained to gmail|slack|manual|calendar|document|other
+    // (+ phone_note after migration). Use manual + metadata.kind until then.
     const { data: rawRow, error: rawErr } = await supabase
       .from("raw_signals")
       .insert({
         user_id: userId,
-        source: "phone_note",
+        source: "manual",
         external_id: externalId,
         raw_text: data.note,
         summary: data.summary || null,
@@ -815,7 +817,8 @@ export const searchNexusKnowledge = createServerFn({ method: "POST" })
       .from("raw_signals")
       .select("id, summary, raw_text, occurred_at")
       .eq("user_id", userId)
-      .eq("source", "phone_note")
+      .eq("source", "manual")
+      .contains("metadata", { kind: "phone_note" } as never)
       .or(`summary.ilike.%${q}%,raw_text.ilike.%${q}%`)
       .order("occurred_at", { ascending: false, nullsFirst: false })
       .limit(5);
