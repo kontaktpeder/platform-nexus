@@ -776,6 +776,125 @@ async function rewireEntityId(
   }
 }
 
+/** Shared merge body — used by mergeCustomers and assistant applySuggestedMerge. */
+export async function performCompanyMerge(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  keepId: string,
+  absorbId: string,
+) {
+  if (keepId === absorbId) throw new Error("Kan ikke slå sammen en kunde med seg selv");
+
+  const { data: rows, error } = await supabase
+    .from("entities")
+    .select("id, name, type, slug, metadata, owner_context")
+    .eq("user_id", userId)
+    .in("id", [keepId, absorbId]);
+  if (error) throw error;
+
+  const keep = (rows ?? []).find((r: { id: string }) => r.id === keepId);
+  const absorb = (rows ?? []).find((r: { id: string }) => r.id === absorbId);
+  if (!keep || !absorb) throw new Error("Kunde ikke funnet");
+  if (keep.type !== "company" || absorb.type !== "company") {
+    throw new Error("Bare selskaper kan slås sammen her");
+  }
+  if (ANCHOR_SLUG_SET.has(keep.slug as string) || ANCHOR_SLUG_SET.has(absorb.slug as string)) {
+    throw new Error("Kontekst-anchor kan ikke slås sammen");
+  }
+
+  await rewireEntityId(supabase, userId, "known_identities", "entity_id", absorbId, keepId);
+  await rewireEntityId(supabase, userId, "entity_signals", "entity_id", absorbId, keepId);
+  await rewireEntityId(supabase, userId, "field_activities", "entity_id", absorbId, keepId);
+  await rewireEntityId(supabase, userId, "field_follow_ups", "entity_id", absorbId, keepId);
+  await rewireEntityId(supabase, userId, "user_commitments", "entity_id", absorbId, keepId);
+  await rewireEntityId(supabase, userId, "context_summaries", "entity_id", absorbId, keepId);
+
+  await supabase
+    .from("entity_relationships")
+    .update({ from_entity_id: keepId })
+    .eq("user_id", userId)
+    .eq("from_entity_id", absorbId);
+  await supabase
+    .from("entity_relationships")
+    .update({ to_entity_id: keepId })
+    .eq("user_id", userId)
+    .eq("to_entity_id", absorbId);
+
+  await supabase
+    .from("entity_relationships")
+    .delete()
+    .eq("user_id", userId)
+    .eq("from_entity_id", keepId)
+    .eq("to_entity_id", keepId);
+
+  await supabase
+    .from("relation_suggestions")
+    .update({ from_entity_id: keepId })
+    .eq("user_id", userId)
+    .eq("from_entity_id", absorbId);
+  await supabase
+    .from("relation_suggestions")
+    .update({ to_entity_id: keepId })
+    .eq("user_id", userId)
+    .eq("to_entity_id", absorbId);
+
+  const keepMeta = { ...((keep.metadata ?? {}) as Record<string, unknown>) };
+  const absorbMeta = (absorb.metadata ?? {}) as Record<string, unknown>;
+  if (absorbMeta.field_place === true) keepMeta.field_place = true;
+  for (const key of [
+    "email",
+    "email_domain",
+    "phone",
+    "website",
+    "org_nr",
+    "address",
+    "relationship_warmth",
+  ] as const) {
+    if (!keepMeta[key] && absorbMeta[key]) keepMeta[key] = absorbMeta[key];
+  }
+  const mergedAliases = new Set<string>();
+  for (const a of [
+    ...(Array.isArray(keepMeta.merged_names) ? keepMeta.merged_names : []),
+    absorb.name,
+  ]) {
+    if (typeof a === "string" && a.trim()) mergedAliases.add(a.trim());
+  }
+  keepMeta.merged_names = [...mergedAliases];
+
+  let ownerContext = keep.owner_context as string | null;
+  if (
+    (!ownerContext || ownerContext === "unknown") &&
+    absorb.owner_context &&
+    absorb.owner_context !== "unknown"
+  ) {
+    ownerContext = absorb.owner_context as string;
+  }
+
+  await supabase
+    .from("entities")
+    .update({
+      metadata: keepMeta as never,
+      owner_context: (ownerContext ?? "unknown") as never,
+    })
+    .eq("id", keepId)
+    .eq("user_id", userId);
+
+  const { error: delErr } = await supabase
+    .from("entities")
+    .delete()
+    .eq("id", absorbId)
+    .eq("user_id", userId);
+  if (delErr) throw delErr;
+
+  return {
+    ok: true as const,
+    keepEntityId: keepId,
+    keepName: keep.name as string,
+    absorbedName: absorb.name as string,
+  };
+}
+
 /**
  * Merge absorb company into keep company.
  * Identities, field, signals, relationships move to keep; absorb is deleted.
@@ -785,117 +904,7 @@ export const mergeCustomers = createServerFn({ method: "POST" })
   .inputValidator((input: { keepEntityId: string; absorbEntityId: string }) => input)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const keepId = data.keepEntityId;
-    const absorbId = data.absorbEntityId;
-    if (keepId === absorbId) throw new Error("Kan ikke slå sammen en kunde med seg selv");
-
-    const { data: rows, error } = await supabase
-      .from("entities")
-      .select("id, name, type, slug, metadata, owner_context")
-      .eq("user_id", userId)
-      .in("id", [keepId, absorbId]);
-    if (error) throw error;
-
-    const keep = (rows ?? []).find((r) => r.id === keepId);
-    const absorb = (rows ?? []).find((r) => r.id === absorbId);
-    if (!keep || !absorb) throw new Error("Kunde ikke funnet");
-    if (keep.type !== "company" || absorb.type !== "company") {
-      throw new Error("Bare selskaper kan slås sammen her");
-    }
-    if (ANCHOR_SLUG_SET.has(keep.slug as string) || ANCHOR_SLUG_SET.has(absorb.slug as string)) {
-      throw new Error("Kontekst-anchor kan ikke slås sammen");
-    }
-
-    // Move known_identities (may be missing from generated types).
-    await rewireEntityId(supabase, userId, "known_identities", "entity_id", absorbId, keepId);
-    await rewireEntityId(supabase, userId, "entity_signals", "entity_id", absorbId, keepId);
-    await rewireEntityId(supabase, userId, "field_activities", "entity_id", absorbId, keepId);
-    await rewireEntityId(supabase, userId, "field_follow_ups", "entity_id", absorbId, keepId);
-    await rewireEntityId(supabase, userId, "user_commitments", "entity_id", absorbId, keepId);
-    await rewireEntityId(supabase, userId, "context_summaries", "entity_id", absorbId, keepId);
-
-    // Relationships pointing at absorb → keep
-    await supabase
-      .from("entity_relationships")
-      .update({ from_entity_id: keepId })
-      .eq("user_id", userId)
-      .eq("from_entity_id", absorbId);
-    await supabase
-      .from("entity_relationships")
-      .update({ to_entity_id: keepId })
-      .eq("user_id", userId)
-      .eq("to_entity_id", absorbId);
-
-    // Drop self-loops created by rewiring
-    await supabase
-      .from("entity_relationships")
-      .delete()
-      .eq("user_id", userId)
-      .eq("from_entity_id", keepId)
-      .eq("to_entity_id", keepId);
-
-    await supabase
-      .from("relation_suggestions")
-      .update({ from_entity_id: keepId })
-      .eq("user_id", userId)
-      .eq("from_entity_id", absorbId);
-    await supabase
-      .from("relation_suggestions")
-      .update({ to_entity_id: keepId })
-      .eq("user_id", userId)
-      .eq("to_entity_id", absorbId);
-
-    // Merge useful metadata onto keep
-    const keepMeta = { ...((keep.metadata ?? {}) as Record<string, unknown>) };
-    const absorbMeta = (absorb.metadata ?? {}) as Record<string, unknown>;
-    if (absorbMeta.field_place === true) keepMeta.field_place = true;
-    if (!keepMeta.email_domain && typeof absorbMeta.email_domain === "string") {
-      keepMeta.email_domain = absorbMeta.email_domain;
-    }
-    if (!keepMeta.relationship_warmth && absorbMeta.relationship_warmth) {
-      keepMeta.relationship_warmth = absorbMeta.relationship_warmth;
-    }
-    const mergedAliases = new Set<string>();
-    for (const a of [
-      ...(Array.isArray(keepMeta.merged_names) ? keepMeta.merged_names : []),
-      absorb.name,
-    ]) {
-      if (typeof a === "string" && a.trim()) mergedAliases.add(a.trim());
-    }
-    keepMeta.merged_names = [...mergedAliases];
-
-    // Prefer non-unknown org from absorb if keep is unknown
-    let ownerContext = keep.owner_context as string | null;
-    if (
-      (!ownerContext || ownerContext === "unknown") &&
-      absorb.owner_context &&
-      absorb.owner_context !== "unknown"
-    ) {
-      ownerContext = absorb.owner_context as string;
-    }
-
-    await supabase
-      .from("entities")
-      .update({
-        metadata: keepMeta as never,
-        owner_context: (ownerContext ?? "unknown") as never,
-      })
-      .eq("id", keepId)
-      .eq("user_id", userId);
-
-    const { error: delErr } = await supabase
-      .from("entities")
-      .delete()
-      .eq("id", absorbId)
-      .eq("user_id", userId);
-    if (delErr) throw delErr;
-
-    return {
-      ok: true,
-      keepEntityId: keepId,
-      keepName: keep.name as string,
-      absorbedName: absorb.name as string,
-    };
+    return performCompanyMerge(supabase, userId, data.keepEntityId, data.absorbEntityId);
   });
 
 const RELATION_KINDS = [

@@ -5,17 +5,21 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { Check, ExternalLink, Loader2, Send, Sparkles, UserPlus } from "lucide-react";
+import { Check, ExternalLink, GitMerge, Link2, Loader2, Send, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  applySuggestedMerge,
+  applySuggestedRelation,
   createContactFromSuggestion,
   runInboxAssistant,
   sendAssistantDraft,
   type AssistantResult,
   type SuggestedContact,
+  type SuggestedMerge,
+  type SuggestedRelation,
 } from "@/lib/inbox-assistant.functions";
 
 const PLACEHOLDER =
@@ -26,16 +30,42 @@ function suggestionKey(c: SuggestedContact): string {
   return c.email ?? `name:${c.entityType}:${c.name.toLowerCase()}:${c.orgNr ?? ""}`;
 }
 
+function relationKey(r: SuggestedRelation): string {
+  return `${r.fromName.toLowerCase()}|${r.kind}|${r.toName.toLowerCase()}`;
+}
+
+function mergeKey(m: SuggestedMerge): string {
+  return [m.keepName, m.absorbName]
+    .map((n) => n.toLowerCase())
+    .sort()
+    .join("|");
+}
+
+const KIND_LABEL: Record<SuggestedRelation["kind"], string> = {
+  member_of: "jobber i",
+  works_on: "jobber på",
+  customer_of: "kunde av",
+  owns: "eier",
+  blocked_by: "blokkert av",
+  related_to: "relatert til",
+};
+
 export function InboxAssistantCard() {
   const qc = useQueryClient();
   const runAssistant = useServerFn(runInboxAssistant);
   const runCreate = useServerFn(createContactFromSuggestion);
   const runSendDraft = useServerFn(sendAssistantDraft);
+  const runApplyRelation = useServerFn(applySuggestedRelation);
+  const runApplyMerge = useServerFn(applySuggestedMerge);
 
   const [instruction, setInstruction] = useState("");
   const [result, setResult] = useState<AssistantResult | null>(null);
   const [createdIds, setCreatedIds] = useState<Record<string, string>>({});
   const [creatingKey, setCreatingKey] = useState<string | null>(null);
+  const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
+  const [appliedMerges, setAppliedMerges] = useState<Record<string, true>>({});
+  const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
+  const [applyingMergeKey, setApplyingMergeKey] = useState<string | null>(null);
 
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
@@ -49,6 +79,8 @@ export function InboxAssistantCard() {
     onSuccess: (res) => {
       setResult(res);
       setCreatedIds({});
+      setAppliedRelations({});
+      setAppliedMerges({});
       setDraftSent(false);
       setGmailDraftUrl(null);
       if (res.draft) {
@@ -92,6 +124,49 @@ export function InboxAssistantCard() {
     onSettled: () => setCreatingKey(null),
   });
 
+  const relationMut = useMutation({
+    mutationFn: (r: SuggestedRelation) =>
+      runApplyRelation({
+        data: {
+          fromName: r.fromName,
+          toName: r.toName,
+          kind: r.kind,
+          role: r.role,
+          fromEntityId: r.fromEntityId,
+          toEntityId: r.toEntityId,
+        },
+      }),
+    onMutate: (r) => setApplyingRelationKey(relationKey(r)),
+    onSuccess: async (res, r) => {
+      setAppliedRelations((prev) => ({ ...prev, [relationKey(r)]: true }));
+      toast.success(`Relasjon lagret: ${res.fromName} → ${res.toName}`);
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+    onSettled: () => setApplyingRelationKey(null),
+  });
+
+  const mergeMut = useMutation({
+    mutationFn: (m: SuggestedMerge) =>
+      runApplyMerge({
+        data: {
+          keepName: m.keepName,
+          absorbName: m.absorbName,
+          keepEntityId: m.keepEntityId,
+          absorbEntityId: m.absorbEntityId,
+        },
+      }),
+    onMutate: (m) => setApplyingMergeKey(mergeKey(m)),
+    onSuccess: async (res, m) => {
+      setAppliedMerges((prev) => ({ ...prev, [mergeKey(m)]: true }));
+      toast.success(`Sammenslått: beholdt «${res.keepName}»`);
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+    onSettled: () => setApplyingMergeKey(null),
+  });
+
+
   const sendMut = useMutation({
     mutationFn: (mode: "send" | "draft") =>
       runSendDraft({
@@ -120,6 +195,8 @@ export function InboxAssistantCard() {
     if (!text || mut.isPending) return;
     setResult(null);
     setCreatedIds({});
+    setAppliedRelations({});
+    setAppliedMerges({});
     setDraftSent(false);
     setGmailDraftUrl(null);
     mut.mutate(text);
@@ -315,6 +392,122 @@ export function InboxAssistantCard() {
                             <UserPlus className="h-3.5 w-3.5" />
                           )}
                           Opprett
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {(result.suggestedRelations?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Relasjoner
+              </p>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Godkjenn for å lagre koblingen. Opprett kontaktene først hvis de er nye.
+              </p>
+              <ul className="space-y-2">
+                {result.suggestedRelations.map((r) => {
+                  const key = relationKey(r);
+                  const done = !!appliedRelations[key];
+                  const busy = applyingRelationKey === key && relationMut.isPending;
+                  return (
+                    <li
+                      key={key}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {r.fromName}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            {KIND_LABEL[r.kind] ?? r.kind}
+                          </span>{" "}
+                          {r.toName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[r.role, r.reason].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      {done ? (
+                        <span className="shrink-0 text-xs font-medium text-emerald-600">Lagret</span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 gap-1.5 rounded-xl"
+                          disabled={busy}
+                          onClick={() => relationMut.mutate(r)}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Link2 className="h-3.5 w-3.5" />
+                          )}
+                          Godkjenn
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {(result.suggestedMerges?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Sammenslåing
+              </p>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Samme aktør under ulike navn. Behold den med org.nr/e-post.
+              </p>
+              <ul className="space-y-2">
+                {result.suggestedMerges.map((m) => {
+                  const key = mergeKey(m);
+                  const done = !!appliedMerges[key];
+                  const busy = applyingMergeKey === key && mergeMut.isPending;
+                  return (
+                    <li
+                      key={key}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          Behold «{m.keepName}», absorber «{m.absorbName}»
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">{m.reason}</p>
+                      </div>
+                      {done ? (
+                        <span className="shrink-0 text-xs font-medium text-emerald-600">
+                          Sammenslått
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 gap-1.5 rounded-xl"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Slå sammen «${m.absorbName}» inn i «${m.keepName}»? Dette kan ikke angres.`,
+                              )
+                            ) {
+                              mergeMut.mutate(m);
+                            }
+                          }}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <GitMerge className="h-3.5 w-3.5" />
+                          )}
+                          Godkjenn
                         </Button>
                       )}
                     </li>

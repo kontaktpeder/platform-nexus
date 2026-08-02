@@ -28,6 +28,24 @@ export type SuggestedContact = {
   relateToCompanyName?: string | null;
 };
 
+export type SuggestedRelation = {
+  fromName: string;
+  toName: string;
+  kind: "works_on" | "customer_of" | "member_of" | "owns" | "blocked_by" | "related_to";
+  role: string | null;
+  reason: string;
+  fromEntityId: string | null;
+  toEntityId: string | null;
+};
+
+export type SuggestedMerge = {
+  keepName: string;
+  absorbName: string;
+  reason: string;
+  keepEntityId: string | null;
+  absorbEntityId: string | null;
+};
+
 export type AssistantDraft = {
   to: string;
   subject: string;
@@ -39,7 +57,18 @@ export type AssistantResult = {
   steps: AssistantStep[];
   draft: AssistantDraft | null;
   suggestedContacts: SuggestedContact[];
+  suggestedRelations: SuggestedRelation[];
+  suggestedMerges: SuggestedMerge[];
 };
+
+const RELATION_KINDS = [
+  "works_on",
+  "customer_of",
+  "member_of",
+  "owns",
+  "blocked_by",
+  "related_to",
+] as const;
 
 const Input = z.object({ instruction: z.string().min(3).max(2000) });
 
@@ -110,6 +139,41 @@ async function emailExistsInNexus(
   return !!entRow?.id;
 }
 
+async function resolveEntityByName(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  name: string,
+  preferType?: "person" | "company" | null,
+): Promise<{ id: string; name: string; type: string } | null> {
+  const q = name.trim();
+  if (!q) return null;
+  let query = supabase
+    .from("entities")
+    .select("id, name, type")
+    .eq("user_id", userId)
+    .in("type", ["person", "company"])
+    .ilike("name", q)
+    .limit(3);
+  if (preferType) query = query.eq("type", preferType);
+  const { data: exact } = await query;
+  if (exact?.[0]) return exact[0] as { id: string; name: string; type: string };
+
+  const { data: fuzzy } = await supabase
+    .from("entities")
+    .select("id, name, type")
+    .eq("user_id", userId)
+    .in("type", ["person", "company"])
+    .ilike("name", `%${q}%`)
+    .limit(5);
+  const rows = (fuzzy ?? []) as Array<{ id: string; name: string; type: string }>;
+  if (preferType) {
+    const typed = rows.find((r) => r.type === preferType);
+    if (typed) return typed;
+  }
+  return rows[0] ?? null;
+}
+
 export const runInboxAssistant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => Input.parse(input))
@@ -125,6 +189,79 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
     const steps: AssistantStep[] = [];
     let draft: AssistantDraft | null = null;
     const suggestions = new Map<string, SuggestedContact>();
+    const relationSuggestions = new Map<string, SuggestedRelation>();
+    const mergeSuggestions = new Map<string, SuggestedMerge>();
+
+    async function addRelationSuggestion(input: {
+      fromName: string;
+      toName: string;
+      kind: SuggestedRelation["kind"];
+      role?: string | null;
+      reason: string;
+      fromEntityId?: string | null;
+      toEntityId?: string | null;
+    }) {
+      const fromName = input.fromName.trim().slice(0, 120);
+      const toName = input.toName.trim().slice(0, 120);
+      if (!fromName || !toName || fromName.toLowerCase() === toName.toLowerCase()) return;
+      const key = `${fromName.toLowerCase()}|${input.kind}|${toName.toLowerCase()}`;
+      if (relationSuggestions.has(key)) return;
+
+      let fromEntityId = input.fromEntityId ?? null;
+      let toEntityId = input.toEntityId ?? null;
+      if (!fromEntityId) {
+        fromEntityId = (await resolveEntityByName(supabase, userId, fromName))?.id ?? null;
+      }
+      if (!toEntityId) {
+        toEntityId = (await resolveEntityByName(supabase, userId, toName))?.id ?? null;
+      }
+
+      relationSuggestions.set(key, {
+        fromName,
+        toName,
+        kind: input.kind,
+        role: input.role?.trim().slice(0, 120) || null,
+        reason: input.reason.slice(0, 200),
+        fromEntityId,
+        toEntityId,
+      });
+    }
+
+    async function addMergeSuggestion(input: {
+      keepName: string;
+      absorbName: string;
+      reason: string;
+      keepEntityId?: string | null;
+      absorbEntityId?: string | null;
+    }) {
+      const keepName = input.keepName.trim().slice(0, 120);
+      const absorbName = input.absorbName.trim().slice(0, 120);
+      if (!keepName || !absorbName || keepName.toLowerCase() === absorbName.toLowerCase()) return;
+      const key = [keepName, absorbName]
+        .map((n) => n.toLowerCase())
+        .sort()
+        .join("|");
+      if (mergeSuggestions.has(key)) return;
+
+      let keepEntityId = input.keepEntityId ?? null;
+      let absorbEntityId = input.absorbEntityId ?? null;
+      if (!keepEntityId) {
+        keepEntityId =
+          (await resolveEntityByName(supabase, userId, keepName, "company"))?.id ?? null;
+      }
+      if (!absorbEntityId) {
+        absorbEntityId =
+          (await resolveEntityByName(supabase, userId, absorbName, "company"))?.id ?? null;
+      }
+
+      mergeSuggestions.set(key, {
+        keepName,
+        absorbName,
+        reason: input.reason.slice(0, 200),
+        keepEntityId,
+        absorbEntityId,
+      });
+    }
 
     async function addSuggestion(input: {
       name: string;
@@ -164,10 +301,11 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
         });
         return;
       }
+      const entityType = input.entityType ?? "person";
       suggestions.set(key, {
         name,
         email,
-        entityType: input.entityType ?? "person",
+        entityType,
         reason: input.reason.slice(0, 200),
         role: input.role ?? null,
         phone: input.phone ?? null,
@@ -176,6 +314,16 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
         address: input.address ?? null,
         relateToCompanyName: input.relateToCompanyName ?? null,
       });
+
+      if (entityType === "person" && input.relateToCompanyName?.trim()) {
+        await addRelationSuggestion({
+          fromName: name,
+          toName: input.relateToCompanyName.trim(),
+          kind: "member_of",
+          role: input.role,
+          reason: "Person knyttet til selskap",
+        });
+      }
     }
 
     const tools = {
@@ -483,6 +631,62 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
           return { ok: true };
         },
       }),
+
+      suggestRelation: tool({
+        description:
+          "Foreslå en relasjon mellom to kontakter (finnes eller foreslått). Eks: daglig leder member_of selskap, handelsnavn related_to juridisk selskap. Brukeren godkjenner i UI.",
+        inputSchema: z.object({
+          fromName: z.string().min(1).max(120),
+          toName: z.string().min(1).max(120),
+          kind: z.enum(RELATION_KINDS),
+          role: z.string().max(120).nullable().optional(),
+          reason: z.string().max(200).optional(),
+          fromEntityId: z.string().uuid().nullable().optional(),
+          toEntityId: z.string().uuid().nullable().optional(),
+        }),
+        execute: async (input) => {
+          await addRelationSuggestion({
+            fromName: input.fromName,
+            toName: input.toName,
+            kind: input.kind,
+            role: input.role,
+            reason: input.reason ?? "Foreslått relasjon",
+            fromEntityId: input.fromEntityId,
+            toEntityId: input.toEntityId,
+          });
+          steps.push({
+            label: "Foreslo relasjon",
+            detail: `${input.fromName} → ${input.kind} → ${input.toName}`,
+          });
+          return { ok: true };
+        },
+      }),
+
+      suggestMerge: tool({
+        description:
+          "Foreslå sammenslåing av to selskaper som er samme aktør (f.eks. handelsnavn «Brygg Storgata» + juridisk «ØSLO AS»). keepName = den som beholdes (helst den med org.nr/e-post). Brukeren godkjenner i UI.",
+        inputSchema: z.object({
+          keepName: z.string().min(1).max(120),
+          absorbName: z.string().min(1).max(120),
+          reason: z.string().max(200).optional(),
+          keepEntityId: z.string().uuid().nullable().optional(),
+          absorbEntityId: z.string().uuid().nullable().optional(),
+        }),
+        execute: async (input) => {
+          await addMergeSuggestion({
+            keepName: input.keepName,
+            absorbName: input.absorbName,
+            reason: input.reason ?? "Trolig samme selskap",
+            keepEntityId: input.keepEntityId,
+            absorbEntityId: input.absorbEntityId,
+          });
+          steps.push({
+            label: "Foreslo sammenslåing",
+            detail: `Behold «${input.keepName}», absorber «${input.absorbName}»`,
+          });
+          return { ok: true };
+        },
+      }),
     };
 
     const system = [
@@ -497,13 +701,15 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       "   3) lookupBrregCompany med juridisk navn eller kjente nøkkelord + city/addressHint.",
       "   4) getBrregRoles for org.nr → daglig leder.",
       "   5) suggestContact for selskap (orgNr/adresse) og person (rolle Daglig leder, relateToCompanyName).",
+      "   6) suggestRelation: person member_of selskap; handelsnavn related_to juridisk selskap.",
+      "   7) suggestMerge når Nexus allerede har handelsnavn og Brreg viser annet juridisk navn (behold den med org.nr/e-post).",
       "Arbeidsmåte:",
       "1. Nevnes person/selskap/idé: findContact + searchNexusKnowledge først, deretter Gmail/Brreg/web.",
       "2. searchGmail: in:sent/from:me for sendte mailer. Utvid query hvis tomt.",
       "3. Les tråder med readThread før du konkluderer.",
       "4. Råd: (a) funn (b) hvem som ikke svarte (c) 2–4 neste steg. createEmailDraft når det hjelper.",
       "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta.",
-      "6. suggestContact for relevante personer/selskaper. E-post valgfri. ALDRI noreply/bank.",
+      "6. suggestContact / suggestRelation / suggestMerge — brukeren godkjenner i UI. ALDRI noreply/bank.",
       "7. Oppfinn ALDRI org.nr eller daglig leder — kun fra Brreg/web-verktøy.",
       "KRITISK: Du MÅ alltid skrive et tekstlig sluttsvar på norsk. Si hva du søkte og fant. Ingen markdown-overskrifter.",
     ].join("\n");
@@ -540,6 +746,8 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       steps,
       draft,
       suggestedContacts: [...suggestions.values()].slice(0, 8),
+      suggestedRelations: [...relationSuggestions.values()].slice(0, 8),
+      suggestedMerges: [...mergeSuggestions.values()].slice(0, 4),
     };
   });
 
@@ -771,4 +979,106 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
       email,
       created: true,
     };
+  });
+
+export const applySuggestedRelation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        fromName: z.string().min(1).max(120),
+        toName: z.string().min(1).max(120),
+        kind: z.enum(RELATION_KINDS),
+        role: z.string().max(120).nullable().optional(),
+        fromEntityId: z.string().uuid().nullable().optional(),
+        toEntityId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const from =
+      (data.fromEntityId
+        ? { id: data.fromEntityId, name: data.fromName, type: "person" }
+        : null) ?? (await resolveEntityByName(supabase, userId, data.fromName));
+    const to =
+      (data.toEntityId
+        ? { id: data.toEntityId, name: data.toName, type: "company" }
+        : null) ?? (await resolveEntityByName(supabase, userId, data.toName));
+
+    if (!from?.id || !to?.id) {
+      throw new Error(
+        "Fant ikke begge kontakter ennå — opprett dem først, deretter lagre relasjonen",
+      );
+    }
+    if (from.id === to.id) throw new Error("Kan ikke koble en kontakt til seg selv");
+
+    const role = data.role?.trim().slice(0, 120) || "";
+    const { data: row, error } = await supabase
+      .from("entity_relationships")
+      .upsert(
+        {
+          user_id: userId,
+          from_entity_id: from.id,
+          to_entity_id: to.id,
+          kind: data.kind as never,
+          source: "assistant",
+          metadata: (role ? { role } : {}) as never,
+        },
+        { onConflict: "user_id,from_entity_id,to_entity_id,kind" },
+      )
+      .select("id")
+      .single();
+    if (error) throw error;
+    return {
+      ok: true,
+      relationshipId: row.id as string,
+      fromName: from.name,
+      toName: to.name,
+    };
+  });
+
+export const applySuggestedMerge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        keepName: z.string().min(1).max(120),
+        absorbName: z.string().min(1).max(120),
+        keepEntityId: z.string().uuid().nullable().optional(),
+        absorbEntityId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const keep =
+      (data.keepEntityId
+        ? await supabase
+            .from("entities")
+            .select("id, name, type")
+            .eq("id", data.keepEntityId)
+            .eq("user_id", userId)
+            .maybeSingle()
+            .then((r) => r.data)
+        : null) ?? (await resolveEntityByName(supabase, userId, data.keepName, "company"));
+    const absorb =
+      (data.absorbEntityId
+        ? await supabase
+            .from("entities")
+            .select("id, name, type")
+            .eq("id", data.absorbEntityId)
+            .eq("user_id", userId)
+            .maybeSingle()
+            .then((r) => r.data)
+        : null) ?? (await resolveEntityByName(supabase, userId, data.absorbName, "company"));
+
+    if (!keep?.id || !absorb?.id) {
+      throw new Error(
+        "Fant ikke begge selskaper ennå — opprett dem først, deretter slå sammen",
+      );
+    }
+
+    const { performCompanyMerge } = await import("@/lib/customers.functions");
+    return performCompanyMerge(supabase, userId, keep.id as string, absorb.id as string);
   });
