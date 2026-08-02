@@ -2,6 +2,10 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
+import {
+  buildReceiptSystemPrompt,
+  type ReceiptOrgContext,
+} from "@/lib/receipt-org-context.server";
 
 const ConfidenceItem = z.object({
   field: z.string(),
@@ -30,29 +34,6 @@ export const ReceiptSuggestionSchema = z.object({
 
 export type ReceiptSuggestion = z.infer<typeof ReceiptSuggestionSchema>;
 
-const SYSTEM_PROMPT = `Du er en regnskapsassistent for norske organisasjoner. Du analyserer kvitteringer/fakturaer og foreslår en finance_entry. Bruk norske MVA-satser (0, 12, 15, 25). amount_net = amount_gross - vat_amount. ISO-dato YYYY-MM-DD. Du skal IKKE bokføre — kun foreslå.
-
-Svar KUN med ett JSON-objekt (ingen markdown, ingen forklaring) på dette skjemaet:
-{
-  "entry_type": "income" | "expense",
-  "entry_date": "YYYY-MM-DD",
-  "counterparty": string | null,
-  "description": string,
-  "category": string | null,
-  "category_group": string | null,
-  "amount_gross": number,
-  "vat_rate": number,
-  "vat_amount": number,
-  "amount_net": number,
-  "payment_status": "paid" | "unpaid" | "partial",
-  "invoice_status": "none" | "draft" | "sent" | "overdue" | "paid",
-  "pre_company_expense": boolean,
-  "notes": string | null,
-  "extracted_text": string,
-  "confidence": [ { "field": string, "score": number, "note": string | null } ]
-}
-Bruk rene tall (uten tusenskilletegn). vat_rate som prosent (f.eks. 25 for 25%). Kvitteringer er typisk expense og ofte payment_status paid. Hvis et felt er ukjent, gjett konservativt og sett lav score i confidence.`;
-
 function extractJson(raw: string): unknown {
   let s = (raw ?? "").trim();
   s = s.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -77,6 +58,7 @@ export async function scanReceiptWithGemini(input: {
   bytes: Uint8Array;
   mimeType: string;
   fileName: string;
+  orgContext?: ReceiptOrgContext | null;
 }): Promise<ReceiptSuggestion> {
   if (!getGeminiApiKey()) {
     throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY (or GEMINI_API_KEY)");
@@ -86,7 +68,10 @@ export async function scanReceiptWithGemini(input: {
 
   const mime = (input.mimeType || "application/octet-stream").split(";")[0].trim();
   const base64 = bytesToBase64(input.bytes);
-  const intro = `Analyser vedlagt ${mime === "application/pdf" ? "PDF" : "bilde"} (filnavn: ${input.fileName}) og returner JSON-objektet. Dette er ÉN kvittering/ett bilag.`;
+  const orgHint = input.orgContext
+    ? ` Bilaget gjelder virksomheten «${input.orgContext.name}».`
+    : "";
+  const intro = `Analyser vedlagt ${mime === "application/pdf" ? "PDF" : "bilde"} (filnavn: ${input.fileName}) og returner JSON-objektet. Dette er ÉN kvittering/ett bilag.${orgHint}`;
 
   const content: Array<Record<string, unknown>> = [{ type: "text", text: intro }];
   if (mime === "application/pdf") {
@@ -105,7 +90,7 @@ export async function scanReceiptWithGemini(input: {
   const result = await generateText({
     model: getGeminiModel("flash"),
     // Gemini rejects role:"system" in messages — use top-level system like rest of Nexus.
-    system: SYSTEM_PROMPT,
+    system: buildReceiptSystemPrompt(input.orgContext ?? null),
     messages: [{ role: "user", content: content as never }],
   });
 

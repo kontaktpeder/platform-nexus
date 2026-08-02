@@ -20,21 +20,32 @@ export const scanReceiptFn = createServerFn({ method: "POST" })
         fileBase64: z.string().min(1).max(20_000_000),
         fileName: z.string().min(1).max(200),
         mimeType: z.string().min(3).max(120),
+        orgSlug: z.string().min(1).max(80).optional().nullable(),
+        financeOrgName: z.string().max(200).optional().nullable(),
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
     const { scanReceiptWithGemini } = await import("@/lib/receipt-scan.server");
+    const { resolveReceiptOrgContext } = await import("@/lib/receipt-org-context.server");
+
     const fileBytes = base64ToBytes(data.fileBase64);
     if (fileBytes.length === 0) throw new Error("Tom fil");
     if (fileBytes.length > 25 * 1024 * 1024) throw new Error("Filen er for stor (maks 25 MB)");
+
+    const orgContext = await resolveReceiptOrgContext(supabase, userId, {
+      orgSlug: data.orgSlug ?? null,
+      financeOrgName: data.financeOrgName ?? null,
+    });
 
     const suggestion = await scanReceiptWithGemini({
       bytes: fileBytes,
       mimeType: data.mimeType,
       fileName: data.fileName,
+      orgContext,
     });
-    return { suggestion };
+    return { suggestion, orgContext };
   });
 
 /** Godkjenn forslag → lag bilag + vedlegg i valgt Finance-org. */

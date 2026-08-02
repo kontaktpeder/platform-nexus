@@ -39,7 +39,8 @@ export const ANCHOR_DEFINITIONS: Record<AnchorSlug, AnchorDefinition> = {
     type: "project",
     owner_context: "gold-of-sicily",
     importance: 80,
-    summary: "Arancini, catering, events og drift.",
+    summary:
+      "Matproduksjon og salg (arancini, catering, events). Driftskostnader, råvarer, emballasje og leverandører — ikke privathusholdning.",
     metadata: { is_anchor: true, platform_org_slug: null },
   },
 };

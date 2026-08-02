@@ -99,6 +99,8 @@ function HjemKvitteringPage() {
           fileBase64: item.fileBase64,
           fileName: item.fileName,
           mimeType: item.mimeType,
+          orgSlug: orgSlug || null,
+          financeOrgName: selectedOrg?.name ?? null,
         },
       });
       return { id: item.id, suggestion: res.suggestion };
