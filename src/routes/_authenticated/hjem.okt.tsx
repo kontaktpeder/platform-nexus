@@ -15,6 +15,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getLastWorkspace } from "@/lib/last-workspace";
+import {
+  listConnectedModuleOrgs,
+  type ConnectedModuleOrg,
+} from "@/lib/module-orgs.functions";
 import { fetchWorkTimerCatalog, syncTimeEntryToWork } from "@/lib/work-timer.functions";
 import {
   BREAK_OPTIONS,
@@ -34,14 +38,43 @@ export const Route = createFileRoute("/_authenticated/hjem/okt")({
 });
 
 function HjemOktPage() {
+  const listOrgs = useServerFn(listConnectedModuleOrgs);
   const runCatalog = useServerFn(fetchWorkTimerCatalog);
   const runSync = useServerFn(syncTimeEntryToWork);
   const lastWs = useMemo(() => getLastWorkspace(), []);
 
-  const catalogQ = useQuery({
-    queryKey: ["work-timer-catalog", lastWs?.orgSlug ?? null],
+  const [orgSlug, setOrgSlug] = useState(lastWs?.orgSlug ?? "");
+  const [session, setSession] = useState<WorkSession | null>(null);
+  const [elapsed, setElapsed] = useState("00:00");
+  const [projectId, setProjectId] = useState("");
+  const [rateId, setRateId] = useState("");
+  const [comment, setComment] = useState("");
+  const [breakMin, setBreakMin] = useState("0");
+  const [pending, setPending] = useState<PendingTimeEntry[]>([]);
+  const [syncing, setSyncing] = useState(false);
+
+  const orgsQ = useQuery({
+    queryKey: ["connected-module-orgs", "work"],
     queryFn: () =>
-      runCatalog({ data: { orgSlug: lastWs?.orgSlug ?? null } }) as Promise<{
+      listOrgs({ data: { moduleSlug: "work" } }) as Promise<{
+        orgs: ConnectedModuleOrg[];
+      }>,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const orgs = orgsQ.data?.orgs ?? [];
+    if (!orgs.length) return;
+    if (!orgSlug || !orgs.some((o) => o.platformOrgSlug === orgSlug)) {
+      setOrgSlug(orgs[0]!.platformOrgSlug);
+    }
+  }, [orgsQ.data, orgSlug]);
+
+  const catalogQ = useQuery({
+    queryKey: ["work-timer-catalog", orgSlug],
+    enabled: !!orgSlug,
+    queryFn: () =>
+      runCatalog({ data: { orgSlug } }) as Promise<{
         connected: boolean;
         org: { id: string; name: string } | null;
         projects: Array<{ id: string; name: string }>;
@@ -51,29 +84,18 @@ function HjemOktPage() {
     staleTime: 30_000,
   });
 
-  const [session, setSession] = useState<WorkSession | null>(null);
-  const [elapsed, setElapsed] = useState("00:00");
-  const [orgId, setOrgId] = useState("");
-  const [orgName, setOrgName] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [rateId, setRateId] = useState("");
-  const [comment, setComment] = useState("");
-  const [breakMin, setBreakMin] = useState("0");
-  const [pending, setPending] = useState<PendingTimeEntry[]>([]);
-  const [syncing, setSyncing] = useState(false);
-
   const projects = catalogQ.data?.projects ?? [];
   const rates = catalogQ.data?.rates ?? [];
   const selectedProject = projects.find((p) => p.id === projectId) ?? null;
   const selectedRate = rates.find((r) => r.id === rateId) ?? null;
+  const workOrgName = catalogQ.data?.org?.name ?? "";
+  const workOrgId = catalogQ.data?.org?.id ?? "";
 
   useEffect(() => {
     const active = readWorkSession();
     setSession(active);
     setPending(readPendingEntries().slice(0, 8));
     if (active) {
-      setOrgId(active.organizationId);
-      setOrgName(active.organizationName);
       setProjectId(active.projectId);
       setRateId(active.rateId ?? "");
       setComment(active.comment ?? "");
@@ -81,17 +103,12 @@ function HjemOktPage() {
   }, []);
 
   useEffect(() => {
-    const org = catalogQ.data?.org;
-    if (!org || session) return;
-    setOrgId(org.id);
-    setOrgName(org.name);
-    if (!projectId && catalogQ.data?.projects[0]) {
-      setProjectId(catalogQ.data.projects[0].id);
-    }
-    if (!rateId && catalogQ.data?.rates[0]) {
-      setRateId(catalogQ.data.rates[0].id);
-    }
-  }, [catalogQ.data, session, projectId, rateId]);
+    if (session || !catalogQ.data?.connected) return;
+    setProjectId((cur) =>
+      projects.some((p) => p.id === cur) ? cur : (projects[0]?.id ?? ""),
+    );
+    setRateId((cur) => (rates.some((r) => r.id === cur) ? cur : (rates[0]?.id ?? "")));
+  }, [catalogQ.data, projects, rates, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -102,7 +119,6 @@ function HjemOktPage() {
   }, [session]);
 
   async function syncEntry(entry: PendingTimeEntry) {
-    // Only sync entries that already have Work UUIDs as project ids
     if (!/^[0-9a-f-]{36}$/i.test(entry.projectId)) {
       throw new Error("Prosjekt mangler Work-id — start økt på nytt etter Work-kobling");
     }
@@ -116,7 +132,7 @@ function HjemOktPage() {
         end_time: entry.end_time,
         break_minutes: entry.break_minutes,
         comment: entry.comment,
-        orgSlug: lastWs?.orgSlug ?? null,
+        orgSlug: orgSlug || null,
       },
     });
     markPendingSynced(entry.id, "synced");
@@ -124,13 +140,13 @@ function HjemOktPage() {
   }
 
   function onStart() {
-    if (!orgId || !selectedProject) {
-      toast.error("Velg prosjekt fra Work");
+    if (!workOrgId || !selectedProject) {
+      toast.error("Velg org og prosjekt fra Work");
       return;
     }
     const s = startWorkSession({
-      organizationId: orgId,
-      organizationName: orgName || "Work",
+      organizationId: workOrgId,
+      organizationName: workOrgName || "Work",
       projectId: selectedProject.id,
       projectName: selectedProject.name,
       rateId: selectedRate?.id ?? null,
@@ -153,7 +169,9 @@ function HjemOktPage() {
       const res = await syncEntry(entry);
       setPending(readPendingEntries().slice(0, 8));
       toast.success(
-        res.duplicate ? `Allerede i Work · ${entry.total_minutes} min` : `Synket til Work · ${entry.total_minutes} min`,
+        res.duplicate
+          ? `Allerede i Work · ${entry.total_minutes} min`
+          : `Synket til Work · ${entry.total_minutes} min`,
         { description: entry.projectName },
       );
     } catch (e) {
@@ -182,7 +200,7 @@ function HjemOktPage() {
     }
   }
 
-  const loading = catalogQ.isLoading;
+  const loading = orgsQ.isLoading || catalogQ.isLoading;
   const catalogError = catalogQ.data?.error;
   const connected = !!catalogQ.data?.connected && !!catalogQ.data.org;
 
@@ -190,6 +208,34 @@ function HjemOktPage() {
     <PlatformShell hideMobileNav>
       <CaptureTopBar title="Arbeidsøkt" />
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1">
+        {!session && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Work-org
+            </label>
+            <Select
+              value={orgSlug || undefined}
+              onValueChange={(v) => {
+                setOrgSlug(v);
+                setProjectId("");
+                setRateId("");
+              }}
+              disabled={!!session}
+            >
+              <SelectTrigger className="h-12 rounded-xl">
+                <SelectValue placeholder="Velg organisasjon" />
+              </SelectTrigger>
+              <SelectContent>
+                {(orgsQ.data?.orgs ?? []).map((o) => (
+                  <SelectItem key={o.connectionId} value={o.platformOrgSlug}>
+                    {o.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         {!loading && !connected && (
           <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
             Koble Work under Moduler for å hente prosjekter og satser.
@@ -253,13 +299,6 @@ function HjemOktPage() {
         ) : (
           <section className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Org</label>
-              <p className="flex h-12 items-center rounded-xl border border-border bg-muted/30 px-3 text-sm font-medium">
-                {loading ? "Henter …" : orgName || "—"}
-              </p>
-            </div>
-
-            <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 Prosjekt *
               </label>
@@ -283,11 +322,7 @@ function HjemOktPage() {
 
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Sats</label>
-              <Select
-                value={rateId || undefined}
-                onValueChange={setRateId}
-                disabled={!rates.length}
-              >
+              <Select value={rateId || undefined} onValueChange={setRateId} disabled={!rates.length}>
                 <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue placeholder={rates.length ? "Velg sats" : "Ingen satser"} />
                 </SelectTrigger>

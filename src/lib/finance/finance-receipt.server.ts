@@ -1,5 +1,9 @@
-// Upload a receipt into Finance as expense entry + attachment.
-import { resolveFinanceConnection, type FinanceConnectionContext } from "@/lib/finance/finance-invoice.server";
+// Upload an approved receipt into Finance as entry + attachment.
+import {
+  resolveFinanceConnection,
+  type FinanceConnectionContext,
+} from "@/lib/finance/finance-invoice.server";
+import type { ReceiptSuggestion } from "@/lib/receipt-scan.server";
 
 type AdminClient = Awaited<
   typeof import("@/integrations/supabase/client.server")
@@ -49,17 +53,17 @@ export async function resolveAnyFinanceConnection(input: {
   return null;
 }
 
-export async function uploadReceiptToFinance(input: {
+export async function uploadApprovedReceiptToFinance(input: {
   ctx: FinanceConnectionContext;
   fileBytes: Uint8Array;
   fileName: string;
   mimeType: string;
-  description?: string;
+  suggestion: ReceiptSuggestion;
   sourceRef: string;
 }): Promise<{ entryId: string; attachmentId: string; duplicate?: boolean }> {
   const base = normalizeBase(input.ctx.connection.external_base_url);
   const key = domainKey(input.ctx);
-  const today = new Date().toISOString().slice(0, 10);
+  const s = input.suggestion;
 
   const entryRes = await fetch(`${base}/api/public/v1/entries`, {
     method: "POST",
@@ -68,16 +72,23 @@ export async function uploadReceiptToFinance(input: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      entry_type: "expense",
-      entry_date: today,
-      description: input.description?.trim() || `Kvittering ${input.fileName}`,
-      amount_gross: 0,
-      vat_rate: 25,
-      payment_status: "unpaid",
+      entry_type: s.entry_type,
+      entry_date: s.entry_date,
+      description: s.description.slice(0, 500),
+      counterparty: s.counterparty ?? undefined,
+      category: s.category ?? undefined,
+      category_group: s.category_group ?? undefined,
+      amount_gross: s.amount_gross,
+      vat_rate: s.vat_rate,
+      vat_amount: s.vat_amount,
+      amount_net: s.amount_net,
+      payment_status: s.payment_status === "partial" ? "partial" : s.payment_status,
+      invoice_status: s.invoice_status,
+      pre_company_expense: s.pre_company_expense,
+      notes: s.notes ?? undefined,
       source_app: "nexus",
       source_type: "receipt",
       source_ref: input.sourceRef,
-      notes: "Opprettet fra Nexus — beløp kan justeres i Finance",
     }),
   });
   const entryText = await entryRes.text();
