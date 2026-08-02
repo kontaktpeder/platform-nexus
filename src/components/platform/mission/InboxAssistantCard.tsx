@@ -1,18 +1,19 @@
 // Ask the Nexus assistant to dig through Gmail and contacts, then act.
-// Long-running: the agent searches, reads threads and may create a draft.
-// Missing contacts found in Gmail are offered as one-click create suggestions.
+// Drafts are previewed/edited/sent in Nexus. Contact suggestions are opt-in.
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { Check, ExternalLink, Loader2, Sparkles, UserPlus } from "lucide-react";
+import { Check, ExternalLink, Loader2, Send, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createContactFromSuggestion,
   runInboxAssistant,
+  sendAssistantDraft,
   type AssistantResult,
   type SuggestedContact,
 } from "@/lib/inbox-assistant.functions";
@@ -26,10 +27,18 @@ export function InboxAssistantCard() {
   const qc = useQueryClient();
   const runAssistant = useServerFn(runInboxAssistant);
   const runCreate = useServerFn(createContactFromSuggestion);
+  const runSendDraft = useServerFn(sendAssistantDraft);
+
   const [instruction, setInstruction] = useState("");
   const [result, setResult] = useState<AssistantResult | null>(null);
   const [createdIds, setCreatedIds] = useState<Record<string, string>>({});
   const [creatingEmail, setCreatingEmail] = useState<string | null>(null);
+
+  const [draftTo, setDraftTo] = useState("");
+  const [draftSubject, setDraftSubject] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftSent, setDraftSent] = useState(false);
+  const [gmailDraftUrl, setGmailDraftUrl] = useState<string | null>(null);
 
   const mut = useMutation({
     mutationFn: (text: string) =>
@@ -37,7 +46,18 @@ export function InboxAssistantCard() {
     onSuccess: (res) => {
       setResult(res);
       setCreatedIds({});
-      if (res.draft) toast.success("Utkast klart i Gmail");
+      setDraftSent(false);
+      setGmailDraftUrl(null);
+      if (res.draft) {
+        setDraftTo(res.draft.to);
+        setDraftSubject(res.draft.subject);
+        setDraftBody(res.draft.body);
+        toast.success("Utkast klart — les gjennom før du sender");
+      } else {
+        setDraftTo("");
+        setDraftSubject("");
+        setDraftBody("");
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -63,13 +83,45 @@ export function InboxAssistantCard() {
     onSettled: () => setCreatingEmail(null),
   });
 
+  const sendMut = useMutation({
+    mutationFn: (mode: "send" | "draft") =>
+      runSendDraft({
+        data: {
+          to: draftTo.trim(),
+          subject: draftSubject.trim(),
+          body: draftBody.trim(),
+          mode,
+        },
+      }),
+    onSuccess: (res) => {
+      if (res.mode === "send") {
+        setDraftSent(true);
+        toast.success(`E-post sendt til ${draftTo}`);
+      } else {
+        setGmailDraftUrl(res.openUrl);
+        toast.success("Utkast lagret i Gmail");
+        if (res.openUrl) window.open(res.openUrl, "_blank", "noopener");
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function submit() {
     const text = instruction.trim();
     if (!text || mut.isPending) return;
     setResult(null);
     setCreatedIds({});
+    setDraftSent(false);
+    setGmailDraftUrl(null);
     mut.mutate(text);
   }
+
+  const canSend =
+    !!draftTo.trim() &&
+    !!draftSubject.trim() &&
+    !!draftBody.trim() &&
+    !draftSent &&
+    !sendMut.isPending;
 
   const pendingSuggestions = result?.suggestedContacts.filter((c) => !createdIds[c.email]) ?? [];
 
@@ -82,7 +134,7 @@ export function InboxAssistantCard() {
         <div>
           <h2 className="text-sm font-semibold">Assistent</h2>
           <p className="text-xs text-muted-foreground">
-            Leser innboks og kontakter, lager utkast — sender aldri selv.
+            Leser innboks og kontakter. Utkast vises her — du sender selv.
           </p>
         </div>
       </div>
@@ -122,18 +174,82 @@ export function InboxAssistantCard() {
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{result.answer}</p>
 
-          {result.draft && (
-            <a
-              href={result.draft.openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5 text-sm font-medium text-primary"
-            >
-              <span className="min-w-0 truncate">
-                Utkast til {result.draft.to}: {result.draft.subject}
-              </span>
-              <ExternalLink className="h-4 w-4 shrink-0" />
-            </a>
+          {(result.draft || draftTo || draftSubject || draftBody) && (
+            <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                {draftSent ? "Sendt" : "E-postutkast"}
+              </p>
+              <Input
+                value={draftTo}
+                onChange={(e) => setDraftTo(e.target.value)}
+                placeholder="Til"
+                disabled={draftSent}
+                className="h-11 rounded-xl bg-background"
+              />
+              <Input
+                value={draftSubject}
+                onChange={(e) => setDraftSubject(e.target.value)}
+                placeholder="Emne"
+                disabled={draftSent}
+                maxLength={300}
+                className="h-11 rounded-xl bg-background"
+              />
+              <Textarea
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                placeholder="Melding…"
+                disabled={draftSent}
+                rows={8}
+                className="rounded-xl bg-background text-base"
+              />
+              {!draftSent ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 flex-1 gap-2 rounded-xl"
+                    disabled={!canSend}
+                    onClick={() => sendMut.mutate("draft")}
+                  >
+                    {sendMut.isPending && sendMut.variables === "draft" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4" />
+                    )}
+                    Lagre i Gmail
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-11 flex-1 gap-2 rounded-xl"
+                    disabled={!canSend}
+                    onClick={() => {
+                      if (window.confirm(`Sende e-posten til ${draftTo} nå?`)) {
+                        sendMut.mutate("send");
+                      }
+                    }}
+                  >
+                    {sendMut.isPending && sendMut.variables === "send" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Send nå
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sendt til {draftTo}.</p>
+              )}
+              {gmailDraftUrl && (
+                <a
+                  href={gmailDraftUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
+                >
+                  Åpne i Gmail <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
           )}
 
           {(pendingSuggestions.length > 0 || Object.keys(createdIds).length > 0) && (
@@ -142,8 +258,7 @@ export function InboxAssistantCard() {
                 Nye kontakter
               </p>
               <p className="mb-3 text-xs text-muted-foreground">
-                Funnet i Gmail, men ikke i Nexus ennå. Opprett dem for å sende mail og koble tråder
-                direkte herfra neste gang.
+                Relevante for denne oppgaven, men ikke i Nexus ennå.
               </p>
               <ul className="space-y-2">
                 {(result.suggestedContacts ?? []).map((c) => {

@@ -1,9 +1,8 @@
 // Nexus-assistent — agentic Gemini over the user's own inbox and contacts.
-// Example: «Les trådene mellom meg og Marit om bryllupet 15. august, finn ut
-// om hun ga meg en kjøreplan, og lag i så fall en mail til lydteknikeren.»
 // Tools: findContact, searchGmail, readThread, createEmailDraft, suggestContact.
-// The agent NEVER sends mail — it only creates Gmail drafts.
-// People found in Gmail but missing from Nexus are returned as suggestedContacts.
+// Drafts are returned to the UI for preview/edit/send in Nexus — never auto-sent.
+// Contact suggestions are opt-in (suggestContact + draft recipient), never harvested
+// from every Gmail hit (that was pulling in bank noreply noise).
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -22,10 +21,16 @@ export type SuggestedContact = {
   reason: string;
 };
 
+export type AssistantDraft = {
+  to: string;
+  subject: string;
+  body: string;
+};
+
 export type AssistantResult = {
   answer: string;
   steps: AssistantStep[];
-  draft: { to: string; subject: string; openUrl: string } | null;
+  draft: AssistantDraft | null;
   suggestedContacts: SuggestedContact[];
 };
 
@@ -45,6 +50,29 @@ function nameFromEmailLocal(email: string): string {
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
     .join(" ")
     .slice(0, 120);
+}
+
+/** Same spirit as identity.server isNoisyEmail — catches __no-reply@dnb.no etc. */
+function isNoisyEmail(email: string): boolean {
+  const local = (email.split("@")[0] ?? "").toLowerCase();
+  if (!local) return true;
+  if (
+    /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|mailerdaemon|notifications?|newsletter|news|updates?|bounce|postmaster|daemon)$/i.test(
+      local,
+    )
+  ) {
+    return true;
+  }
+  if (
+    local.includes("noreply") ||
+    local.includes("no-reply") ||
+    local.includes("donotreply") ||
+    local.includes("do-not-reply") ||
+    local.includes("mailer-daemon")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 async function emailExistsInNexus(
@@ -88,7 +116,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
 
     const gmail = await import("@/lib/inbox/gmail.server");
     const steps: AssistantStep[] = [];
-    let draft: AssistantResult["draft"] = null;
+    let draft: AssistantDraft | null = null;
     const suggestions = new Map<string, SuggestedContact>();
 
     async function addSuggestion(input: {
@@ -100,11 +128,10 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       const email = input.email.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
       if (selfEmail && email === selfEmail) return;
-      if (/^(noreply|no-reply|mailer-daemon|notifications?)@/i.test(email)) return;
+      if (isNoisyEmail(email)) return;
       const name = (input.name.trim() || nameFromEmailLocal(email)).slice(0, 120);
       const existing = suggestions.get(email);
       if (existing) {
-        // Prefer a real display name over email-local guess when agent refines later.
         if (name.length > existing.name.length && !name.includes("@")) {
           suggestions.set(email, { ...existing, name });
         }
@@ -169,16 +196,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
         execute: async ({ query, max }) => {
           steps.push({ label: "Søkte i Gmail", detail: query });
           const hits = await gmail.searchGmailMessages(query, max ?? 8);
-          for (const hit of hits) {
-            const parsed = gmail.parseEmailFrom(hit.from);
-            if (parsed.email) {
-              await addSuggestion({
-                name: parsed.name || nameFromEmailLocal(parsed.email),
-                email: parsed.email,
-                reason: `Funnet i Gmail: ${hit.subject}`,
-              });
-            }
-          }
+          // Do NOT auto-suggest contacts from every hit — that pulls in bank/noreply noise.
           return { hits };
         },
       }),
@@ -193,45 +211,36 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
             label: "Leste tråd",
             detail: messages[0]?.subject || threadId,
           });
-          for (const msg of messages) {
-            for (const header of [msg.from, msg.to]) {
-              const parsed = gmail.parseEmailFrom(header);
-              if (!parsed.email) continue;
-              await addSuggestion({
-                name: parsed.name || nameFromEmailLocal(parsed.email),
-                email: parsed.email,
-                reason: `Fra tråd: ${msg.subject || "uten emne"}`,
-              });
-            }
-          }
           return { messages };
         },
       }),
 
       createEmailDraft: tool({
         description:
-          "Lag et Gmail-utkast til en mottaker. Sender ALDRI — brukeren sender selv fra Gmail. Bruk når oppgaven ber om å skrive/lage en mail og grunnlaget er bekreftet i trådene.",
+          "Lag et e-postutkast som brukeren kan forhåndsvise, redigere og sende i Nexus. Sender ALDRI automatisk. Bruk når oppgaven ber om å skrive/lage en mail og grunnlaget er bekreftet.",
         inputSchema: z.object({
           to: z.string().email(),
           subject: z.string().min(1).max(300),
           body: z.string().min(1).max(20000),
         }),
         execute: async ({ to, subject, body }) => {
-          const saved = await gmail.createGmailComposeDraft({ to, subject, body });
-          draft = { to, subject, openUrl: saved.openUrl };
+          draft = { to, subject, body };
           steps.push({ label: `Lagde utkast til ${to}`, detail: subject });
           await addSuggestion({
             name: nameFromEmailLocal(to),
             email: to,
             reason: "Mottaker av e-postutkast",
           });
-          return { ok: true, openUrl: saved.openUrl };
+          return {
+            ok: true,
+            note: "Utkastet vises i Nexus for gjennomgang. Brukeren sender selv.",
+          };
         },
       }),
 
       suggestContact: tool({
         description:
-          "Foreslå en ny Nexus-kontakt når en person/selskap finnes i Gmail men ikke i Nexus. Kall dette med navn + e-post fra trådene. Oppretter IKKE kontakten — brukeren godkjenner i UI.",
+          "Foreslå en ny Nexus-kontakt KUN når personen/selskapet er relevant for brukerens oppgave (f.eks. Marit i bryllupstråden, eller Brygg som pitch-mottaker) og mangler i Nexus. Kall ALDRI for noreply, banker, systemmail eller tilfeldige avsendere i søkeresultater. Oppretter IKKE kontakten — brukeren godkjenner i UI.",
         inputSchema: z.object({
           name: z.string().min(1).max(120),
           email: z.string().email(),
@@ -245,7 +254,9 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
             entityType: entityType ?? "person",
             reason: reason ?? "Foreslått av assistenten",
           });
-          steps.push({ label: "Foreslo kontakt", detail: `${name} <${email}>` });
+          if (!isNoisyEmail(email.trim().toLowerCase())) {
+            steps.push({ label: "Foreslo kontakt", detail: `${name} <${email}>` });
+          }
           return { ok: true };
         },
       }),
@@ -258,10 +269,10 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       "1. Nevnes en person/selskap ved navn: kall findContact først for å få e-postadresser. Finner du ingen, søk i Gmail på navnet i stedet.",
       "2. Bruk searchGmail med presise queries. Prøv flere varianter hvis første søk er tomt (norske og engelske nøkkelord, med/uten anførselstegn).",
       "3. Les relevante tråder med readThread FØR du konkluderer. Aldri gjett på innhold du ikke har lest.",
-      "4. Skal det skrives en mail: bruk createEmailDraft. Skriv på norsk med mindre tråden tilsier noe annet, 2–10 setninger, vennlig avslutning uten navnesignatur. Ikke finn på fakta — bruk kun det som står i trådene eller i instruksen.",
+      "4. Skal det skrives en mail: bruk createEmailDraft. Skriv på norsk med mindre tråden tilsier noe annet, 2–10 setninger, vennlig avslutning uten navnesignatur. Ikke finn på fakta — bruk kun det som står i trådene eller i instruksen. Utkastet vises i Nexus; brukeren sender selv.",
       "5. Ligger etterspurt informasjon (f.eks. en kjøreplan) som vedlegg, si tydelig hvilken mail/dato vedlegget ligger i, og oppsummer det du kan fra teksten.",
-      "6. Når noen er funnet i Gmail men mangler i Nexus (findContact tom): kall suggestContact med navn + e-post fra tråden. Gjør det også for mottakere du lager utkast til, hvis de ikke finnes i Nexus. Opprett aldri kontakter selv — bare foreslå.",
-      "Til slutt: svar kort på norsk. Si hva du fant (med datoer/emner), hva du gjorde, og hva du IKKE fant hvis noe mangler. Nevn gjerne at kontakter kan opprettes fra forslagene under. Ingen markdown-overskrifter.",
+      "6. suggestContact KUN for personer/selskaper som er sentrale i oppgaven og mangler i Nexus. ALDRI for noreply, banker, systemmail, nyhetsbrev eller tilfeldige treff i søk. Mottaker av createEmailDraft foreslås automatisk hvis den mangler.",
+      "Til slutt: svar kort på norsk. Si hva du fant (med datoer/emner), hva du gjorde, og hva du IKKE fant hvis noe mangler. Ingen markdown-overskrifter.",
     ].join("\n");
 
     const result = await generateText({
@@ -277,11 +288,52 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       answer:
         answer ||
         (draft
-          ? "Utkastet er klart i Gmail."
+          ? "Utkastet er klart under — les gjennom og send når du er klar."
           : "Jeg fant ikke noe entydig svar — prøv å presisere navn eller tidsrom."),
       steps,
       draft,
       suggestedContacts: [...suggestions.values()].slice(0, 8),
+    };
+  });
+
+/** Send or save-as-Gmail-draft an assistant email from Nexus UI. */
+export const sendAssistantDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        to: z.string().email(),
+        subject: z.string().min(1).max(300),
+        body: z.string().min(1).max(20000),
+        mode: z.enum(["send", "draft"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const gmail = await import("@/lib/inbox/gmail.server");
+    if (data.mode === "draft") {
+      const saved = await gmail.createGmailComposeDraft({
+        to: data.to,
+        subject: data.subject,
+        body: data.body,
+      });
+      return {
+        ok: true,
+        mode: "draft" as const,
+        messageId: saved.messageId,
+        openUrl: saved.openUrl,
+      };
+    }
+    const sent = await gmail.sendGmailMessage({
+      to: data.to,
+      subject: data.subject,
+      body: data.body,
+    });
+    return {
+      ok: true,
+      mode: "send" as const,
+      messageId: sent.messageId,
+      openUrl: null as string | null,
     };
   });
 
@@ -306,6 +358,10 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
     const name = data.name.trim().slice(0, 120);
     const entityType = data.entityType === "company" ? "company" : "person";
     const domain = extractEmailDomain(email);
+
+    if (isNoisyEmail(email)) {
+      throw new Error("Kan ikke opprette kontakt for system-/noreply-adresse");
+    }
 
     if (await emailExistsInNexus(supabase, userId, email)) {
       const { data: existingId } = await supabase
