@@ -186,6 +186,70 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
         },
       }),
 
+      searchNexusKnowledge: tool({
+        description:
+          "Søk i Nexus-kunnskap (kontakter, fakta fra samtalenotater, åpne oppfølginger, relasjoner, telefonnotater). Bruk FØR eller SAMMEN med Gmail når brukeren nevner noen Nexus allerede kjenner — f.eks. HMS Kontoret etter et telefonnotat.",
+        inputSchema: z.object({
+          query: z.string().min(1).max(120),
+        }),
+        execute: async ({ query }) => {
+          steps.push({ label: "Søkte i Nexus", detail: query });
+          const q = query.trim();
+          const { data: ents } = await supabase
+            .from("entities")
+            .select("id, name, type, summary, metadata")
+            .eq("user_id", userId)
+            .in("type", ["person", "company"])
+            .or(`name.ilike.%${q}%,summary.ilike.%${q}%`)
+            .limit(6);
+          const contacts = [];
+          for (const e of ents ?? []) {
+            const meta = (e.metadata ?? {}) as Record<string, unknown>;
+            const facts = Array.isArray(meta.notes_facts)
+              ? meta.notes_facts.filter((x): x is string => typeof x === "string").slice(0, 6)
+              : [];
+            const { data: fus } = await supabase
+              .from("field_follow_ups")
+              .select("action, due_at")
+              .eq("user_id", userId)
+              .eq("entity_id", e.id)
+              .eq("status", "open")
+              .limit(3);
+            const { data: sigs } = await supabase
+              .from("entity_signals")
+              .select("source, signal_type, snippet, occurred_at")
+              .eq("user_id", userId)
+              .eq("entity_id", e.id)
+              .order("occurred_at", { ascending: false, nullsFirst: false })
+              .limit(4);
+            contacts.push({
+              name: e.name,
+              type: e.type,
+              summary: e.summary,
+              facts,
+              openFollowUps: fus ?? [],
+              recentSignals: sigs ?? [],
+            });
+          }
+          const { data: notes } = await supabase
+            .from("raw_signals")
+            .select("summary, raw_text, occurred_at")
+            .eq("user_id", userId)
+            .eq("source", "phone_note")
+            .or(`summary.ilike.%${q}%,raw_text.ilike.%${q}%`)
+            .order("occurred_at", { ascending: false, nullsFirst: false })
+            .limit(4);
+          return {
+            contacts,
+            phoneNotes: (notes ?? []).map((n) => ({
+              summary: n.summary,
+              excerpt: (n.raw_text ?? "").slice(0, 600),
+              at: n.occurred_at,
+            })),
+          };
+        },
+      }),
+
       searchGmail: tool({
         description:
           'Søk i Gmail med Gmail-søkesyntaks. Viktig: mailer brukeren har SENDT ligger i Sendt — bruk in:sent eller from:me. Eksempler: in:sent (nettside OR hjemmeside OR website), in:sent "Gold of Sicily", (from:a@x.no OR to:a@x.no) kjøreplan, after:2026/01/01. Returnerer én treff-rad per tråd.',
@@ -269,7 +333,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       "A) Konkret oppgave (finn info i tråd, lag mail til X): søk → les → konkluder → evt. createEmailDraft.",
       "B) Analyse / råd (f.eks. «se mailene jeg har sendt om nettsider, jeg får ikke svar, hva bør jeg gjøre»): søk i SENDTE mailer med in:sent / from:me, les flere tråder, oppsummer mottakere/datoer/status, og gi konkrete anbefalinger basert på det du fant. Navn eller tidsrom er IKKE påkrevd hvis brukeren beskriver temaet.",
       "Arbeidsmåte:",
-      "1. Nevnes en person/selskap ved navn: kall findContact først. Finner du ingen, søk i Gmail.",
+      "1. Nevnes en person/selskap ved navn: kall findContact OG searchNexusKnowledge først (Nexus kan ha samtalenotater, fakta og oppfølginger Gmail ikke har). Deretter Gmail om nødvendig.",
       "2. searchGmail: bruk in:sent eller from:me når brukeren snakker om mailer HAN har sendt. Prøv norske og engelske nøkkelord (nettside, hjemmeside, website, web). Hvis første søk er tomt: bredere query, ikke gi opp etter ett forsøk.",
       "3. Les relevante tråder med readThread FØR du konkluderer. For analyse: les nok til å se mønster (typisk 3–8 tråder), ikke bare én.",
       "4. Når brukeren ber om råd: svar med (a) hva du fant, (b) hvem som ikke har svart / hva som ser mest lovende ut, (c) 2–4 konkrete neste steg. Du kan anbefale oppfølging selv om du ikke lager utkast — men lag createEmailDraft hvis det hjelper (f.eks. oppfølging til den mest lovende mottakeren).",

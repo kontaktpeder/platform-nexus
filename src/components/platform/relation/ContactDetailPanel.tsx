@@ -456,6 +456,21 @@ export function ContactDetailPanel({
                 industry={metaIndustry}
               />
 
+              {Array.isArray(d.metadata.notes_facts) &&
+                d.metadata.notes_facts.some((x) => typeof x === "string") && (
+                  <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                    <h3 className="text-sm font-semibold">Fra notater</h3>
+                    <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                      {(d.metadata.notes_facts as unknown[])
+                        .filter((x): x is string => typeof x === "string")
+                        .slice(0, 12)
+                        .map((fact, i) => (
+                          <li key={i}>{fact}</li>
+                        ))}
+                    </ul>
+                  </section>
+                )}
+
               <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                 <h3 className="text-sm font-semibold">Aktive saker</h3>
                 {d.followUp ? (
