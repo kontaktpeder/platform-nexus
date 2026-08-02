@@ -27,9 +27,13 @@ import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedKunderIndexRouteImport } from './routes/_authenticated/kunder.index'
 import { Route as AuthenticatedKontakterIndexRouteImport } from './routes/_authenticated/kontakter.index'
+import { Route as AuthenticatedHjemIndexRouteImport } from './routes/_authenticated/hjem.index'
 import { Route as ApiSsoExchangeRouteImport } from './routes/api/sso.exchange'
 import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
 import { Route as AuthenticatedKontakterEntityIdRouteImport } from './routes/_authenticated/kontakter.$entityId'
+import { Route as AuthenticatedHjemOktRouteImport } from './routes/_authenticated/hjem.okt'
+import { Route as AuthenticatedHjemNotatRouteImport } from './routes/_authenticated/hjem.notat'
+import { Route as AuthenticatedHjemKvitteringRouteImport } from './routes/_authenticated/hjem.kvittering'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
 import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
@@ -130,6 +134,11 @@ const AuthenticatedKontakterIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedKontakterRoute,
   } as any)
+const AuthenticatedHjemIndexRoute = AuthenticatedHjemIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
 const ApiSsoExchangeRoute = ApiSsoExchangeRouteImport.update({
   id: '/api/sso/exchange',
   path: '/api/sso/exchange',
@@ -146,6 +155,22 @@ const AuthenticatedKontakterEntityIdRoute =
     id: '/$entityId',
     path: '/$entityId',
     getParentRoute: () => AuthenticatedKontakterRoute,
+  } as any)
+const AuthenticatedHjemOktRoute = AuthenticatedHjemOktRouteImport.update({
+  id: '/okt',
+  path: '/okt',
+  getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
+const AuthenticatedHjemNotatRoute = AuthenticatedHjemNotatRouteImport.update({
+  id: '/notat',
+  path: '/notat',
+  getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
+const AuthenticatedHjemKvitteringRoute =
+  AuthenticatedHjemKvitteringRouteImport.update({
+    id: '/kvittering',
+    path: '/kvittering',
+    getParentRoute: () => AuthenticatedHjemRoute,
   } as any)
 const AuthenticatedOOrgSlugIndexRoute =
   AuthenticatedOOrgSlugIndexRouteImport.update({
@@ -201,7 +226,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
-  '/hjem': typeof AuthenticatedHjemRoute
+  '/hjem': typeof AuthenticatedHjemRouteWithChildren
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/kontakter': typeof AuthenticatedKontakterRouteWithChildren
   '/kunder': typeof AuthenticatedKunderRouteWithChildren
@@ -212,9 +237,13 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/hjem/kvittering': typeof AuthenticatedHjemKvitteringRoute
+  '/hjem/notat': typeof AuthenticatedHjemNotatRoute
+  '/hjem/okt': typeof AuthenticatedHjemOktRoute
   '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/api/sso/exchange': typeof ApiSsoExchangeRoute
+  '/hjem/': typeof AuthenticatedHjemIndexRoute
   '/kontakter/': typeof AuthenticatedKontakterIndexRoute
   '/kunder/': typeof AuthenticatedKunderIndexRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
@@ -231,7 +260,6 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
   '/field': typeof AuthenticatedFieldRoute
-  '/hjem': typeof AuthenticatedHjemRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
   '/modules': typeof AuthenticatedModulesRoute
@@ -240,9 +268,13 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/hjem/kvittering': typeof AuthenticatedHjemKvitteringRoute
+  '/hjem/notat': typeof AuthenticatedHjemNotatRoute
+  '/hjem/okt': typeof AuthenticatedHjemOktRoute
   '/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/api/sso/exchange': typeof ApiSsoExchangeRoute
+  '/hjem': typeof AuthenticatedHjemIndexRoute
   '/kontakter': typeof AuthenticatedKontakterIndexRoute
   '/kunder': typeof AuthenticatedKunderIndexRoute
   '/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
@@ -260,7 +292,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRoute
   '/_authenticated/field': typeof AuthenticatedFieldRoute
-  '/_authenticated/hjem': typeof AuthenticatedHjemRoute
+  '/_authenticated/hjem': typeof AuthenticatedHjemRouteWithChildren
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
   '/_authenticated/kontakter': typeof AuthenticatedKontakterRouteWithChildren
   '/_authenticated/kunder': typeof AuthenticatedKunderRouteWithChildren
@@ -271,9 +303,13 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/logo': typeof ApiLogoRoute
   '/auth/update-password': typeof AuthUpdatePasswordRoute
+  '/_authenticated/hjem/kvittering': typeof AuthenticatedHjemKvitteringRoute
+  '/_authenticated/hjem/notat': typeof AuthenticatedHjemNotatRoute
+  '/_authenticated/hjem/okt': typeof AuthenticatedHjemOktRoute
   '/_authenticated/kontakter/$entityId': typeof AuthenticatedKontakterEntityIdRoute
   '/_authenticated/kunder/$entityId': typeof AuthenticatedKunderEntityIdRoute
   '/api/sso/exchange': typeof ApiSsoExchangeRoute
+  '/_authenticated/hjem/': typeof AuthenticatedHjemIndexRoute
   '/_authenticated/kontakter/': typeof AuthenticatedKontakterIndexRoute
   '/_authenticated/kunder/': typeof AuthenticatedKunderIndexRoute
   '/_authenticated/o/$orgSlug/connections': typeof AuthenticatedOOrgSlugConnectionsRoute
@@ -303,9 +339,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/logo'
     | '/auth/update-password'
+    | '/hjem/kvittering'
+    | '/hjem/notat'
+    | '/hjem/okt'
     | '/kontakter/$entityId'
     | '/kunder/$entityId'
     | '/api/sso/exchange'
+    | '/hjem/'
     | '/kontakter/'
     | '/kunder/'
     | '/o/$orgSlug/connections'
@@ -322,7 +362,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app'
     | '/field'
-    | '/hjem'
     | '/knowledge'
     | '/mission'
     | '/modules'
@@ -331,9 +370,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/logo'
     | '/auth/update-password'
+    | '/hjem/kvittering'
+    | '/hjem/notat'
+    | '/hjem/okt'
     | '/kontakter/$entityId'
     | '/kunder/$entityId'
     | '/api/sso/exchange'
+    | '/hjem'
     | '/kontakter'
     | '/kunder'
     | '/o/$orgSlug/connections'
@@ -361,9 +404,13 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/api/logo'
     | '/auth/update-password'
+    | '/_authenticated/hjem/kvittering'
+    | '/_authenticated/hjem/notat'
+    | '/_authenticated/hjem/okt'
     | '/_authenticated/kontakter/$entityId'
     | '/_authenticated/kunder/$entityId'
     | '/api/sso/exchange'
+    | '/_authenticated/hjem/'
     | '/_authenticated/kontakter/'
     | '/_authenticated/kunder/'
     | '/_authenticated/o/$orgSlug/connections'
@@ -512,6 +559,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKontakterIndexRouteImport
       parentRoute: typeof AuthenticatedKontakterRoute
     }
+    '/_authenticated/hjem/': {
+      id: '/_authenticated/hjem/'
+      path: '/'
+      fullPath: '/hjem/'
+      preLoaderRoute: typeof AuthenticatedHjemIndexRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
+    }
     '/api/sso/exchange': {
       id: '/api/sso/exchange'
       path: '/api/sso/exchange'
@@ -532,6 +586,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/kontakter/$entityId'
       preLoaderRoute: typeof AuthenticatedKontakterEntityIdRouteImport
       parentRoute: typeof AuthenticatedKontakterRoute
+    }
+    '/_authenticated/hjem/okt': {
+      id: '/_authenticated/hjem/okt'
+      path: '/okt'
+      fullPath: '/hjem/okt'
+      preLoaderRoute: typeof AuthenticatedHjemOktRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
+    }
+    '/_authenticated/hjem/notat': {
+      id: '/_authenticated/hjem/notat'
+      path: '/notat'
+      fullPath: '/hjem/notat'
+      preLoaderRoute: typeof AuthenticatedHjemNotatRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
+    }
+    '/_authenticated/hjem/kvittering': {
+      id: '/_authenticated/hjem/kvittering'
+      path: '/kvittering'
+      fullPath: '/hjem/kvittering'
+      preLoaderRoute: typeof AuthenticatedHjemKvitteringRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
     }
     '/_authenticated/o/$orgSlug/': {
       id: '/_authenticated/o/$orgSlug/'
@@ -592,6 +667,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedHjemRouteChildren {
+  AuthenticatedHjemKvitteringRoute: typeof AuthenticatedHjemKvitteringRoute
+  AuthenticatedHjemNotatRoute: typeof AuthenticatedHjemNotatRoute
+  AuthenticatedHjemOktRoute: typeof AuthenticatedHjemOktRoute
+  AuthenticatedHjemIndexRoute: typeof AuthenticatedHjemIndexRoute
+}
+
+const AuthenticatedHjemRouteChildren: AuthenticatedHjemRouteChildren = {
+  AuthenticatedHjemKvitteringRoute: AuthenticatedHjemKvitteringRoute,
+  AuthenticatedHjemNotatRoute: AuthenticatedHjemNotatRoute,
+  AuthenticatedHjemOktRoute: AuthenticatedHjemOktRoute,
+  AuthenticatedHjemIndexRoute: AuthenticatedHjemIndexRoute,
+}
+
+const AuthenticatedHjemRouteWithChildren =
+  AuthenticatedHjemRoute._addFileChildren(AuthenticatedHjemRouteChildren)
+
 interface AuthenticatedKontakterRouteChildren {
   AuthenticatedKontakterEntityIdRoute: typeof AuthenticatedKontakterEntityIdRoute
   AuthenticatedKontakterIndexRoute: typeof AuthenticatedKontakterIndexRoute
@@ -645,7 +737,7 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
   AuthenticatedFieldRoute: typeof AuthenticatedFieldRoute
-  AuthenticatedHjemRoute: typeof AuthenticatedHjemRoute
+  AuthenticatedHjemRoute: typeof AuthenticatedHjemRouteWithChildren
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
   AuthenticatedKontakterRoute: typeof AuthenticatedKontakterRouteWithChildren
   AuthenticatedKunderRoute: typeof AuthenticatedKunderRouteWithChildren
@@ -664,7 +756,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
   AuthenticatedFieldRoute: AuthenticatedFieldRoute,
-  AuthenticatedHjemRoute: AuthenticatedHjemRoute,
+  AuthenticatedHjemRoute: AuthenticatedHjemRouteWithChildren,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
   AuthenticatedKontakterRoute: AuthenticatedKontakterRouteWithChildren,
   AuthenticatedKunderRoute: AuthenticatedKunderRouteWithChildren,

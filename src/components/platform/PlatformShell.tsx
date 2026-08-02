@@ -11,10 +11,13 @@ export function PlatformShell({
   children,
   className,
   contentClassName,
+  hideMobileNav = false,
 }: {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
+  /** Full-screen capture flows hide bottom tabs on mobile. */
+  hideMobileNav?: boolean;
 }) {
   return (
     <SidebarProvider defaultOpen>
@@ -23,12 +26,20 @@ export function PlatformShell({
           <PlatformSideNav />
         </div>
         <SidebarInset className="min-w-0 flex-1">
-          <div className={cn("flex min-h-svh flex-col pb-20 md:pb-0", contentClassName)}>
+          <div
+            className={cn(
+              "flex min-h-svh flex-col",
+              hideMobileNav ? "pb-0" : "pb-20 md:pb-0",
+              contentClassName,
+            )}
+          >
             {children}
           </div>
-          <div className="md:hidden">
-            <PlatformBottomNav />
-          </div>
+          {!hideMobileNav && (
+            <div className="md:hidden">
+              <PlatformBottomNav />
+            </div>
+          )}
         </SidebarInset>
       </div>
     </SidebarProvider>
