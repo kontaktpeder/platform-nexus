@@ -19,9 +19,9 @@ import {
 } from "@/lib/inbox-assistant.functions";
 
 const PLACEHOLDER =
-  "F.eks: Les trådene mellom meg og Marit om bryllupet 15. august og finn ut " +
-  "om hun ga meg en kjøreplan. Hvis ja: lag en mail til lydteknikeren " +
-  "(oeklandsound.music@gmail.com) med kjøreplanen.";
+  "F.eks: Se mailene jeg har sendt om å bygge nettsider for bedrifter. " +
+  "Jeg har ikke fått svar — vurder hva jeg bør gjøre for første salg. " +
+  "Eller: les trådene med Marit om bryllupet og lag oppfølging.";
 
 export function InboxAssistantCard() {
   const qc = useQueryClient();

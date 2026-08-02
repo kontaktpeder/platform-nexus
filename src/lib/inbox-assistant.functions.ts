@@ -188,14 +188,14 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
 
       searchGmail: tool({
         description:
-          'Søk i Gmail med Gmail-søkesyntaks, f.eks. from:navn@x.no, to:navn@x.no, subject:bryllup, "kjøreplan", after:2026/06/01. Kombiner gjerne: (from:a@x.no OR to:a@x.no) kjøreplan. Returnerer én treff-rad per tråd.',
+          'Søk i Gmail med Gmail-søkesyntaks. Viktig: mailer brukeren har SENDT ligger i Sendt — bruk in:sent eller from:me. Eksempler: in:sent (nettside OR hjemmeside OR website), in:sent "Gold of Sicily", (from:a@x.no OR to:a@x.no) kjøreplan, after:2026/01/01. Returnerer én treff-rad per tråd.',
         inputSchema: z.object({
           query: z.string().min(2).max(400),
           max: z.number().int().min(1).max(15).optional(),
         }),
         execute: async ({ query, max }) => {
           steps.push({ label: "Søkte i Gmail", detail: query });
-          const hits = await gmail.searchGmailMessages(query, max ?? 8);
+          const hits = await gmail.searchGmailMessages(query, max ?? 10);
           // Do NOT auto-suggest contacts from every hit — that pulls in bank/noreply noise.
           return { hits };
         },
@@ -263,16 +263,19 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
     };
 
     const system = [
-      "Du er Nexus-assistenten til Peder. Du hjelper ham med innboksen og nettverket hans.",
+      "Du er Nexus-assistenten til Peder. Du hjelper ham med innboksen, nettverket og konkrete neste steg i arbeid/salg.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
+      "To hovedmoduser:",
+      "A) Konkret oppgave (finn info i tråd, lag mail til X): søk → les → konkluder → evt. createEmailDraft.",
+      "B) Analyse / råd (f.eks. «se mailene jeg har sendt om nettsider, jeg får ikke svar, hva bør jeg gjøre»): søk i SENDTE mailer med in:sent / from:me, les flere tråder, oppsummer mottakere/datoer/status, og gi konkrete anbefalinger basert på det du fant. Navn eller tidsrom er IKKE påkrevd hvis brukeren beskriver temaet.",
       "Arbeidsmåte:",
-      "1. Nevnes en person/selskap ved navn: kall findContact først for å få e-postadresser. Finner du ingen, søk i Gmail på navnet i stedet.",
-      "2. Bruk searchGmail med presise queries. Prøv flere varianter hvis første søk er tomt (norske og engelske nøkkelord, med/uten anførselstegn).",
-      "3. Les relevante tråder med readThread FØR du konkluderer. Aldri gjett på innhold du ikke har lest.",
-      "4. Skal det skrives en mail: bruk createEmailDraft. Skriv på norsk med mindre tråden tilsier noe annet, 2–10 setninger, vennlig avslutning uten navnesignatur. Ikke finn på fakta — bruk kun det som står i trådene eller i instruksen. Utkastet vises i Nexus; brukeren sender selv.",
-      "5. Ligger etterspurt informasjon (f.eks. en kjøreplan) som vedlegg, si tydelig hvilken mail/dato vedlegget ligger i, og oppsummer det du kan fra teksten.",
-      "6. suggestContact KUN for personer/selskaper som er sentrale i oppgaven og mangler i Nexus. ALDRI for noreply, banker, systemmail, nyhetsbrev eller tilfeldige treff i søk. Mottaker av createEmailDraft foreslås automatisk hvis den mangler.",
-      "Til slutt: svar kort på norsk. Si hva du fant (med datoer/emner), hva du gjorde, og hva du IKKE fant hvis noe mangler. Ingen markdown-overskrifter.",
+      "1. Nevnes en person/selskap ved navn: kall findContact først. Finner du ingen, søk i Gmail.",
+      "2. searchGmail: bruk in:sent eller from:me når brukeren snakker om mailer HAN har sendt. Prøv norske og engelske nøkkelord (nettside, hjemmeside, website, web). Hvis første søk er tomt: bredere query, ikke gi opp etter ett forsøk.",
+      "3. Les relevante tråder med readThread FØR du konkluderer. For analyse: les nok til å se mønster (typisk 3–8 tråder), ikke bare én.",
+      "4. Når brukeren ber om råd: svar med (a) hva du fant, (b) hvem som ikke har svart / hva som ser mest lovende ut, (c) 2–4 konkrete neste steg. Du kan anbefale oppfølging selv om du ikke lager utkast — men lag createEmailDraft hvis det hjelper (f.eks. oppfølging til den mest lovende mottakeren).",
+      "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta. Utkastet vises i Nexus; brukeren sender selv.",
+      "6. suggestContact KUN for sentrale personer/selskaper som mangler i Nexus. ALDRI noreply/bank/systemmail.",
+      "KRITISK: Du MÅ alltid skrive et tekstlig sluttsvar på norsk — også når søket er tynt. Si tydelig hva du søkte etter og hva du fant (eller ikke fant). Aldri avslutt bare med verktøykall. Ingen markdown-overskrifter.",
     ].join("\n");
 
     const result = await generateText({
@@ -280,16 +283,30 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       system,
       prompt: data.instruction,
       tools,
-      stopWhen: stepCountIs(12),
+      stopWhen: stepCountIs(16),
     });
 
     const answer = result.text.trim();
+    const searchSteps = steps
+      .filter((s) => s.label === "Søkte i Gmail" && s.detail)
+      .map((s) => s.detail);
+    const readSteps = steps.filter((s) => s.label === "Leste tråd").length;
+
+    let fallback = "Jeg fant ikke noe entydig svar — prøv å nevne tema, mottaker eller tidsrom.";
+    if (draft) {
+      fallback = "Utkastet er klart under — les gjennom og send når du er klar.";
+    } else if (searchSteps.length > 0) {
+      fallback = [
+        readSteps > 0
+          ? `Jeg søkte og leste ${readSteps} tråd(er), men rakk ikke å formulere et klart råd.`
+          : "Jeg søkte i Gmail, men fant for lite å bygge et klart råd på.",
+        `Søk som ble kjørt: ${searchSteps.slice(0, 4).join(" · ")}.`,
+        "Prøv mer konkrete nøkkelord (f.eks. «in:sent nettside») eller nevne en mottaker.",
+      ].join(" ");
+    }
+
     return {
-      answer:
-        answer ||
-        (draft
-          ? "Utkastet er klart under — les gjennom og send når du er klar."
-          : "Jeg fant ikke noe entydig svar — prøv å presisere navn eller tidsrom."),
+      answer: answer || fallback,
       steps,
       draft,
       suggestedContacts: [...suggestions.values()].slice(0, 8),
