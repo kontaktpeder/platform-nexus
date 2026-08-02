@@ -14,9 +14,7 @@ const MODEL_IDS: Record<GeminiTier, string> = {
 /** Prefer GOOGLE_GENERATIVE_AI_API_KEY (AI SDK default); GEMINI_API_KEY also accepted. */
 export function getGeminiApiKey(): string | null {
   const key =
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
-    process.env.GEMINI_API_KEY?.trim() ||
-    "";
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim() || "";
   return key || null;
 }
 
@@ -29,6 +27,9 @@ export function createGeminiProvider(apiKey?: string) {
   }
   return createGoogleGenerativeAI({ apiKey: key });
 }
+
+/** Provider instance with `.tools` (e.g. googleSearch). */
+export type GeminiProvider = ReturnType<typeof createGeminiProvider>;
 
 /** Language model for in-app AI. Flash for quality, Flash Lite for bulk/cheap. */
 export function getGeminiModel(tier: GeminiTier = "flash"): LanguageModel {

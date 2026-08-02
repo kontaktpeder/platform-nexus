@@ -19,9 +19,12 @@ import {
 } from "@/lib/inbox-assistant.functions";
 
 const PLACEHOLDER =
-  "F.eks: Se mailene jeg har sendt om å bygge nettsider for bedrifter. " +
-  "Jeg har ikke fått svar — vurder hva jeg bør gjøre for første salg. " +
-  "Eller: les trådene med Marit om bryllupet og lag oppfølging.";
+  "F.eks: Søk Brygg i Storgata Oslo på nett, finn daglig leder og opprett kontakt. " +
+  "Eller: se mailene jeg har sendt om nettsider — hva bør jeg gjøre?";
+
+function suggestionKey(c: SuggestedContact): string {
+  return c.email ?? `name:${c.entityType}:${c.name.toLowerCase()}:${c.orgNr ?? ""}`;
+}
 
 export function InboxAssistantCard() {
   const qc = useQueryClient();
@@ -32,7 +35,7 @@ export function InboxAssistantCard() {
   const [instruction, setInstruction] = useState("");
   const [result, setResult] = useState<AssistantResult | null>(null);
   const [createdIds, setCreatedIds] = useState<Record<string, string>>({});
-  const [creatingEmail, setCreatingEmail] = useState<string | null>(null);
+  const [creatingKey, setCreatingKey] = useState<string | null>(null);
 
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
@@ -69,18 +72,24 @@ export function InboxAssistantCard() {
           name: c.name,
           email: c.email,
           entityType: c.entityType,
+          role: c.role,
+          phone: c.phone,
+          website: c.website,
+          orgNr: c.orgNr,
+          address: c.address,
+          relateToCompanyName: c.relateToCompanyName,
         },
       }),
-    onMutate: (c) => setCreatingEmail(c.email),
+    onMutate: (c) => setCreatingKey(suggestionKey(c)),
     onSuccess: async (res, c) => {
-      setCreatedIds((prev) => ({ ...prev, [c.email]: res.entityId }));
+      setCreatedIds((prev) => ({ ...prev, [suggestionKey(c)]: res.entityId }));
       toast.success(
         res.created ? `${res.name} lagt til i Kontakter` : `${res.name} finnes allerede`,
       );
       await qc.invalidateQueries({ queryKey: ["customers"] });
     },
     onError: (e: Error) => toast.error(e.message),
-    onSettled: () => setCreatingEmail(null),
+    onSettled: () => setCreatingKey(null),
   });
 
   const sendMut = useMutation({
@@ -123,7 +132,8 @@ export function InboxAssistantCard() {
     !draftSent &&
     !sendMut.isPending;
 
-  const pendingSuggestions = result?.suggestedContacts.filter((c) => !createdIds[c.email]) ?? [];
+  const pendingSuggestions =
+    result?.suggestedContacts.filter((c) => !createdIds[suggestionKey(c)]) ?? [];
 
   return (
     <section className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -134,7 +144,7 @@ export function InboxAssistantCard() {
         <div>
           <h2 className="text-sm font-semibold">Assistent</h2>
           <p className="text-xs text-muted-foreground">
-            Leser innboks og kontakter. Utkast vises her — du sender selv.
+            Innboks, Brreg og nett. Utkast vises her — du sender selv.
           </p>
         </div>
       </div>
@@ -262,18 +272,24 @@ export function InboxAssistantCard() {
               </p>
               <ul className="space-y-2">
                 {(result.suggestedContacts ?? []).map((c) => {
-                  const entityId = createdIds[c.email];
-                  const busy = creatingEmail === c.email && createMut.isPending;
+                  const key = suggestionKey(c);
+                  const entityId = createdIds[key];
+                  const busy = creatingKey === key && createMut.isPending;
+                  const metaBits = [
+                    c.role,
+                    c.email,
+                    c.orgNr ? `Org.nr ${c.orgNr}` : null,
+                    c.reason,
+                  ].filter(Boolean);
                   return (
                     <li
-                      key={c.email}
+                      key={key}
                       className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{c.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {c.email}
-                          {c.reason ? ` · ${c.reason}` : ""}
+                          {metaBits.join(" · ") || c.entityType}
                         </p>
                       </div>
                       {entityId ? (

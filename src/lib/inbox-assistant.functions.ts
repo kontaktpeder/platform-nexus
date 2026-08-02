@@ -1,5 +1,4 @@
-// Nexus-assistent — agentic Gemini over the user's own inbox and contacts.
-// Tools: findContact, searchGmail, readThread, createEmailDraft, suggestContact.
+// Nexus-assistent — agentic Gemini over inbox, contacts, Brreg and web search.
 // Drafts are returned to the UI for preview/edit/send in Nexus — never auto-sent.
 // Contact suggestions are opt-in (suggestContact + draft recipient), never harvested
 // from every Gmail hit (that was pulling in bank noreply noise).
@@ -8,17 +7,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText, stepCountIs, tool } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
+import { createGeminiProvider, getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
 import { extractEmailDomain } from "@/lib/knowledge/entity-matcher";
 import { ANCHOR_SLUG_SET } from "@/lib/knowledge/types";
+import { getBrregRoles, searchBrregCompanies } from "@/lib/brreg.server";
 
 export type AssistantStep = { label: string; detail: string | null };
 
 export type SuggestedContact = {
   name: string;
-  email: string;
+  email: string | null;
   entityType: "person" | "company";
   reason: string;
+  role?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  orgNr?: string | null;
+  address?: string | null;
+  /** Link person → this company name when creating */
+  relateToCompanyName?: string | null;
 };
 
 export type AssistantDraft = {
@@ -121,28 +128,53 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
 
     async function addSuggestion(input: {
       name: string;
-      email: string;
+      email?: string | null;
       entityType?: "person" | "company";
       reason: string;
+      role?: string | null;
+      phone?: string | null;
+      website?: string | null;
+      orgNr?: string | null;
+      address?: string | null;
+      relateToCompanyName?: string | null;
     }) {
-      const email = input.email.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-      if (selfEmail && email === selfEmail) return;
-      if (isNoisyEmail(email)) return;
-      const name = (input.name.trim() || nameFromEmailLocal(email)).slice(0, 120);
-      const existing = suggestions.get(email);
+      const emailRaw = (input.email ?? "").trim().toLowerCase();
+      const email = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : null;
+      if (email) {
+        if (selfEmail && email === selfEmail) return;
+        if (isNoisyEmail(email)) return;
+        if (await emailExistsInNexus(supabase, userId, email)) return;
+      }
+      const name = (input.name.trim() || (email ? nameFromEmailLocal(email) : "")).slice(0, 120);
+      if (!name) return;
+
+      const key =
+        email ?? `name:${input.entityType ?? "person"}:${name.toLowerCase()}:${input.orgNr ?? ""}`;
+      const existing = suggestions.get(key);
       if (existing) {
-        if (name.length > existing.name.length && !name.includes("@")) {
-          suggestions.set(email, { ...existing, name });
-        }
+        suggestions.set(key, {
+          ...existing,
+          name: name.length > existing.name.length ? name : existing.name,
+          role: input.role ?? existing.role,
+          phone: input.phone ?? existing.phone,
+          website: input.website ?? existing.website,
+          orgNr: input.orgNr ?? existing.orgNr,
+          address: input.address ?? existing.address,
+          relateToCompanyName: input.relateToCompanyName ?? existing.relateToCompanyName,
+        });
         return;
       }
-      if (await emailExistsInNexus(supabase, userId, email)) return;
-      suggestions.set(email, {
+      suggestions.set(key, {
         name,
         email,
         entityType: input.entityType ?? "person",
         reason: input.reason.slice(0, 200),
+        role: input.role ?? null,
+        phone: input.phone ?? null,
+        website: input.website ?? null,
+        orgNr: input.orgNr ?? null,
+        address: input.address ?? null,
+        relateToCompanyName: input.relateToCompanyName ?? null,
       });
     }
 
@@ -299,6 +331,97 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
         },
       }),
 
+      lookupBrregCompany: tool({
+        description:
+          "Søk i Brønnøysundregistrene (Enhetsregisteret) etter norsk selskap/underenhet. Bruk når brukeren ber om org.nr, adresse, eller å finne et selskap. Valgfri city (f.eks. Oslo) og addressHint (f.eks. Storgata).",
+        inputSchema: z.object({
+          name: z.string().min(2).max(120),
+          city: z.string().max(80).nullable().optional(),
+          addressHint: z.string().max(120).nullable().optional(),
+        }),
+        execute: async ({ name, city, addressHint }) => {
+          const detail = [name, city, addressHint].filter(Boolean).join(" · ");
+          steps.push({ label: "Søkte i Brreg", detail });
+          try {
+            const companies = await searchBrregCompanies({
+              name,
+              city: city ?? null,
+              addressHint: addressHint ?? null,
+            });
+            return { companies, count: companies.length };
+          } catch (e) {
+            return {
+              companies: [],
+              count: 0,
+              error: e instanceof Error ? e.message : "Brreg-feil",
+            };
+          }
+        },
+      }),
+
+      getBrregRoles: tool({
+        description:
+          "Hent roller (daglig leder, styre, …) for et org.nr fra Brønnøysund. Bruk etter lookupBrregCompany når brukeren vil finne daglig leder eller styre.",
+        inputSchema: z.object({
+          orgNr: z.string().min(9).max(20),
+        }),
+        execute: async ({ orgNr }) => {
+          steps.push({ label: "Hentet Brreg-roller", detail: orgNr });
+          try {
+            return await getBrregRoles(orgNr);
+          } catch (e) {
+            return {
+              orgNr,
+              roles: [],
+              dagligLeder: null,
+              error: e instanceof Error ? e.message : "Brreg-feil",
+            };
+          }
+        },
+      }),
+
+      searchWeb: tool({
+        description:
+          "Søk på internett (Google) etter bedrift, adresse, nettside, handelsnavn. Bruk når brukeren sier «på nett», eller når Brreg ikke treffer (f.eks. restaurantnavn vs juridisk navn). Deretter: bruk org.nr fra treff mot getBrregRoles.",
+        inputSchema: z.object({
+          query: z.string().min(3).max(300),
+        }),
+        execute: async ({ query }) => {
+          steps.push({ label: "Søkte på nett", detail: query });
+          try {
+            const google = createGeminiProvider();
+            const grounded = await generateText({
+              model: google("gemini-3.5-flash-lite"),
+              // Provider-executed Google Search — types don't mix cleanly with function tools.
+              tools: {
+                google_search: google.tools.googleSearch({}) as never,
+              },
+              prompt: [
+                "Du hjelper med oppslag for et norsk CRM.",
+                "Svar kort på norsk. Trekk ut konkrete fakta: juridisk selskapsnavn, org.nr (9 siffer), adresse, nettside, daglig leder hvis nevnt.",
+                "Ikke finn på org.nr. Hvis usikkert, si det.",
+                `Søk: ${query}`,
+              ].join("\n"),
+            });
+            const sources = (grounded.sources ?? [])
+              .slice(0, 8)
+              .map((s) => {
+                const url = "url" in s && typeof s.url === "string" ? s.url : null;
+                const title = "title" in s && typeof s.title === "string" ? s.title : null;
+                return url ? { title, url } : null;
+              })
+              .filter((s): s is { title: string | null; url: string } => !!s);
+            return { summary: grounded.text.trim(), sources };
+          } catch (e) {
+            return {
+              summary: "",
+              sources: [],
+              error: e instanceof Error ? e.message : "Nettsøk feilet",
+            };
+          }
+        },
+      }),
+
       createEmailDraft: tool({
         description:
           "Lag et e-postutkast som brukeren kan forhåndsvise, redigere og sende i Nexus. Sender ALDRI automatisk. Bruk når oppgaven ber om å skrive/lage en mail og grunnlaget er bekreftet.",
@@ -324,22 +447,38 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
 
       suggestContact: tool({
         description:
-          "Foreslå en ny Nexus-kontakt KUN når personen/selskapet er relevant for brukerens oppgave (f.eks. Marit i bryllupstråden, eller Brygg som pitch-mottaker) og mangler i Nexus. Kall ALDRI for noreply, banker, systemmail eller tilfeldige avsendere i søkeresultater. Oppretter IKKE kontakten — brukeren godkjenner i UI.",
+          "Foreslå en ny Nexus-kontakt. E-post er valgfri. Bruk for daglig leder fra Brreg (uten e-post), eller selskap med org.nr/adresse. Sett relateToCompanyName for å koble person til selskap. Oppretter IKKE — brukeren godkjenner i UI. ALDRI noreply/bank.",
         inputSchema: z.object({
           name: z.string().min(1).max(120),
-          email: z.string().email(),
+          email: z.string().email().nullable().optional(),
           entityType: z.enum(["person", "company"]).optional(),
           reason: z.string().max(200).optional(),
+          role: z.string().max(120).nullable().optional(),
+          phone: z.string().max(40).nullable().optional(),
+          website: z.string().max(200).nullable().optional(),
+          orgNr: z.string().max(20).nullable().optional(),
+          address: z.string().max(200).nullable().optional(),
+          relateToCompanyName: z.string().max(120).nullable().optional(),
         }),
-        execute: async ({ name, email, entityType, reason }) => {
+        execute: async (input) => {
           await addSuggestion({
-            name,
-            email,
-            entityType: entityType ?? "person",
-            reason: reason ?? "Foreslått av assistenten",
+            name: input.name,
+            email: input.email,
+            entityType: input.entityType ?? "person",
+            reason: input.reason ?? "Foreslått av assistenten",
+            role: input.role,
+            phone: input.phone,
+            website: input.website,
+            orgNr: input.orgNr,
+            address: input.address,
+            relateToCompanyName: input.relateToCompanyName,
           });
-          if (!isNoisyEmail(email.trim().toLowerCase())) {
-            steps.push({ label: "Foreslo kontakt", detail: `${name} <${email}>` });
+          const email = input.email?.trim().toLowerCase();
+          if (!email || !isNoisyEmail(email)) {
+            steps.push({
+              label: "Foreslo kontakt",
+              detail: email ? `${input.name} <${email}>` : input.name,
+            });
           }
           return { ok: true };
         },
@@ -347,19 +486,26 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
     };
 
     const system = [
-      "Du er Nexus-assistenten til Peder. Du hjelper ham med innboksen, nettverket og konkrete neste steg i arbeid/salg.",
+      "Du er Nexus-assistenten til Peder. Du hjelper ham med innboks, nettverk, Brreg-oppslag og konkrete neste steg i arbeid/salg.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
-      "To hovedmoduser:",
-      "A) Konkret oppgave (finn info i tråd, lag mail til X): søk → les → konkluder → evt. createEmailDraft.",
-      "B) Analyse / råd (f.eks. «se mailene jeg har sendt om nettsider, jeg får ikke svar, hva bør jeg gjøre»): søk i SENDTE mailer med in:sent / from:me, les flere tråder, oppsummer mottakere/datoer/status, og gi konkrete anbefalinger basert på det du fant. Navn eller tidsrom er IKKE påkrevd hvis brukeren beskriver temaet.",
+      "Moduser:",
+      "A) Innboks/oppgave: søk Gmail → les → konkluder → evt. createEmailDraft.",
+      "B) Analyse/råd om sendte mailer: in:sent / from:me.",
+      "C) Bedriftsoppslag («søk X på nett», «finn daglig leder», «opprett kontakt»):",
+      "   1) findContact + searchNexusKnowledge først.",
+      "   2) searchWeb for handelsnavn/adresse (f.eks. Brygg Storgata Oslo).",
+      "   3) lookupBrregCompany med juridisk navn eller kjente nøkkelord + city/addressHint.",
+      "   4) getBrregRoles for org.nr → daglig leder.",
+      "   5) suggestContact for selskap (orgNr/adresse) og person (rolle Daglig leder, relateToCompanyName).",
       "Arbeidsmåte:",
-      "1. Nevnes en person/selskap/idé ved navn: kall findContact OG searchNexusKnowledge først (Nexus kan ha samtalenotater, fakta, oppfølginger og kunnskapsbank-ideer Gmail ikke har). Deretter Gmail om nødvendig.",
-      "2. searchGmail: bruk in:sent eller from:me når brukeren snakker om mailer HAN har sendt. Prøv norske og engelske nøkkelord (nettside, hjemmeside, website, web). Hvis første søk er tomt: bredere query, ikke gi opp etter ett forsøk.",
-      "3. Les relevante tråder med readThread FØR du konkluderer. For analyse: les nok til å se mønster (typisk 3–8 tråder), ikke bare én.",
-      "4. Når brukeren ber om råd: svar med (a) hva du fant, (b) hvem som ikke har svart / hva som ser mest lovende ut, (c) 2–4 konkrete neste steg. Du kan anbefale oppfølging selv om du ikke lager utkast — men lag createEmailDraft hvis det hjelper (f.eks. oppfølging til den mest lovende mottakeren).",
-      "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta. Utkastet vises i Nexus; brukeren sender selv.",
-      "6. suggestContact KUN for sentrale personer/selskaper som mangler i Nexus. ALDRI noreply/bank/systemmail.",
-      "KRITISK: Du MÅ alltid skrive et tekstlig sluttsvar på norsk — også når søket er tynt. Si tydelig hva du søkte etter og hva du fant (eller ikke fant). Aldri avslutt bare med verktøykall. Ingen markdown-overskrifter.",
+      "1. Nevnes person/selskap/idé: findContact + searchNexusKnowledge først, deretter Gmail/Brreg/web.",
+      "2. searchGmail: in:sent/from:me for sendte mailer. Utvid query hvis tomt.",
+      "3. Les tråder med readThread før du konkluderer.",
+      "4. Råd: (a) funn (b) hvem som ikke svarte (c) 2–4 neste steg. createEmailDraft når det hjelper.",
+      "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta.",
+      "6. suggestContact for relevante personer/selskaper. E-post valgfri. ALDRI noreply/bank.",
+      "7. Oppfinn ALDRI org.nr eller daglig leder — kun fra Brreg/web-verktøy.",
+      "KRITISK: Du MÅ alltid skrive et tekstlig sluttsvar på norsk. Si hva du søkte og fant. Ingen markdown-overskrifter.",
     ].join("\n");
 
     const result = await generateText({
@@ -367,7 +513,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       system,
       prompt: data.instruction,
       tools,
-      stopWhen: stepCountIs(16),
+      stopWhen: stepCountIs(20),
     });
 
     const answer = result.text.trim();
@@ -439,8 +585,8 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
   });
 
 /**
- * Create a Nexus contact from an assistant suggestion (name + email).
- * Writes entity + known_identities so future mail and assistant runs link automatically.
+ * Create a Nexus contact from an assistant suggestion.
+ * Email optional — Brreg/person lookups often only have name + role.
  */
 export const createContactFromSuggestion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -448,23 +594,31 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
     z
       .object({
         name: z.string().min(1).max(120),
-        email: z.string().email(),
+        email: z.string().email().nullable().optional(),
         entityType: z.enum(["person", "company"]).default("person"),
+        role: z.string().max(120).nullable().optional(),
+        phone: z.string().max(40).nullable().optional(),
+        website: z.string().max(200).nullable().optional(),
+        orgNr: z.string().max(20).nullable().optional(),
+        address: z.string().max(200).nullable().optional(),
+        relateToCompanyName: z.string().max(120).nullable().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const email = data.email.trim().toLowerCase();
+    const emailRaw = (data.email ?? "").trim().toLowerCase();
+    const email = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : null;
     const name = data.name.trim().slice(0, 120);
     const entityType = data.entityType === "company" ? "company" : "person";
-    const domain = extractEmailDomain(email);
+    const domain = email ? extractEmailDomain(email) : null;
+    const orgNr = (data.orgNr ?? "").replace(/\D/g, "").slice(0, 9) || null;
 
-    if (isNoisyEmail(email)) {
+    if (email && isNoisyEmail(email)) {
       throw new Error("Kan ikke opprette kontakt for system-/noreply-adresse");
     }
 
-    if (await emailExistsInNexus(supabase, userId, email)) {
+    if (email && (await emailExistsInNexus(supabase, userId, email))) {
       const { data: existingId } = await supabase
         .from("known_identities")
         .select("entity_id")
@@ -485,6 +639,27 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
       }
     }
 
+    // Match existing company by org.nr or exact name
+    if (orgNr) {
+      const { data: byOrg } = await supabase
+        .from("entities")
+        .select("id, name")
+        .eq("user_id", userId)
+        .eq("type", "company")
+        .contains("metadata", { org_nr: orgNr } as never)
+        .limit(1)
+        .maybeSingle();
+      if (byOrg?.id) {
+        return {
+          ok: true,
+          entityId: byOrg.id as string,
+          name: byOrg.name as string,
+          email,
+          created: false,
+        };
+      }
+    }
+
     const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
     const slug = await slugifyEntityName(supabase, userId, name);
     if (ANCHOR_SLUG_SET.has(slug)) {
@@ -493,10 +668,23 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
 
     const now = new Date().toISOString();
     const metadata: Record<string, unknown> = {
-      email,
       created_via: "assistant_suggestion",
     };
-    if (domain) metadata.email_domain = domain;
+    if (email) {
+      metadata.email = email;
+      if (domain) metadata.email_domain = domain;
+    }
+    if (data.role) metadata.role = data.role.trim().slice(0, 120);
+    if (data.phone) metadata.phone = data.phone.trim().slice(0, 40);
+    if (data.website) {
+      let website = data.website.trim().slice(0, 200);
+      if (!/^https?:\/\//i.test(website) && /^[\w.-]+\.[a-z]{2,}/i.test(website)) {
+        website = `https://${website}`;
+      }
+      metadata.website = website;
+    }
+    if (orgNr) metadata.org_nr = orgNr;
+    if (data.address) metadata.address = data.address.trim().slice(0, 200);
 
     const { data: row, error } = await supabase
       .from("entities")
@@ -514,39 +702,66 @@ export const createContactFromSuggestion = createServerFn({ method: "POST" })
       .single();
     if (error) throw error;
 
-    const { data: existingKi } = await supabase
-      .from("known_identities")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("identity_type", "email_address")
-      .eq("external_key", email)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingKi?.id) {
-      await supabase
+    if (email) {
+      const { data: existingKi } = await supabase
         .from("known_identities")
-        .update({
-          entity_id: row.id,
-          ignored_at: null,
-          last_seen_at: now,
+        .select("id")
+        .eq("user_id", userId)
+        .eq("identity_type", "email_address")
+        .eq("external_key", email)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingKi?.id) {
+        await supabase
+          .from("known_identities")
+          .update({
+            entity_id: row.id,
+            ignored_at: null,
+            last_seen_at: now,
+            display_name: name,
+          })
+          .eq("id", existingKi.id)
+          .eq("user_id", userId);
+      } else {
+        await supabase.from("known_identities").insert({
+          user_id: userId,
+          provider: "manual",
+          identity_type: "email_address",
+          external_key: email,
+          email,
+          domain: domain ?? null,
           display_name: name,
-        })
-        .eq("id", existingKi.id)
-        .eq("user_id", userId);
-    } else {
-      await supabase.from("known_identities").insert({
-        user_id: userId,
-        provider: "manual",
-        identity_type: "email_address",
-        external_key: email,
-        email,
-        domain: domain ?? null,
-        display_name: name,
-        entity_id: row.id,
-        first_seen_at: now,
-        last_seen_at: now,
-      });
+          entity_id: row.id,
+          first_seen_at: now,
+          last_seen_at: now,
+        });
+      }
+    }
+
+    const relateName = data.relateToCompanyName?.trim();
+    if (relateName && entityType === "person") {
+      const { data: company } = await supabase
+        .from("entities")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("type", "company")
+        .ilike("name", relateName)
+        .limit(1)
+        .maybeSingle();
+      if (company?.id) {
+        await supabase.from("entity_relationships").upsert(
+          {
+            user_id: userId,
+            from_entity_id: row.id,
+            to_entity_id: company.id,
+            kind: "member_of" as never,
+            source: "assistant",
+            metadata: (data.role ? { role: data.role } : {}) as never,
+          },
+          { onConflict: "user_id,from_entity_id,to_entity_id,kind" },
+        );
+      }
     }
 
     return {
