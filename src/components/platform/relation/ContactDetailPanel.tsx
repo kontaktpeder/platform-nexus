@@ -313,8 +313,9 @@ export function ContactDetailPanel({
       )}
 
       <div
+        data-sheet-scroll={isPanel ? true : undefined}
         className={cn(
-          "min-h-0 flex-1 overflow-y-auto",
+          "min-h-0 flex-1 overflow-y-auto overscroll-contain",
           isPanel ? "px-4 py-3" : "mx-auto w-full max-w-lg flex-1 px-4 pb-8 pt-3",
         )}
       >

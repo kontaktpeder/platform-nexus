@@ -5,7 +5,8 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 /**
- * Desktop: left sidebar (collapsible to icons). Mobile: bottom nav.
+ * App shell: desktop left sidebar; mobile docked bottom nav.
+ * Only the main column scrolls — top/bottom chrome stay put in PWA.
  */
 export function PlatformShell({
   children,
@@ -21,25 +22,21 @@ export function PlatformShell({
 }) {
   return (
     <SidebarProvider defaultOpen>
-      <div className={cn("flex min-h-svh w-full bg-background", className)}>
+      <div className={cn("flex h-dvh w-full overflow-hidden bg-background", className)}>
         <div className="hidden md:block">
           <PlatformSideNav />
         </div>
-        <SidebarInset className="min-w-0 flex-1">
-          <div
-            className={cn(
-              "flex min-h-svh flex-col",
-              hideMobileNav ? "pb-0" : "pb-20 md:pb-0",
-              contentClassName,
-            )}
-          >
-            {children}
-          </div>
-          {!hideMobileNav && (
-            <div className="md:hidden">
-              <PlatformBottomNav />
+        <SidebarInset className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div className={cn("flex h-full min-h-0 flex-col", contentClassName)}>
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+              {children}
             </div>
-          )}
+            {!hideMobileNav && (
+              <div className="md:hidden">
+                <PlatformBottomNav mode="inline" />
+              </div>
+            )}
+          </div>
         </SidebarInset>
       </div>
     </SidebarProvider>
