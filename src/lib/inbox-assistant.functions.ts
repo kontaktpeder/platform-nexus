@@ -239,8 +239,20 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
             .or(`summary.ilike.%${q}%,raw_text.ilike.%${q}%`)
             .order("occurred_at", { ascending: false, nullsFirst: false })
             .limit(4);
+          const { data: ideas } = await supabase
+            .from("entities")
+            .select("name, summary")
+            .eq("user_id", userId)
+            .eq("type", "goal")
+            .contains("metadata", { kind: "idea" } as never)
+            .or(`name.ilike.%${q}%,summary.ilike.%${q}%`)
+            .limit(8);
           return {
             contacts,
+            ideas: (ideas ?? []).map((i) => ({
+              title: i.name,
+              text: i.summary ?? i.name,
+            })),
             phoneNotes: (notes ?? []).map((n) => ({
               summary: n.summary,
               excerpt: (n.raw_text ?? "").slice(0, 600),
@@ -333,7 +345,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       "A) Konkret oppgave (finn info i tråd, lag mail til X): søk → les → konkluder → evt. createEmailDraft.",
       "B) Analyse / råd (f.eks. «se mailene jeg har sendt om nettsider, jeg får ikke svar, hva bør jeg gjøre»): søk i SENDTE mailer med in:sent / from:me, les flere tråder, oppsummer mottakere/datoer/status, og gi konkrete anbefalinger basert på det du fant. Navn eller tidsrom er IKKE påkrevd hvis brukeren beskriver temaet.",
       "Arbeidsmåte:",
-      "1. Nevnes en person/selskap ved navn: kall findContact OG searchNexusKnowledge først (Nexus kan ha samtalenotater, fakta og oppfølginger Gmail ikke har). Deretter Gmail om nødvendig.",
+      "1. Nevnes en person/selskap/idé ved navn: kall findContact OG searchNexusKnowledge først (Nexus kan ha samtalenotater, fakta, oppfølginger og kunnskapsbank-ideer Gmail ikke har). Deretter Gmail om nødvendig.",
       "2. searchGmail: bruk in:sent eller from:me når brukeren snakker om mailer HAN har sendt. Prøv norske og engelske nøkkelord (nettside, hjemmeside, website, web). Hvis første søk er tomt: bredere query, ikke gi opp etter ett forsøk.",
       "3. Les relevante tråder med readThread FØR du konkluderer. For analyse: les nok til å se mønster (typisk 3–8 tråder), ikke bare én.",
       "4. Når brukeren ber om råd: svar med (a) hva du fant, (b) hvem som ikke har svart / hva som ser mest lovende ut, (c) 2–4 konkrete neste steg. Du kan anbefale oppfølging selv om du ikke lager utkast — men lag createEmailDraft hvis det hjelper (f.eks. oppfølging til den mest lovende mottakeren).",

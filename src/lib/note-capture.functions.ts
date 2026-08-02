@@ -45,14 +45,30 @@ export type NoteFactProposal = {
   selected: boolean;
 };
 
+export type NoteIdeaProposal = {
+  text: string;
+  selected: boolean;
+};
+
 export type NoteParseResult = {
   summary: string;
   contacts: NoteContactProposal[];
   relations: NoteRelationProposal[];
   followUps: NoteFollowUpProposal[];
   facts: NoteFactProposal[];
-  ideas: string[];
+  ideas: NoteIdeaProposal[];
 };
+
+export const RELATION_KIND_OPTIONS = [
+  "works_on",
+  "customer_of",
+  "member_of",
+  "owns",
+  "blocked_by",
+  "related_to",
+] as const;
+
+export const FOLLOW_UP_PRESET_OPTIONS = ["today", "tomorrow", "in_3_days", "next_week"] as const;
 
 const AiContact = z.object({
   ref: z.string().min(1).max(40),
@@ -256,7 +272,10 @@ export const parsePhoneNote = createServerFn({ method: "POST" })
       relations,
       followUps,
       facts,
-      ideas: (parsed.ideas ?? []).map((i) => i.trim().slice(0, 280)).filter(Boolean),
+      ideas: (parsed.ideas ?? [])
+        .map((i) => i.trim().slice(0, 280))
+        .filter(Boolean)
+        .map((text) => ({ text, selected: true })),
     };
   });
 
@@ -298,7 +317,12 @@ const ApplyInput = z.object({
       selected: z.boolean(),
     }),
   ),
-  ideas: z.array(z.string()).default([]),
+  ideas: z.array(
+    z.object({
+      text: z.string().min(1).max(280),
+      selected: z.boolean(),
+    }),
+  ),
 });
 
 export const applyPhoneNote = createServerFn({ method: "POST" })
@@ -309,6 +333,10 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
     const { slugifyEntityName } = await import("@/lib/knowledge/entity.server");
     const now = new Date().toISOString();
     const externalId = `phone_note:${Date.now()}`;
+
+    const selectedIdeas = data.ideas
+      .filter((i) => i.selected && i.text.trim())
+      .map((i) => i.text.trim().slice(0, 280));
 
     const { data: rawRow, error: rawErr } = await supabase
       .from("raw_signals")
@@ -323,7 +351,7 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
         occurred_at: now,
         metadata: {
           kind: "phone_note",
-          ideas: data.ideas.slice(0, 8),
+          ideas: selectedIdeas.slice(0, 12),
         } as never,
       })
       .select("id")
@@ -331,14 +359,50 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
     if (rawErr) throw rawErr;
     const rawSignalId = rawRow.id as string;
 
+    // Auto-include contacts referenced by selected relations / follow-ups / facts.
+    const neededRefs = new Set(data.contacts.filter((c) => c.selected).map((c) => c.ref));
+    for (const r of data.relations.filter((x) => x.selected)) {
+      neededRefs.add(r.fromRef);
+      neededRefs.add(r.toRef);
+    }
+    for (const f of data.followUps.filter((x) => x.selected)) neededRefs.add(f.contactRef);
+    for (const f of data.facts.filter((x) => x.selected)) neededRefs.add(f.contactRef);
+
     const refToEntityId = new Map<string, string>();
     let contactsCreated = 0;
     let contactsLinked = 0;
 
-    for (const c of data.contacts.filter((x) => x.selected)) {
+    for (const c of data.contacts.filter((x) => neededRefs.has(x.ref))) {
       let entityId = c.existingEntityId;
       if (entityId) {
         contactsLinked += 1;
+        // Apply user edits (name / role / email) onto the existing contact.
+        const { data: row } = await supabase
+          .from("entities")
+          .select("metadata")
+          .eq("id", entityId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (row) {
+          const meta: Record<string, unknown> = {
+            ...((row.metadata ?? {}) as Record<string, unknown>),
+          };
+          if (c.role) meta.role = c.role;
+          if (c.email) {
+            meta.email = c.email;
+            const domain = extractEmailDomain(c.email);
+            if (domain) meta.email_domain = domain;
+          }
+          await supabase
+            .from("entities")
+            .update({
+              name: c.name.trim().slice(0, 120),
+              metadata: meta as never,
+              last_seen_at: now,
+            })
+            .eq("id", entityId)
+            .eq("user_id", userId);
+        }
       } else {
         const slug = await slugifyEntityName(supabase, userId, c.name);
         if (ANCHOR_SLUG_SET.has(slug)) continue;
@@ -500,6 +564,30 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
       if (!error) followUpsCreated += 1;
     }
 
+    // Ideas → searchable knowledge bank (entities type goal, metadata.kind = idea)
+    let ideasCreated = 0;
+    for (const text of selectedIdeas) {
+      const title = text.length > 80 ? `${text.slice(0, 77).trimEnd()}…` : text;
+      const slug = await slugifyEntityName(supabase, userId, `idea-${title}`);
+      if (ANCHOR_SLUG_SET.has(slug)) continue;
+      const { error } = await supabase.from("entities").insert({
+        user_id: userId,
+        type: "goal",
+        name: title,
+        slug,
+        importance: 50,
+        summary: text,
+        owner_context: "personal" as never,
+        metadata: {
+          kind: "idea",
+          created_via: "phone_note",
+          raw_signal_id: rawSignalId,
+        } as never,
+        last_seen_at: now,
+      });
+      if (!error) ideasCreated += 1;
+    }
+
     const primaryEntityId =
       refToEntityId.get(data.contacts.find((c) => c.selected)?.ref ?? "") ?? null;
 
@@ -512,6 +600,7 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
       relationsCreated,
       followUpsCreated,
       factsApplied,
+      ideasCreated,
     };
   });
 
@@ -529,6 +618,16 @@ export const searchNexusKnowledge = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .in("type", ["person", "company"])
       .or(`name.ilike.%${q}%,summary.ilike.%${q}%`)
+      .limit(8);
+
+    const { data: ideaRows } = await supabase
+      .from("entities")
+      .select("id, name, summary, metadata")
+      .eq("user_id", userId)
+      .eq("type", "goal")
+      .contains("metadata", { kind: "idea" } as never)
+      .or(`name.ilike.%${q}%,summary.ilike.%${q}%`)
+      .order("last_seen_at", { ascending: false, nullsFirst: false })
       .limit(8);
 
     const results = [];
@@ -612,6 +711,11 @@ export const searchNexusKnowledge = createServerFn({ method: "POST" })
 
     return {
       contacts: results,
+      ideas: (ideaRows ?? []).map((i) => ({
+        id: i.id,
+        title: i.name,
+        text: i.summary ?? i.name,
+      })),
       phoneNotes: (notes ?? []).map((n) => ({
         id: n.id,
         summary: n.summary,
