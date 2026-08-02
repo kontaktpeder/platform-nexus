@@ -17,6 +17,13 @@ export type NoteContactProposal = {
   entityType: "person" | "company";
   email: string | null;
   role: string | null;
+  phone: string | null;
+  website: string | null;
+  orgNr: string | null;
+  address: string | null;
+  industry: string | null;
+  /** YYYY-MM-DD — maps to entities.last_seen_at when set */
+  lastContactedAt: string | null;
   reason: string;
   existingEntityId: string | null;
   selected: boolean;
@@ -76,8 +83,73 @@ const AiContact = z.object({
   entityType: z.enum(["person", "company"]),
   email: z.string().max(200).nullable().optional(),
   role: z.string().max(120).nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  website: z.string().max(200).nullable().optional(),
+  orgNr: z.string().max(20).nullable().optional(),
+  address: z.string().max(200).nullable().optional(),
+  industry: z.string().max(120).nullable().optional(),
+  lastContactedAt: z.string().max(32).nullable().optional(),
   reason: z.string().max(240),
 });
+
+function normalizePhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const t = raw.trim().replace(/\s+/g, " ").slice(0, 40);
+  return t || null;
+}
+
+function normalizeWebsite(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let t = raw.trim().slice(0, 200);
+  if (!t) return null;
+  if (!/^https?:\/\//i.test(t) && /^[\w.-]+\.[a-z]{2,}/i.test(t)) {
+    t = `https://${t}`;
+  }
+  return t;
+}
+
+function normalizeOrgNr(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "").slice(0, 9);
+  return digits.length >= 9 ? digits : raw.trim().replace(/\s+/g, "").slice(0, 20) || null;
+}
+
+function normalizeDateKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const m = raw.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return m?.[1] ?? null;
+}
+
+function lastSeenIsoFromDateKey(dateKey: string | null, fallbackIso: string): string {
+  if (!dateKey) return fallbackIso;
+  try {
+    return osloNoonIso(dateKey);
+  } catch {
+    return fallbackIso;
+  }
+}
+
+function mergeContactProfileMeta(
+  meta: Record<string, unknown>,
+  c: Pick<
+    NoteContactProposal,
+    "email" | "role" | "phone" | "website" | "orgNr" | "address" | "industry"
+  >,
+): Record<string, unknown> {
+  const next = { ...meta };
+  if (c.role) next.role = c.role.trim().slice(0, 120);
+  if (c.email) {
+    next.email = c.email;
+    const domain = extractEmailDomain(c.email);
+    if (domain) next.email_domain = domain;
+  }
+  if (c.phone) next.phone = c.phone;
+  if (c.website) next.website = c.website;
+  if (c.orgNr) next.org_nr = c.orgNr;
+  if (c.address) next.address = c.address.trim().slice(0, 200);
+  if (c.industry) next.industry = c.industry.trim().slice(0, 120);
+  return next;
+}
 
 const AiRelation = z.object({
   fromRef: z.string().min(1).max(40),
@@ -185,6 +257,7 @@ export const parsePhoneNote = createServerFn({ method: "POST" })
       "Returner:",
       "- summary: 1–2 setninger på norsk om samtalen",
       "- contacts: personer og selskaper som nevnes (HMS Kontoret, Godmat, Thomas, Norgesgruppen, …)",
+      "  Fyll inn profilfelter når notatet har dem: email, role, phone, website, orgNr (9 siffer), address, industry, lastContactedAt (YYYY-MM-DD).",
       "- relations: koblinger (member_of, related_to, customer_of, owns, works_on)",
       "- followUps: konkrete neste handlinger med contactRef og duePreset",
       "- facts: viktige fakta knyttet til en kontakt (vises på kontaktkortet)",
@@ -195,6 +268,7 @@ export const parsePhoneNote = createServerFn({ method: "POST" })
       "- Ikke opprett kontakt for generiske begreper (franchise, provisjon) uten egenaktør.",
       "- followUps skal være handlingsbare («Snakke med Godmat om det Thomas sa»).",
       "- Hvis eksisterende kontakter matcher, bruk samme navn slik at systemet kan koble dem.",
+      "- La profilfelter være null hvis ikke nevnt — ikke finn på org.nr / telefon / nettside.",
     ].join("\n");
 
     const prompt = JSON.stringify({
@@ -224,12 +298,36 @@ export const parsePhoneNote = createServerFn({ method: "POST" })
       const email =
         typeof c.email === "string" && c.email.includes("@") ? c.email.trim().toLowerCase() : null;
       const existingId = await matchExistingEntity(supabase, userId, c.name, c.entityType, email);
+      let existingMeta: Record<string, unknown> = {};
+      let existingLastSeen: string | null = null;
+      if (existingId) {
+        const { data: existingRow } = await supabase
+          .from("entities")
+          .select("metadata, last_seen_at")
+          .eq("id", existingId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        existingMeta = (existingRow?.metadata ?? {}) as Record<string, unknown>;
+        existingLastSeen =
+          typeof existingRow?.last_seen_at === "string"
+            ? normalizeDateKey(existingRow.last_seen_at)
+            : null;
+      }
+      const metaStr = (key: string) =>
+        typeof existingMeta[key] === "string" ? (existingMeta[key] as string) : null;
+
       contacts.push({
         ref: c.ref,
         name: c.name.trim().slice(0, 120),
         entityType: c.entityType,
-        email,
-        role: c.role?.trim() || null,
+        email: email ?? (metaStr("email")?.includes("@") ? metaStr("email")!.toLowerCase() : null),
+        role: c.role?.trim() || metaStr("role") || metaStr("title"),
+        phone: normalizePhone(c.phone) ?? normalizePhone(metaStr("phone")),
+        website: normalizeWebsite(c.website) ?? normalizeWebsite(metaStr("website")),
+        orgNr: normalizeOrgNr(c.orgNr) ?? normalizeOrgNr(metaStr("org_nr")),
+        address: c.address?.trim().slice(0, 200) || metaStr("address"),
+        industry: c.industry?.trim().slice(0, 120) || metaStr("industry"),
+        lastContactedAt: normalizeDateKey(c.lastContactedAt) ?? existingLastSeen,
         reason: c.reason.trim().slice(0, 240),
         existingEntityId: existingId,
         selected: true,
@@ -289,6 +387,12 @@ const ApplyInput = z.object({
       entityType: z.enum(["person", "company"]),
       email: z.string().nullable(),
       role: z.string().nullable(),
+      phone: z.string().nullable(),
+      website: z.string().nullable(),
+      orgNr: z.string().nullable(),
+      address: z.string().nullable(),
+      industry: z.string().nullable(),
+      lastContactedAt: z.string().nullable(),
       existingEntityId: z.string().nullable(),
       selected: z.boolean(),
     }),
@@ -373,10 +477,24 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
     let contactsLinked = 0;
 
     for (const c of data.contacts.filter((x) => neededRefs.has(x.ref))) {
+      const phone = normalizePhone(c.phone);
+      const website = normalizeWebsite(c.website);
+      const orgNr = normalizeOrgNr(c.orgNr);
+      const profile = {
+        email: c.email,
+        role: c.role,
+        phone,
+        website,
+        orgNr,
+        address: c.address,
+        industry: c.industry,
+      };
+      const seenAt = lastSeenIsoFromDateKey(normalizeDateKey(c.lastContactedAt), now);
+
       let entityId = c.existingEntityId;
       if (entityId) {
         contactsLinked += 1;
-        // Apply user edits (name / role / email) onto the existing contact.
+        // Apply user edits (profile fields) onto the existing contact.
         const { data: row } = await supabase
           .from("entities")
           .select("metadata")
@@ -384,21 +502,16 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
           .eq("user_id", userId)
           .maybeSingle();
         if (row) {
-          const meta: Record<string, unknown> = {
-            ...((row.metadata ?? {}) as Record<string, unknown>),
-          };
-          if (c.role) meta.role = c.role;
-          if (c.email) {
-            meta.email = c.email;
-            const domain = extractEmailDomain(c.email);
-            if (domain) meta.email_domain = domain;
-          }
+          const meta = mergeContactProfileMeta(
+            { ...((row.metadata ?? {}) as Record<string, unknown>) },
+            profile,
+          );
           await supabase
             .from("entities")
             .update({
               name: c.name.trim().slice(0, 120),
               metadata: meta as never,
-              last_seen_at: now,
+              last_seen_at: seenAt,
             })
             .eq("id", entityId)
             .eq("user_id", userId);
@@ -406,15 +519,7 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
       } else {
         const slug = await slugifyEntityName(supabase, userId, c.name);
         if (ANCHOR_SLUG_SET.has(slug)) continue;
-        const metadata: Record<string, unknown> = {
-          created_via: "phone_note",
-        };
-        if (c.email) {
-          metadata.email = c.email;
-          const domain = extractEmailDomain(c.email);
-          if (domain) metadata.email_domain = domain;
-        }
-        if (c.role) metadata.role = c.role;
+        const metadata = mergeContactProfileMeta({ created_via: "phone_note" }, profile);
         const { data: ent, error } = await supabase
           .from("entities")
           .insert({
@@ -426,7 +531,7 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
             summary: data.summary.slice(0, 400) || null,
             owner_context: "unknown" as never,
             metadata: metadata as never,
-            last_seen_at: now,
+            last_seen_at: seenAt,
           })
           .select("id")
           .single();
@@ -450,7 +555,7 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
               .update({
                 entity_id: entityId,
                 ignored_at: null,
-                last_seen_at: now,
+                last_seen_at: seenAt,
                 display_name: c.name,
               })
               .eq("id", existingKi.id)
@@ -465,8 +570,8 @@ export const applyPhoneNote = createServerFn({ method: "POST" })
               domain: domain ?? null,
               display_name: c.name,
               entity_id: entityId,
-              first_seen_at: now,
-              last_seen_at: now,
+              first_seen_at: seenAt,
+              last_seen_at: seenAt,
             });
           }
         }
@@ -684,6 +789,12 @@ export const searchNexusKnowledge = createServerFn({ method: "POST" })
         summary: e.summary,
         email: typeof meta.email === "string" ? meta.email : null,
         role: typeof meta.role === "string" ? meta.role : null,
+        phone: typeof meta.phone === "string" ? meta.phone : null,
+        website: typeof meta.website === "string" ? meta.website : null,
+        orgNr: typeof meta.org_nr === "string" ? meta.org_nr : null,
+        address: typeof meta.address === "string" ? meta.address : null,
+        industry: typeof meta.industry === "string" ? meta.industry : null,
+        lastSeenAt: e.last_seen_at,
         facts,
         openFollowUps: (fus ?? []).map((f) => ({
           action: f.action,

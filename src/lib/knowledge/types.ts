@@ -27,7 +27,15 @@ export type EntityMetadata = {
   platform_org_id?: string;
   platform_org_slug?: string | null;
   platform_workspace_id?: string;
+  email?: string;
   email_domain?: string;
+  role?: string;
+  title?: string;
+  phone?: string;
+  website?: string;
+  org_nr?: string;
+  address?: string;
+  industry?: string;
   external_ref?: string;
   is_anchor?: boolean;
   [key: string]: unknown;

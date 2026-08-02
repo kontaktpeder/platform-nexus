@@ -1,6 +1,7 @@
 // Customer catalog — company entities with warmth + field + timeline.
 
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { FIELD_RESULT_LABEL, type FieldResult } from "@/lib/field/field.types";
 import { formatOsloActivityDate, formatOsloDayLabel, osloDateKey } from "@/lib/field/field-dates";
@@ -664,6 +665,95 @@ export const renameCustomer = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     if (upErr) throw upErr;
     return { ok: true, name };
+  });
+
+/**
+ * Update CRM-style profile fields on a person/company (proff.no / Gulesider style).
+ * Empty strings clear the field. lastContactedAt is YYYY-MM-DD → last_seen_at.
+ */
+export const updateContactProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        entityId: z.string().uuid(),
+        role: z.string().max(120).nullable().optional(),
+        phone: z.string().max(40).nullable().optional(),
+        website: z.string().max(200).nullable().optional(),
+        orgNr: z.string().max(20).nullable().optional(),
+        address: z.string().max(200).nullable().optional(),
+        industry: z.string().max(120).nullable().optional(),
+        lastContactedAt: z.string().max(32).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("entities")
+      .select("id, type, metadata")
+      .eq("id", data.entityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Kontakt ikke funnet");
+    if (row.type !== "person" && row.type !== "company") {
+      throw new Error("Bare person/selskap kan oppdateres her");
+    }
+
+    const meta: Record<string, unknown> = {
+      ...((row.metadata ?? {}) as Record<string, unknown>),
+    };
+    const setOrClear = (key: string, value: string | null | undefined) => {
+      if (value === undefined) return;
+      const t = (value ?? "").trim();
+      if (!t) delete meta[key];
+      else meta[key] = t;
+    };
+
+    setOrClear("role", data.role);
+    if (data.phone !== undefined) {
+      const phone = (data.phone ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+      if (!phone) delete meta.phone;
+      else meta.phone = phone;
+    }
+    if (data.website !== undefined) {
+      let website = (data.website ?? "").trim().slice(0, 200);
+      if (!website) delete meta.website;
+      else {
+        if (!/^https?:\/\//i.test(website) && /^[\w.-]+\.[a-z]{2,}/i.test(website)) {
+          website = `https://${website}`;
+        }
+        meta.website = website;
+      }
+    }
+    if (data.orgNr !== undefined) {
+      const digits = (data.orgNr ?? "").replace(/\D/g, "").slice(0, 9);
+      if (!digits) delete meta.org_nr;
+      else meta.org_nr = digits;
+    }
+    setOrClear("address", data.address);
+    setOrClear("industry", data.industry);
+
+    let lastSeenAt: string | undefined;
+    if (data.lastContactedAt !== undefined) {
+      const m = (data.lastContactedAt ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
+      if (m?.[1]) {
+        const { osloNoonIso } = await import("@/lib/field/field-dates");
+        lastSeenAt = osloNoonIso(m[1]);
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("entities")
+      .update({
+        metadata: meta as never,
+        ...(lastSeenAt ? { last_seen_at: lastSeenAt } : {}),
+      })
+      .eq("id", data.entityId)
+      .eq("user_id", userId);
+    if (upErr) throw upErr;
+    return { ok: true };
   });
 
 async function rewireEntityId(

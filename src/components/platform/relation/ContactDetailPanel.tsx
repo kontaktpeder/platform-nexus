@@ -27,6 +27,7 @@ import {
   renameCustomer,
   setCustomerOwnerContext,
   setCustomerWarmth,
+  updateContactProfile,
   type CustomerDetail,
   type CustomerListItem,
   type CustomerWarmth,
@@ -104,6 +105,7 @@ export function ContactDetailPanel({
   const runWarmth = useServerFn(setCustomerWarmth);
   const runOwner = useServerFn(setCustomerOwnerContext);
   const runRename = useServerFn(renameCustomer);
+  const runProfile = useServerFn(updateContactProfile);
   const runMerge = useServerFn(mergeCustomers);
   const runReject = useServerFn(rejectWrongEntity);
   const runEnsureField = useServerFn(ensureFieldPlace);
@@ -111,6 +113,16 @@ export function ContactDetailPanel({
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    role: "",
+    phone: "",
+    website: "",
+    orgNr: "",
+    address: "",
+    industry: "",
+    lastContactedAt: "",
+  });
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeQuery, setMergeQuery] = useState("");
   const [mergeTargetId, setMergeTargetId] = useState("");
@@ -164,6 +176,29 @@ export function ContactDetailPanel({
       toast.success("Navn oppdatert");
       setEditingName(false);
       setNameDraft(res.name);
+      await qc.invalidateQueries({ queryKey: ["customer", entityId] });
+      await qc.invalidateQueries({ queryKey: ["customers"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const profileMut = useMutation({
+    mutationFn: () =>
+      runProfile({
+        data: {
+          entityId,
+          role: profileDraft.role || null,
+          phone: profileDraft.phone || null,
+          website: profileDraft.website || null,
+          orgNr: profileDraft.orgNr || null,
+          address: profileDraft.address || null,
+          industry: profileDraft.industry || null,
+          lastContactedAt: profileDraft.lastContactedAt || null,
+        },
+      }),
+    onSuccess: async () => {
+      toast.success("Profil oppdatert");
+      setEditingProfile(false);
       await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       await qc.invalidateQueries({ queryKey: ["customers"] });
     },
@@ -237,6 +272,11 @@ export function ContactDetailPanel({
         ? d.metadata.title
         : null;
   const metaIndustry = typeof d?.metadata.industry === "string" ? d.metadata.industry : null;
+  const metaPhone = typeof d?.metadata.phone === "string" ? d.metadata.phone : null;
+  const metaWebsite = typeof d?.metadata.website === "string" ? d.metadata.website : null;
+  const metaOrgNr = typeof d?.metadata.org_nr === "string" ? d.metadata.org_nr : null;
+  const metaAddress = typeof d?.metadata.address === "string" ? d.metadata.address : null;
+  const lastContactedDate = typeof d?.lastSeenAt === "string" ? d.lastSeenAt.slice(0, 10) : "";
 
   return (
     <div
@@ -454,7 +494,132 @@ export function ContactDetailPanel({
                 domain={metaDomain}
                 role={metaRole}
                 industry={metaIndustry}
+                phone={metaPhone}
+                website={metaWebsite}
+                orgNr={metaOrgNr}
+                address={metaAddress}
+                lastSeenAtLabel={d.lastSeenAt ? formatOsloActivityDate(d.lastSeenAt) : null}
               />
+
+              {editingProfile ? (
+                <section className="space-y-2 rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <h3 className="text-sm font-semibold">Rediger profil</h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={profileDraft.role}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({ ...p, role: e.target.value.slice(0, 120) }))
+                      }
+                      placeholder="Rolle / tittel"
+                      className="h-10 rounded-xl"
+                    />
+                    <Input
+                      value={profileDraft.phone}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({ ...p, phone: e.target.value.slice(0, 40) }))
+                      }
+                      placeholder="Telefon"
+                      className="h-10 rounded-xl"
+                    />
+                    <Input
+                      value={profileDraft.website}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({ ...p, website: e.target.value.slice(0, 200) }))
+                      }
+                      placeholder="Nettside"
+                      className="h-10 rounded-xl"
+                    />
+                    {d.entityType === "company" ? (
+                      <Input
+                        value={profileDraft.orgNr}
+                        onChange={(e) =>
+                          setProfileDraft((p) => ({
+                            ...p,
+                            orgNr: e.target.value.replace(/\D/g, "").slice(0, 9),
+                          }))
+                        }
+                        placeholder="Org.nr"
+                        inputMode="numeric"
+                        className="h-10 rounded-xl"
+                      />
+                    ) : null}
+                    <Input
+                      value={profileDraft.industry}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({
+                          ...p,
+                          industry: e.target.value.slice(0, 120),
+                        }))
+                      }
+                      placeholder="Bransje"
+                      className="h-10 rounded-xl"
+                    />
+                    <Input
+                      value={profileDraft.address}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({
+                          ...p,
+                          address: e.target.value.slice(0, 200),
+                        }))
+                      }
+                      placeholder="Adresse"
+                      className="h-10 rounded-xl sm:col-span-2"
+                    />
+                    <Input
+                      type="date"
+                      value={profileDraft.lastContactedAt}
+                      onChange={(e) =>
+                        setProfileDraft((p) => ({ ...p, lastContactedAt: e.target.value }))
+                      }
+                      className="h-10 rounded-xl"
+                      aria-label="Kontaktet sist"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="button"
+                      className="h-10 flex-1 rounded-xl"
+                      disabled={profileMut.isPending}
+                      onClick={() => profileMut.mutate()}
+                    >
+                      {profileMut.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Lagre profil"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-10 rounded-xl"
+                      onClick={() => setEditingProfile(false)}
+                    >
+                      Avbryt
+                    </Button>
+                  </div>
+                </section>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-full gap-1.5 rounded-xl"
+                  onClick={() => {
+                    setProfileDraft({
+                      role: metaRole ?? "",
+                      phone: metaPhone ?? "",
+                      website: metaWebsite ?? "",
+                      orgNr: metaOrgNr ?? "",
+                      address: metaAddress ?? "",
+                      industry: metaIndustry ?? "",
+                      lastContactedAt: lastContactedDate,
+                    });
+                    setEditingProfile(true);
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Rediger profil (org.nr, tlf, nettside …)
+                </Button>
+              )}
 
               {Array.isArray(d.metadata.notes_facts) &&
                 d.metadata.notes_facts.some((x) => typeof x === "string") && (

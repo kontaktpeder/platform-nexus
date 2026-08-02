@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { FileText, Loader2, StickyNote } from "lucide-react";
+import { FileText, Loader2, Plus, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
   RELATION_KIND_OPTIONS,
   applyPhoneNote,
   parsePhoneNote,
+  type NoteContactProposal,
   type NoteParseResult,
 } from "@/lib/note-capture.functions";
 
@@ -36,6 +37,43 @@ const KIND_LABEL: Record<(typeof RELATION_KIND_OPTIONS)[number], string> = {
   blocked_by: "blokkert av",
   related_to: "relatert til",
 };
+
+function nextContactRef(contacts: NoteContactProposal[]): string {
+  let n = contacts.length + 1;
+  const used = new Set(contacts.map((c) => c.ref));
+  while (used.has(`c${n}`)) n += 1;
+  return `c${n}`;
+}
+
+function emptyContact(ref: string): NoteContactProposal {
+  return {
+    ref,
+    name: "",
+    entityType: "person",
+    email: null,
+    role: null,
+    phone: null,
+    website: null,
+    orgNr: null,
+    address: null,
+    industry: null,
+    lastContactedAt: null,
+    reason: "Manuelt lagt til",
+    existingEntityId: null,
+    selected: true,
+  };
+}
+
+function patchContact(
+  p: NoteParseResult,
+  ref: string,
+  patch: Partial<NoteContactProposal>,
+): NoteParseResult {
+  return {
+    ...p,
+    contacts: p.contacts.map((x) => (x.ref === ref ? { ...x, ...patch } : x)),
+  };
+}
 
 export function NoteCaptureCard() {
   const qc = useQueryClient();
@@ -63,7 +101,7 @@ export function NoteCaptureCard() {
         data: {
           note: note.trim(),
           summary: parsed.summary,
-          contacts: parsed.contacts,
+          contacts: parsed.contacts.filter((c) => c.name.trim()),
           relations: parsed.relations,
           followUps: parsed.followUps,
           facts: parsed.facts,
@@ -87,10 +125,10 @@ export function NoteCaptureCard() {
     setParsed((p) => (p ? updater(p) : p));
   }
 
-  const contactOptions = parsed?.contacts ?? [];
+  const contactOptions = parsed?.contacts.filter((c) => c.name.trim()) ?? [];
   const hasSelection =
     !!parsed &&
-    (parsed.contacts.some((c) => c.selected) ||
+    (parsed.contacts.some((c) => c.selected && c.name.trim()) ||
       parsed.relations.some((r) => r.selected) ||
       parsed.followUps.some((f) => f.selected) ||
       parsed.facts.some((f) => f.selected) ||
@@ -151,216 +189,341 @@ export function NoteCaptureCard() {
             />
           </div>
 
-          {parsed.contacts.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Kontakter
               </p>
-              <ul className="space-y-2">
-                {parsed.contacts.map((c) => (
-                  <li
-                    key={c.ref}
-                    className="space-y-2 rounded-xl border border-border bg-muted/20 p-3"
-                  >
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        checked={c.selected}
-                        onChange={() =>
-                          patchParsed((p) => ({
-                            ...p,
-                            contacts: p.contacts.map((x) =>
-                              x.ref === c.ref ? { ...x, selected: !x.selected } : x,
-                            ),
-                          }))
-                        }
-                      />
-                      Lagre kontakt
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {c.existingEntityId ? "· finnes fra før" : "· ny"}
-                      </span>
-                    </label>
-                    <Input
-                      value={c.name}
-                      onChange={(e) =>
-                        patchParsed((p) => ({
-                          ...p,
-                          contacts: p.contacts.map((x) =>
-                            x.ref === c.ref ? { ...x, name: e.target.value.slice(0, 120) } : x,
-                          ),
-                        }))
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 rounded-xl text-xs"
+                onClick={() =>
+                  patchParsed((p) => ({
+                    ...p,
+                    contacts: [...p.contacts, emptyContact(nextContactRef(p.contacts))],
+                  }))
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Legg til
+              </Button>
+            </div>
+            <ul className="space-y-2">
+              {parsed.contacts.map((c) => (
+                <li
+                  key={c.ref}
+                  className="space-y-2 rounded-xl border border-border bg-muted/20 p-3"
+                >
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={c.selected}
+                      onChange={() =>
+                        patchParsed((p) => patchContact(p, c.ref, { selected: !c.selected }))
                       }
-                      placeholder="Navn"
-                      className="h-10 rounded-xl"
                     />
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={c.entityType}
-                        onChange={(e) =>
-                          patchParsed((p) => ({
-                            ...p,
-                            contacts: p.contacts.map((x) =>
-                              x.ref === c.ref
-                                ? {
-                                    ...x,
-                                    entityType: e.target.value as "person" | "company",
-                                  }
-                                : x,
-                            ),
-                          }))
-                        }
-                        className="h-10 rounded-xl border border-border bg-background px-2 text-sm"
-                      >
-                        <option value="person">Person</option>
-                        <option value="company">Selskap</option>
-                      </select>
-                      <Input
-                        value={c.role ?? ""}
-                        onChange={(e) =>
-                          patchParsed((p) => ({
-                            ...p,
-                            contacts: p.contacts.map((x) =>
-                              x.ref === c.ref
-                                ? { ...x, role: e.target.value.slice(0, 120) || null }
-                                : x,
-                            ),
-                          }))
-                        }
-                        placeholder="Rolle (valgfritt)"
-                        className="h-10 min-w-[8rem] flex-1 rounded-xl"
-                      />
-                    </div>
+                    Lagre kontakt
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {c.existingEntityId ? "· finnes fra før" : "· ny"}
+                    </span>
+                  </label>
+                  <Input
+                    value={c.name}
+                    onChange={(e) =>
+                      patchParsed((p) =>
+                        patchContact(p, c.ref, { name: e.target.value.slice(0, 120) }),
+                      )
+                    }
+                    placeholder="Navn"
+                    className="h-10 rounded-xl"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={c.entityType}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            entityType: e.target.value as "person" | "company",
+                          }),
+                        )
+                      }
+                      className="h-10 rounded-xl border border-border bg-background px-2 text-sm"
+                    >
+                      <option value="person">Person</option>
+                      <option value="company">Selskap</option>
+                    </select>
+                    <Input
+                      value={c.role ?? ""}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            role: e.target.value.slice(0, 120) || null,
+                          }),
+                        )
+                      }
+                      placeholder={c.entityType === "company" ? "Bransjerolle" : "Rolle / tittel"}
+                      className="h-10 min-w-[8rem] flex-1 rounded-xl"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <Input
                       value={c.email ?? ""}
                       onChange={(e) =>
-                        patchParsed((p) => ({
-                          ...p,
-                          contacts: p.contacts.map((x) =>
-                            x.ref === c.ref
-                              ? {
-                                  ...x,
-                                  email: e.target.value.trim()
-                                    ? e.target.value.trim().toLowerCase()
-                                    : null,
-                                }
-                              : x,
-                          ),
-                        }))
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            email: e.target.value.trim()
+                              ? e.target.value.trim().toLowerCase()
+                              : null,
+                          }),
+                        )
                       }
-                      placeholder="E-post (valgfritt)"
+                      placeholder="E-post"
                       className="h-10 rounded-xl"
                     />
-                    <p className="text-xs text-muted-foreground">{c.reason}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                    <Input
+                      value={c.phone ?? ""}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            phone: e.target.value.slice(0, 40) || null,
+                          }),
+                        )
+                      }
+                      placeholder="Telefon"
+                      className="h-10 rounded-xl"
+                    />
+                    <Input
+                      value={c.website ?? ""}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            website: e.target.value.slice(0, 200) || null,
+                          }),
+                        )
+                      }
+                      placeholder="Nettside"
+                      className="h-10 rounded-xl"
+                    />
+                    {c.entityType === "company" ? (
+                      <Input
+                        value={c.orgNr ?? ""}
+                        onChange={(e) =>
+                          patchParsed((p) =>
+                            patchContact(p, c.ref, {
+                              orgNr: e.target.value.replace(/\D/g, "").slice(0, 9) || null,
+                            }),
+                          )
+                        }
+                        placeholder="Org.nr"
+                        inputMode="numeric"
+                        className="h-10 rounded-xl"
+                      />
+                    ) : (
+                      <Input
+                        value={c.industry ?? ""}
+                        onChange={(e) =>
+                          patchParsed((p) =>
+                            patchContact(p, c.ref, {
+                              industry: e.target.value.slice(0, 120) || null,
+                            }),
+                          )
+                        }
+                        placeholder="Bransje (valgfritt)"
+                        className="h-10 rounded-xl"
+                      />
+                    )}
+                    {c.entityType === "company" && (
+                      <Input
+                        value={c.industry ?? ""}
+                        onChange={(e) =>
+                          patchParsed((p) =>
+                            patchContact(p, c.ref, {
+                              industry: e.target.value.slice(0, 120) || null,
+                            }),
+                          )
+                        }
+                        placeholder="Bransje"
+                        className="h-10 rounded-xl"
+                      />
+                    )}
+                    <Input
+                      value={c.address ?? ""}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            address: e.target.value.slice(0, 200) || null,
+                          }),
+                        )
+                      }
+                      placeholder="Adresse"
+                      className="h-10 rounded-xl"
+                    />
+                    <Input
+                      type="date"
+                      value={c.lastContactedAt ?? ""}
+                      onChange={(e) =>
+                        patchParsed((p) =>
+                          patchContact(p, c.ref, {
+                            lastContactedAt: e.target.value || null,
+                          }),
+                        )
+                      }
+                      className="h-10 rounded-xl"
+                      aria-label="Kontaktet sist"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Kontaktet sist (dato) · lagres som sist sett på kontaktkortet
+                  </p>
+                  {c.reason && <p className="text-xs text-muted-foreground">{c.reason}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
 
-          {parsed.relations.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Relasjoner
               </p>
-              <ul className="space-y-2">
-                {parsed.relations.map((r, i) => (
-                  <li
-                    key={`${r.fromRef}-${r.toRef}-${i}`}
-                    className="space-y-2 rounded-xl border border-border bg-muted/20 p-3"
-                  >
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        checked={r.selected}
-                        onChange={() =>
-                          patchParsed((p) => {
-                            const relations = [...p.relations];
-                            relations[i] = {
-                              ...relations[i]!,
-                              selected: !relations[i]!.selected,
-                            };
-                            return { ...p, relations };
-                          })
-                        }
-                      />
-                      Lagre relasjon
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={r.fromRef}
-                        onChange={(e) =>
-                          patchParsed((p) => {
-                            const relations = [...p.relations];
-                            relations[i] = { ...relations[i]!, fromRef: e.target.value };
-                            return { ...p, relations };
-                          })
-                        }
-                        className="h-10 min-w-[7rem] flex-1 rounded-xl border border-border bg-background px-2 text-sm"
-                      >
-                        {contactOptions.map((c) => (
-                          <option key={c.ref} value={c.ref}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={r.kind}
-                        onChange={(e) =>
-                          patchParsed((p) => {
-                            const relations = [...p.relations];
-                            relations[i] = {
-                              ...relations[i]!,
-                              kind: e.target.value as (typeof RELATION_KIND_OPTIONS)[number],
-                            };
-                            return { ...p, relations };
-                          })
-                        }
-                        className="h-10 rounded-xl border border-border bg-background px-2 text-sm"
-                      >
-                        {RELATION_KIND_OPTIONS.map((k) => (
-                          <option key={k} value={k}>
-                            {KIND_LABEL[k]}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={r.toRef}
-                        onChange={(e) =>
-                          patchParsed((p) => {
-                            const relations = [...p.relations];
-                            relations[i] = { ...relations[i]!, toRef: e.target.value };
-                            return { ...p, relations };
-                          })
-                        }
-                        className="h-10 min-w-[7rem] flex-1 rounded-xl border border-border bg-background px-2 text-sm"
-                      >
-                        {contactOptions.map((c) => (
-                          <option key={c.ref} value={c.ref}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <Input
-                      value={r.role ?? ""}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 rounded-xl text-xs"
+                disabled={contactOptions.length < 2}
+                onClick={() =>
+                  patchParsed((p) => {
+                    const opts = p.contacts.filter((x) => x.name.trim());
+                    const from = opts[0]?.ref;
+                    const to = opts.find((x) => x.ref !== from)?.ref;
+                    if (!from || !to) return p;
+                    return {
+                      ...p,
+                      relations: [
+                        ...p.relations,
+                        {
+                          fromRef: from,
+                          toRef: to,
+                          kind: "related_to" as const,
+                          role: null,
+                          reason: "Manuelt lagt til",
+                          selected: true,
+                        },
+                      ],
+                    };
+                  })
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Legg til
+              </Button>
+            </div>
+            {parsed.relations.length === 0 ? (
+              <p className="mb-2 text-xs text-muted-foreground">
+                Ingen relasjoner foreslått. Legg til manuelt (krever minst to kontakter).
+              </p>
+            ) : null}
+            <ul className="space-y-2">
+              {parsed.relations.map((r, i) => (
+                <li
+                  key={`${r.fromRef}-${r.toRef}-${i}`}
+                  className="space-y-2 rounded-xl border border-border bg-muted/20 p-3"
+                >
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={r.selected}
+                      onChange={() =>
+                        patchParsed((p) => {
+                          const relations = [...p.relations];
+                          relations[i] = {
+                            ...relations[i]!,
+                            selected: !relations[i]!.selected,
+                          };
+                          return { ...p, relations };
+                        })
+                      }
+                    />
+                    Lagre relasjon
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={r.fromRef}
+                      onChange={(e) =>
+                        patchParsed((p) => {
+                          const relations = [...p.relations];
+                          relations[i] = { ...relations[i]!, fromRef: e.target.value };
+                          return { ...p, relations };
+                        })
+                      }
+                      className="h-10 min-w-[7rem] flex-1 rounded-xl border border-border bg-background px-2 text-sm"
+                    >
+                      {(contactOptions.length ? contactOptions : parsed.contacts).map((c) => (
+                        <option key={c.ref} value={c.ref}>
+                          {c.name || c.ref}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={r.kind}
                       onChange={(e) =>
                         patchParsed((p) => {
                           const relations = [...p.relations];
                           relations[i] = {
                             ...relations[i]!,
-                            role: e.target.value.slice(0, 120) || null,
+                            kind: e.target.value as (typeof RELATION_KIND_OPTIONS)[number],
                           };
                           return { ...p, relations };
                         })
                       }
-                      placeholder="Rolle på relasjonen (valgfritt)"
-                      className="h-10 rounded-xl"
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                      className="h-10 rounded-xl border border-border bg-background px-2 text-sm"
+                    >
+                      {RELATION_KIND_OPTIONS.map((k) => (
+                        <option key={k} value={k}>
+                          {KIND_LABEL[k]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={r.toRef}
+                      onChange={(e) =>
+                        patchParsed((p) => {
+                          const relations = [...p.relations];
+                          relations[i] = { ...relations[i]!, toRef: e.target.value };
+                          return { ...p, relations };
+                        })
+                      }
+                      className="h-10 min-w-[7rem] flex-1 rounded-xl border border-border bg-background px-2 text-sm"
+                    >
+                      {(contactOptions.length ? contactOptions : parsed.contacts).map((c) => (
+                        <option key={c.ref} value={c.ref}>
+                          {c.name || c.ref}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Input
+                    value={r.role ?? ""}
+                    onChange={(e) =>
+                      patchParsed((p) => {
+                        const relations = [...p.relations];
+                        relations[i] = {
+                          ...relations[i]!,
+                          role: e.target.value.slice(0, 120) || null,
+                        };
+                        return { ...p, relations };
+                      })
+                    }
+                    placeholder="Rolle på relasjonen (valgfritt)"
+                    className="h-10 rounded-xl"
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {parsed.followUps.length > 0 && (
             <div>
@@ -407,9 +570,9 @@ export function NoteCaptureCard() {
                       }
                       className="h-10 w-full rounded-xl border border-border bg-background px-2 text-sm"
                     >
-                      {contactOptions.map((c) => (
+                      {(contactOptions.length ? contactOptions : parsed.contacts).map((c) => (
                         <option key={c.ref} value={c.ref}>
-                          {c.name}
+                          {c.name || c.ref}
                         </option>
                       ))}
                     </select>
@@ -493,9 +656,9 @@ export function NoteCaptureCard() {
                       }
                       className="h-10 w-full rounded-xl border border-border bg-background px-2 text-sm"
                     >
-                      {contactOptions.map((c) => (
+                      {(contactOptions.length ? contactOptions : parsed.contacts).map((c) => (
                         <option key={c.ref} value={c.ref}>
-                          {c.name}
+                          {c.name || c.ref}
                         </option>
                       ))}
                     </select>
