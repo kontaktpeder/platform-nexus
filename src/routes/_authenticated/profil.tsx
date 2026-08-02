@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Building2,
   Camera,
@@ -40,6 +40,14 @@ function ProfilPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [nameDraft, setNameDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true);
+
+  useEffect(() => {
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsStandalone(standalone);
+  }, []);
 
   const profileQ = useQuery({
     queryKey: ["profile", user?.id],
@@ -282,6 +290,13 @@ function ProfilPage() {
           <LogOut className="h-4 w-4" />
           Logg ut
         </Button>
+
+        {!isStandalone && (
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            For app-modus uten Safari-footer: Del → Legg til på Hjem-skjerm (slett gammelt ikon
+            først hvis du hadde et fra før).
+          </p>
+        )}
       </main>
     </PlatformShell>
   );

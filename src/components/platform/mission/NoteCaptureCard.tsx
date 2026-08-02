@@ -18,9 +18,11 @@ import {
   type NoteParseResult,
 } from "@/lib/note-capture.functions";
 
-const PLACEHOLDER =
+const PLACEHOLDER_CARD =
   "Lim inn rå notater fra samtale — f.eks. HMS Kontoret, Godmat, Norgesgruppen, " +
   "oppfølging, provisjon, ideer … Nexus foreslår kontakter, relasjoner og planer.";
+
+const PLACEHOLDER_FULLSCREEN = "Noter hva som helst";
 
 const PRESET_LABEL: Record<(typeof FOLLOW_UP_PRESET_OPTIONS)[number], string> = {
   today: "I dag",
@@ -75,10 +77,16 @@ function patchContact(
   };
 }
 
-export function NoteCaptureCard() {
+export function NoteCaptureCard({
+  variant = "card",
+}: {
+  /** Full-screen capture on /hjem/notat — large field, app-like. */
+  variant?: "card" | "fullscreen";
+}) {
   const qc = useQueryClient();
   const runParse = useServerFn(parsePhoneNote);
   const runApply = useServerFn(applyPhoneNote);
+  const fullscreen = variant === "fullscreen";
 
   const [note, setNote] = useState("");
   const [parsed, setParsed] = useState<NoteParseResult | null>(null);
@@ -135,32 +143,44 @@ export function NoteCaptureCard() {
       parsed.ideas.some((i) => i.selected));
 
   return (
-    <section className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-2 flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
-          <StickyNote className="h-4 w-4" />
+    <section
+      className={
+        fullscreen
+          ? "flex flex-1 flex-col gap-3"
+          : "mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm"
+      }
+    >
+      {!fullscreen && (
+        <div className="mb-2 flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+            <StickyNote className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold">Notat → Nexus</h2>
+            <p className="text-xs text-muted-foreground">
+              Rediger forslagene før du lagrer. Huk av det som skal inn i Nexus.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-sm font-semibold">Notat → Nexus</h2>
-          <p className="text-xs text-muted-foreground">
-            Rediger forslagene før du lagrer. Huk av det som skal inn i Nexus.
-          </p>
-        </div>
-      </div>
+      )}
 
       <Textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder={PLACEHOLDER}
-        rows={5}
+        placeholder={fullscreen ? PLACEHOLDER_FULLSCREEN : PLACEHOLDER_CARD}
+        rows={fullscreen ? 16 : 5}
         maxLength={20000}
-        className="rounded-xl text-base"
+        className={
+          fullscreen
+            ? "min-h-[55dvh] flex-1 resize-none rounded-2xl border-border bg-card p-4 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70"
+            : "rounded-xl text-base"
+        }
       />
 
-      <div className="mt-2 flex justify-end">
+      <div className={`mt-2 flex ${fullscreen ? "justify-stretch" : "justify-end"}`}>
         <Button
           type="button"
-          className="h-10 gap-2 rounded-xl px-4"
+          className={fullscreen ? "h-14 w-full gap-2 rounded-2xl text-base" : "h-10 gap-2 rounded-xl px-4"}
           disabled={note.trim().length < 10 || parseMut.isPending}
           onClick={() => parseMut.mutate()}
         >

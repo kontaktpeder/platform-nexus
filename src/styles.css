@@ -133,6 +133,7 @@
     min-width: 320px;
     max-width: 100%;
     overflow-x: clip;
+    overscroll-behavior: none;
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
   }
@@ -142,10 +143,13 @@
     min-height: 100dvh;
     max-width: 100%;
     overflow-x: clip;
+    overscroll-behavior: none;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--body-font);
     -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   img,

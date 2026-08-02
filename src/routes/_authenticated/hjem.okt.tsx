@@ -1,20 +1,37 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
+import { CaptureTopBar } from "@/components/platform/CaptureTopBar";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { listConnectedWorkOrgs } from "@/lib/work-timer.functions";
+import {
+  BREAK_OPTIONS,
+  addProjectToCatalog,
+  addRateToCatalog,
+  ensureOrgsInCatalog,
   formatElapsed,
-  parseHourlyRate,
+  projectsForOrg,
+  ratesForOrg,
   readCatalog,
   readPendingEntries,
   readWorkSession,
   startWorkSession,
   stopWorkSession,
   type PendingTimeEntry,
+  type WorkCatalog,
   type WorkSession,
 } from "@/lib/work-session";
 
@@ -24,29 +41,70 @@ export const Route = createFileRoute("/_authenticated/hjem/okt")({
 });
 
 function HjemOktPage() {
-  const catalog = useMemo(() => readCatalog(), []);
+  const listWorkOrgs = useServerFn(listConnectedWorkOrgs);
+  const [catalog, setCatalog] = useState<WorkCatalog>(() => readCatalog());
   const [session, setSession] = useState<WorkSession | null>(null);
   const [elapsed, setElapsed] = useState("00:00");
-  const [org, setOrg] = useState(catalog.orgs[0] ?? "");
-  const [project, setProject] = useState(catalog.projects[0] ?? "");
-  const [rateName, setRateName] = useState(catalog.rates[0] ?? "");
-  const [rateAmount, setRateAmount] = useState("");
+  const [orgId, setOrgId] = useState(catalog.orgs[0]?.id ?? "");
+  const [projectId, setProjectId] = useState("");
+  const [rateId, setRateId] = useState("");
   const [comment, setComment] = useState("");
   const [breakMin, setBreakMin] = useState("0");
   const [pending, setPending] = useState<PendingTimeEntry[]>([]);
+  const [adding, setAdding] = useState<"project" | "rate" | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newAmount, setNewAmount] = useState("950");
+
+  const workOrgsQ = useQuery({
+    queryKey: ["work-timer-orgs"],
+    queryFn: () => listWorkOrgs() as Promise<{ orgs: Array<{ id: string; name: string }> }>,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    const orgs = workOrgsQ.data?.orgs ?? [];
+    if (orgs.length === 0) return;
+    setCatalog(ensureOrgsInCatalog(orgs));
+  }, [workOrgsQ.data]);
+
+  const projects = useMemo(() => projectsForOrg(catalog, orgId), [catalog, orgId]);
+  const rates = useMemo(() => ratesForOrg(catalog, orgId), [catalog, orgId]);
+  const selectedOrg = catalog.orgs.find((o) => o.id === orgId) ?? null;
+  const selectedProject = projects.find((p) => p.id === projectId) ?? null;
+  const selectedRate = rates.find((r) => r.id === rateId) ?? null;
 
   useEffect(() => {
     const active = readWorkSession();
     setSession(active);
     setPending(readPendingEntries().slice(0, 5));
+    const cat = readCatalog();
+    setCatalog(cat);
     if (active) {
-      setOrg(active.organizationName);
-      setProject(active.projectName);
-      setRateName(active.rateName ?? "");
-      setRateAmount(active.hourlyRate != null ? String(active.hourlyRate) : "");
+      setOrgId(active.organizationId);
+      setProjectId(active.projectId);
+      setRateId(active.rateId ?? "");
       setComment(active.comment ?? "");
+      return;
     }
+    const firstOrg = cat.orgs[0]?.id ?? "";
+    setOrgId(firstOrg);
+    const orgProjects = projectsForOrg(cat, firstOrg);
+    const orgRates = ratesForOrg(cat, firstOrg);
+    setProjectId(orgProjects[0]?.id ?? "");
+    setRateId(orgRates[0]?.id ?? "");
   }, []);
+
+  useEffect(() => {
+    if (session) return;
+    const orgProjects = projectsForOrg(catalog, orgId);
+    const orgRates = ratesForOrg(catalog, orgId);
+    if (!orgProjects.some((p) => p.id === projectId)) {
+      setProjectId(orgProjects[0]?.id ?? "");
+    }
+    if (!orgRates.some((r) => r.id === rateId)) {
+      setRateId(orgRates[0]?.id ?? "");
+    }
+  }, [orgId, catalog, session, projectId, rateId]);
 
   useEffect(() => {
     if (!session) return;
@@ -57,19 +115,18 @@ function HjemOktPage() {
   }, [session]);
 
   function onStart() {
-    if (!org.trim()) {
-      toast.error("Velg eller skriv org");
-      return;
-    }
-    if (!project.trim()) {
-      toast.error("Velg eller skriv prosjekt");
+    if (!selectedOrg || !selectedProject) {
+      toast.error("Velg org og prosjekt");
       return;
     }
     const s = startWorkSession({
-      organizationName: org,
-      projectName: project,
-      rateName: rateName || null,
-      hourlyRate: parseHourlyRate(rateAmount),
+      organizationId: selectedOrg.id,
+      organizationName: selectedOrg.name,
+      projectId: selectedProject.id,
+      projectName: selectedProject.name,
+      rateId: selectedRate?.id ?? null,
+      rateName: selectedRate?.name ?? null,
+      hourlyRate: selectedRate?.amount ?? null,
       comment: comment || null,
     });
     setSession(s);
@@ -88,14 +145,33 @@ function HjemOktPage() {
     }
   }
 
+  function submitAdd() {
+    if (!orgId || !newName.trim()) return;
+    if (adding === "project") {
+      const p = addProjectToCatalog(orgId, newName);
+      setCatalog(readCatalog());
+      setProjectId(p.id);
+      toast.success(`Prosjekt «${p.name}» lagt til`);
+    } else if (adding === "rate") {
+      const amount = Number(newAmount.replace(",", ".")) || 0;
+      if (amount <= 0) {
+        toast.error("Ugyldig timepris");
+        return;
+      }
+      const r = addRateToCatalog(orgId, newName, amount);
+      setCatalog(readCatalog());
+      setRateId(r.id);
+      toast.success(`Sats «${r.name}» lagt til`);
+    }
+    setAdding(null);
+    setNewName("");
+    setNewAmount("950");
+  }
+
   return (
     <PlatformShell hideMobileNav>
-      <GlobalTopBar
-        title="Arbeidsøkt"
-        subtitle="Samme felter som i Work"
-        back={{ to: "/hjem" }}
-      />
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3">
+      <CaptureTopBar title="Arbeidsøkt" />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1">
         {session ? (
           <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
             <p className="font-heading text-5xl font-semibold tracking-tight tabular-nums">
@@ -128,17 +204,19 @@ function HjemOktPage() {
               )}
             </dl>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                Pause (minutter)
-              </label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={breakMin}
-                onChange={(e) => setBreakMin(e.target.value)}
-                className="h-12 rounded-xl"
-              />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Pause</label>
+              <Select value={breakMin} onValueChange={setBreakMin}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BREAK_OPTIONS.map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      {m === 0 ? "Ingen pause" : `${m} minutter`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <p className="text-xs text-muted-foreground">
               Stopp lagrer økten som Work-timeføring (klar for synk).
@@ -149,48 +227,122 @@ function HjemOktPage() {
           </section>
         ) : (
           <section className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <Field
-              id="org"
-              label="Org"
-              value={org}
-              onChange={setOrg}
-              placeholder="F.eks. Gold of Sicily"
-              listId="org-list"
-              options={catalog.orgs}
-              required
-            />
-            <Field
-              id="project"
-              label="Prosjekt"
-              value={project}
-              onChange={setProject}
-              placeholder="F.eks. Brygg — pitch"
-              listId="project-list"
-              options={catalog.projects}
-              required
-            />
-            <Field
-              id="rate"
-              label="Sats (navn)"
-              value={rateName}
-              onChange={setRateName}
-              placeholder="F.eks. Standard"
-              listId="rate-list"
-              options={catalog.rates}
-            />
-            <div>
-              <label htmlFor="rate-amount" className="mb-1 block text-xs font-medium text-muted-foreground">
-                Timepris (kr)
-              </label>
-              <Input
-                id="rate-amount"
-                inputMode="decimal"
-                value={rateAmount}
-                onChange={(e) => setRateAmount(e.target.value)}
-                placeholder="f.eks. 950"
-                className="h-12 rounded-xl"
-              />
-            </div>
+            <PickerField label="Org *">
+              <Select value={orgId} onValueChange={setOrgId}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue placeholder="Velg organisasjon" />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalog.orgs.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PickerField>
+
+            <PickerField
+              label="Prosjekt *"
+              action={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary"
+                  onClick={() => {
+                    setAdding("project");
+                    setNewName("");
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Ny
+                </button>
+              }
+            >
+              <Select value={projectId || undefined} onValueChange={setProjectId} disabled={!orgId}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue placeholder="Velg prosjekt" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PickerField>
+
+            <PickerField
+              label="Sats"
+              action={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary"
+                  onClick={() => {
+                    setAdding("rate");
+                    setNewName("");
+                    setNewAmount("950");
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Ny
+                </button>
+              }
+            >
+              <Select value={rateId || undefined} onValueChange={setRateId} disabled={!orgId}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue placeholder="Velg sats" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rates.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} · {r.amount} kr
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PickerField>
+
+            {adding && (
+              <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {adding === "project" ? "Nytt prosjekt" : "Ny sats"}
+                </p>
+                <Input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder={adding === "project" ? "Prosjektnavn" : "Satsnavn"}
+                  className="h-11 rounded-xl"
+                  autoFocus
+                />
+                {adding === "rate" && (
+                  <Input
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="Timepris (kr)"
+                    className="h-11 rounded-xl"
+                  />
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 flex-1 rounded-xl"
+                    onClick={() => setAdding(null)}
+                  >
+                    Avbryt
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-10 flex-1 rounded-xl"
+                    disabled={!newName.trim()}
+                    onClick={submitAdd}
+                  >
+                    Legg til
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor="comment" className="mb-1 block text-xs font-medium text-muted-foreground">
                 Kommentar
@@ -208,7 +360,7 @@ function HjemOktPage() {
               type="button"
               className="h-14 w-full rounded-2xl text-base"
               onClick={onStart}
-              disabled={!org.trim() || !project.trim()}
+              disabled={!orgId || !projectId}
             >
               Start økt
             </Button>
@@ -246,45 +398,22 @@ function HjemOktPage() {
   );
 }
 
-function Field({
-  id,
+function PickerField({
   label,
-  value,
-  onChange,
-  placeholder,
-  listId,
-  options,
-  required,
+  action,
+  children,
 }: {
-  id: string;
   label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  listId: string;
-  options: string[];
-  required?: boolean;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-muted-foreground">
-        {label}
-        {required ? " *" : ""}
-      </label>
-      <Input
-        id={id}
-        list={listId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="h-12 rounded-xl"
-        required={required}
-      />
-      <datalist id={listId}>
-        {options.map((o) => (
-          <option key={o} value={o} />
-        ))}
-      </datalist>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className="block text-xs font-medium text-muted-foreground">{label}</label>
+        {action}
+      </div>
+      {children}
     </div>
   );
 }

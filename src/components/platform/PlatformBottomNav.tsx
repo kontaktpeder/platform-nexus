@@ -13,18 +13,20 @@ export function PlatformBottomNav() {
   return (
     <nav
       aria-label="Hovednavigasjon"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/85"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 [.standalone_&]:pb-[env(safe-area-inset-bottom)]"
     >
       <div className="mx-auto grid max-w-lg grid-cols-3 px-2">
         {ITEMS.map((item) => {
           const { to, label, icon: Icon, exact } = item;
-          const active = exact ? pathname === to : pathname.startsWith(to);
+          const active = exact
+            ? pathname === to || pathname === `${to}/`
+            : pathname.startsWith(to);
           return (
             <Link
               key={to}
               to={to}
               aria-current={active ? "page" : undefined}
-              className={`relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium transition-colors active:bg-muted sm:text-xs ${
+              className={`relative flex min-h-[3.75rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium transition-colors active:bg-muted sm:text-xs ${
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >

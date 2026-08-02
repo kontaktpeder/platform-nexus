@@ -56,22 +56,50 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Platform Core — Operativsystemet for alle moduler" },
-      { name: "description", content: "Én inngang til organisasjoner, arbeidsflater og moduler. Platform Core binder hele økosystemet sammen." },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no",
+      },
+      { title: "Nexus" },
+      {
+        name: "description",
+        content: "Personlig nettverk, notater, tid og kvitteringer.",
+      },
       { name: "theme-color", content: "#4f46e5" },
-      { property: "og:title", content: "Platform Core — Operativsystemet for alle moduler" },
-      { property: "og:description", content: "Én inngang til organisasjoner, arbeidsflater og moduler. Platform Core binder hele økosystemet sammen." },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Nexus" },
+      { name: "application-name", content: "Nexus" },
+      { property: "og:title", content: "Nexus" },
+      {
+        property: "og:description",
+        content: "Personlig nettverk, notater, tid og kvitteringer.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Platform Core — Operativsystemet for alle moduler" },
-      { name: "twitter:description", content: "Én inngang til organisasjoner, arbeidsflater og moduler. Platform Core binder hele økosystemet sammen." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/24f19d18-5f4a-4dfa-8800-3a24776edbe2/id-preview-d8e3e733--3b2b3a3d-19ad-4b32-8019-7c2d5b21cad5.lovable.app-1782917855222.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/24f19d18-5f4a-4dfa-8800-3a24776edbe2/id-preview-d8e3e733--3b2b3a3d-19ad-4b32-8019-7c2d5b21cad5.lovable.app-1782917855222.png" },
+      { name: "twitter:title", content: "Nexus" },
+      {
+        name: "twitter:description",
+        content: "Personlig nettverk, notater, tid og kvitteringer.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/24f19d18-5f4a-4dfa-8800-3a24776edbe2/id-preview-d8e3e733--3b2b3a3d-19ad-4b32-8019-7c2d5b21cad5.lovable.app-1782917855222.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/24f19d18-5f4a-4dfa-8800-3a24776edbe2/id-preview-d8e3e733--3b2b3a3d-19ad-4b32-8019-7c2d5b21cad5.lovable.app-1782917855222.png",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootShell,
@@ -98,6 +126,13 @@ function RootComponent() {
 
   useEffect(() => {
     redirectRecoveryLinkToUpdatePassword();
+
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // iOS Safari legacy
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    document.documentElement.classList.toggle("standalone", standalone);
+    document.documentElement.dataset.displayMode = standalone ? "standalone" : "browser";
 
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
