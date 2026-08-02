@@ -28,7 +28,7 @@ const LEGACY_ORG_FILTER_KEY = "mission:kunderOrgFilter";
 type TypeFilter = "all" | "person" | "company";
 
 export const Route = createFileRoute("/_authenticated/kontakter/")({
-  head: () => ({ meta: [{ title: "Kontakter — Mission" }] }),
+  head: () => ({ meta: [{ title: "Kontakter — Nexus" }] }),
   component: KontakterPage,
 });
 
@@ -274,7 +274,7 @@ function KontakterPage() {
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {items.length === 0
-                ? "Opprett her, logg i Felt, eller godkjenn forslag i Innboks."
+                ? "Opprett her, eller fang et notat fra Hjem."
                 : "Bytt filter, eller opprett ny under aktiv org."}
             </p>
             <div className="mt-4 flex flex-col gap-2">

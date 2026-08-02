@@ -2,7 +2,17 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { ArrowLeft, GitMerge, Loader2, MapPin, Pencil, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  GitMerge,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   ContactAboutCard,
@@ -411,6 +421,34 @@ export function ContactDetailPanel({
                       <Pencil className="h-3 w-3" />
                       Endre navn
                     </Button>
+                    {(metaPhone || metaEmail || metaWebsite) && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {metaPhone && (
+                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
+                            <a href={`tel:${metaPhone.replace(/\s+/g, "")}`}>
+                              <Phone className="h-4 w-4" />
+                              Ring
+                            </a>
+                          </Button>
+                        )}
+                        {metaEmail && (
+                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
+                            <a href={`mailto:${metaEmail}`}>
+                              <Mail className="h-4 w-4" />
+                              Mail
+                            </a>
+                          </Button>
+                        )}
+                        {metaWebsite && (
+                          <Button asChild variant="outline" className="h-10 gap-1.5 rounded-xl">
+                            <a href={metaWebsite} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4" />
+                              Nettside
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -230,7 +230,7 @@ function AuthPage() {
             variant="outline"
             className="w-full"
             onClick={() => {
-              window.location.assign("/mission");
+              window.location.assign("/hjem");
             }}
           >
             Gå til Nexus uten modul

@@ -2,28 +2,28 @@ import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
 
 type NavigateFn = (opts: {
-  to: "/app" | "/mission" | "/o/$orgSlug/w/$wsSlug";
+  to: "/app" | "/hjem" | "/mission" | "/o/$orgSlug/w/$wsSlug";
   params?: { orgSlug: string; wsSlug: string };
   replace?: boolean;
 }) => unknown | Promise<unknown>;
 
 /**
- * After login always land on Mission (/mission).
- * Mission is the personal control layer; organization management remains under Mer.
+ * After login land on Hjem — capture-first mobile shell.
+ * Mission / Felt / Innboks remain under Profil.
  */
 export async function redirectAfterLogin(navigate?: NavigateFn): Promise<void> {
   clearPasswordRecoveryPending();
 
   if (navigate) {
     try {
-      await Promise.resolve(navigate({ to: "/mission", replace: true }));
+      await Promise.resolve(navigate({ to: "/hjem", replace: true }));
       return;
     } catch {
       /* fall through */
     }
   }
 
-  window.location.assign("/mission");
+  window.location.assign("/hjem");
 }
 
 /** Optional: resume last workspace only when caller has validated it. */
