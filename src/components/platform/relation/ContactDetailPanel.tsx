@@ -24,9 +24,11 @@ import {
   PlanFollowUpPanel,
   TimelineEvent,
 } from "@/components/platform/relation";
+import { CompanyBrregSearch } from "@/components/platform/relation/CompanyBrregSearch";
 import { PlatformSheet } from "@/components/platform/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { BrregCompanyHit } from "@/lib/brreg.server";
 import { tryOpenSheet } from "@/lib/sheetGate";
 import {
   CUSTOMER_ORG_FILTER_LABEL,
@@ -839,18 +841,45 @@ owner_context: ${d.ownerContext}${metaDomain ? `\nemail_domain: ${metaDomain}` :
               className="h-11 rounded-xl"
             />
             {d.entityType === "company" && (
-              <Input
-                value={profileDraft.orgNr}
-                onChange={(e) =>
-                  setProfileDraft((p) => ({
-                    ...p,
-                    orgNr: e.target.value.replace(/\D/g, "").slice(0, 9),
-                  }))
-                }
-                placeholder="Org.nr"
-                inputMode="numeric"
-                className="h-11 rounded-xl"
-              />
+              <>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Hent fra Brønnøysund
+                  </p>
+                  <CompanyBrregSearch
+                    disabled={profileMut.isPending || renameMut.isPending}
+                    onSelect={(c: BrregCompanyHit) => {
+                      const addr = [c.address, [c.postalCode, c.city].filter(Boolean).join(" ")]
+                        .filter(Boolean)
+                        .join(", ")
+                        .slice(0, 200);
+                      setProfileDraft((p) => ({
+                        ...p,
+                        orgNr: c.orgNr,
+                        address: addr || p.address,
+                        website: c.website?.slice(0, 200) || p.website,
+                        industry: c.orgForm?.slice(0, 120) || p.industry,
+                      }));
+                      if (c.name && c.name !== d.name) {
+                        renameMut.mutate(c.name);
+                      }
+                      toast.success(`Fylt fra Brreg · ${c.name}`);
+                    }}
+                  />
+                </div>
+                <Input
+                  value={profileDraft.orgNr}
+                  onChange={(e) =>
+                    setProfileDraft((p) => ({
+                      ...p,
+                      orgNr: e.target.value.replace(/\D/g, "").slice(0, 9),
+                    }))
+                  }
+                  placeholder="Org.nr"
+                  inputMode="numeric"
+                  className="h-11 rounded-xl"
+                />
+              </>
             )}
             <Input
               value={profileDraft.industry}

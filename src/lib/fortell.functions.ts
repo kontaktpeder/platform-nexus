@@ -87,6 +87,27 @@ export type FortellContactProposal = {
   reason: string | null;
 };
 
+const RELATION_KINDS = [
+  "works_on",
+  "customer_of",
+  "member_of",
+  "owns",
+  "blocked_by",
+  "related_to",
+] as const;
+
+export type FortellRelationKind = (typeof RELATION_KINDS)[number];
+
+export type FortellRelationProposal = {
+  fromName: string;
+  toName: string;
+  kind: FortellRelationKind;
+  role: string | null;
+  reason: string | null;
+  fromEntityId: string | null;
+  toEntityId: string | null;
+};
+
 export type FortellChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -102,6 +123,7 @@ export type FortellResult = {
   mailHits: FortellMailHit[];
   slackHits: FortellSlackHit[];
   contactProposal: FortellContactProposal | null;
+  relationProposals: FortellRelationProposal[];
 };
 
 const Input = z.object({
@@ -178,6 +200,7 @@ export const runFortell = createServerFn({ method: "POST" })
       mailHits: FortellMailHit[];
       slackHits: FortellSlackHit[];
       contactProposal: FortellContactProposal | null;
+      relationProposals: FortellRelationProposal[];
     } = {
       draft: null,
       workProposal: null,
@@ -186,6 +209,7 @@ export const runFortell = createServerFn({ method: "POST" })
       mailHits: [],
       slackHits: [],
       contactProposal: null,
+      relationProposals: [],
     };
 
     const tools = {
@@ -422,6 +446,47 @@ export const runFortell = createServerFn({ method: "POST" })
             ok: true,
             note: "Forslag klart — brukeren må bekrefte i UI før lagring.",
             proposal: out.contactProposal,
+          };
+        },
+      }),
+
+      proposeRelation: tool({
+        description:
+          "Foreslå en relasjon mellom to kontakter. Lagrer IKKE — brukeren godkjenner i UI. Typisk: person member_of selskap (daglig leder), handelsnavn related_to juridisk selskap, kunde customer_of leverandør. Bruk entityId fra readContact når du har dem.",
+        inputSchema: z.object({
+          fromName: z.string().min(1).max(120),
+          toName: z.string().min(1).max(120),
+          kind: z.enum(RELATION_KINDS),
+          role: z.string().max(120).nullable().optional(),
+          reason: z.string().max(300).optional(),
+          fromEntityId: z.string().uuid().nullable().optional(),
+          toEntityId: z.string().uuid().nullable().optional(),
+        }),
+        execute: async (input) => {
+          const proposal: FortellRelationProposal = {
+            fromName: input.fromName.trim(),
+            toName: input.toName.trim(),
+            kind: input.kind,
+            role: input.role?.trim() || null,
+            reason: input.reason?.trim() || "Foreslått relasjon",
+            fromEntityId: input.fromEntityId ?? null,
+            toEntityId: input.toEntityId ?? null,
+          };
+          const dup = out.relationProposals.some(
+            (r) =>
+              r.fromName.toLowerCase() === proposal.fromName.toLowerCase() &&
+              r.toName.toLowerCase() === proposal.toName.toLowerCase() &&
+              r.kind === proposal.kind,
+          );
+          if (!dup) out.relationProposals.push(proposal);
+          steps.push({
+            label: "Foreslo relasjon",
+            detail: `${proposal.fromName} → ${proposal.kind} → ${proposal.toName}`,
+          });
+          return {
+            ok: true,
+            note: "Forslag klart — brukeren må godkjenne i UI før lagring.",
+            proposal,
           };
         },
       }),
@@ -839,15 +904,17 @@ export const runFortell = createServerFn({ method: "POST" })
       "1) readContact — les person/selskap i Nexus",
       "2) searchWeb / lookupBrregCompany / getBrregRoles — finn mer info på nett/Brreg",
       "3) proposeContactUpdate — foreslå felt på eksisterende kontakt (lagrer ikke selv)",
-      "4) searchImportantMail — søk Gmail (viktige/uleste)",
-      "5) searchSlack — les Slack denne uken (#drift, mentions, DM)",
-      "6) listUnpaidInvoices — ubetalte fakturaer fra Finance",
-      "7) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
-      "8) proposeEmailDraft — e-postutkast (sender ikke selv)",
+      "4) proposeRelation — foreslå kobling mellom to kontakter (lagrer ikke selv)",
+      "5) searchImportantMail — søk Gmail (viktige/uleste)",
+      "6) searchSlack — les Slack denne uken (#drift, mentions, DM)",
+      "7) listUnpaidInvoices — ubetalte fakturaer fra Finance",
+      "8) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
+      "9) proposeEmailDraft — e-postutkast (sender ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
-      "- Oppfinn ALDRI e-post, org.nr, telefon eller Slack-innhold.",
+      "- Ved daglig leder / eier / «koble X til Y» / handelsnavn↔juridisk: readContact begge → proposeRelation (member_of, owns, related_to, customer_of).",
+      "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ikke signer med navn.",
       "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
@@ -900,6 +967,12 @@ export const runFortell = createServerFn({ method: "POST" })
     if (out.contactProposal) {
       fallback = `Forslag til oppdatering av ${out.contactProposal.name} er klart — bekreft under.`;
     }
+    if (out.relationProposals.length > 0) {
+      fallback =
+        out.relationProposals.length === 1
+          ? `Relasjonsforslag klart: ${out.relationProposals[0].fromName} → ${out.relationProposals[0].toName}. Godkjenn under.`
+          : `${out.relationProposals.length} relasjonsforslag klare — godkjenn under.`;
+    }
 
     return {
       answer: answer || fallback,
@@ -911,6 +984,7 @@ export const runFortell = createServerFn({ method: "POST" })
       mailHits: out.mailHits,
       slackHits: out.slackHits,
       contactProposal: out.contactProposal,
+      relationProposals: out.relationProposals,
     };
   });
 

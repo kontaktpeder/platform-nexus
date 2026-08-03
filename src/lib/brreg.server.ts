@@ -114,7 +114,26 @@ function matchesHints(
   return true;
 }
 
-/** Search Enhetsregisteret (+ underenheter) by name, optional city/address filter. */
+/** Lookup a single company by 9-digit org.nr. */
+export async function getBrregCompany(orgNr: string): Promise<BrregCompanyHit | null> {
+  const digits = orgNr.replace(/\D/g, "");
+  if (digits.length !== 9) return null;
+  try {
+    const json = (await brregGet(`/enheter/${digits}`)) as Record<string, unknown>;
+    const hit = mapEnhet(json, "enhet");
+    return hit.orgNr && hit.name ? hit : null;
+  } catch {
+    try {
+      const json = (await brregGet(`/underenheter/${digits}`)) as Record<string, unknown>;
+      const hit = mapEnhet(json, "underenhet");
+      return hit.orgNr && hit.name ? hit : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Search Enhetsregisteret (+ underenheter) by name or org.nr, optional city/address filter. */
 export async function searchBrregCompanies(input: {
   name: string;
   city?: string | null;
@@ -123,6 +142,11 @@ export async function searchBrregCompanies(input: {
 }): Promise<BrregCompanyHit[]> {
   const name = input.name.trim();
   if (name.length < 2) return [];
+  const digits = name.replace(/\D/g, "");
+  if (digits.length === 9 && digits === name.replace(/\s/g, "")) {
+    const one = await getBrregCompany(digits);
+    return one ? [one] : [];
+  }
   const limit = Math.min(input.limit ?? 8, 15);
   const cityKey = (input.city ?? "").trim().toLowerCase();
   const kommune = CITY_KOMMUNE[cityKey] ?? null;

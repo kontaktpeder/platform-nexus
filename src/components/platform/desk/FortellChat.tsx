@@ -2,7 +2,16 @@ import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Clock, ExternalLink, Loader2, Send, Sparkles, Square, UserRound } from "lucide-react";
+import {
+  Clock,
+  ExternalLink,
+  Link2,
+  Loader2,
+  Send,
+  Sparkles,
+  Square,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,10 +21,14 @@ import {
   runFortell,
   type FortellChatMessage,
   type FortellContactProposal,
+  type FortellRelationProposal,
   type FortellResult,
   type FortellWorkProposal,
 } from "@/lib/fortell.functions";
-import { sendAssistantDraft } from "@/lib/inbox-assistant.functions";
+import {
+  applySuggestedRelation,
+  sendAssistantDraft,
+} from "@/lib/inbox-assistant.functions";
 import { getLastWorkspace } from "@/lib/last-workspace";
 import { listConnectedModuleOrgs } from "@/lib/module-orgs.functions";
 import { syncTimeEntryToWork } from "@/lib/work-timer.functions";
@@ -26,6 +39,21 @@ import {
   stopWorkSession,
 } from "@/lib/work-session";
 
+const RELATION_KIND_LABEL: Record<FortellRelationProposal["kind"], string> = {
+  member_of: "jobber i",
+  works_on: "jobber på",
+  customer_of: "kunde av",
+  owns: "eier",
+  blocked_by: "blokkert av",
+  related_to: "relatert til",
+};
+
+function relationKey(r: FortellRelationProposal): string {
+  return [r.fromName, r.kind, r.toName]
+    .map((n) => n.toLowerCase())
+    .join("|");
+}
+
 /**
  * Desk-only Fortell surface — tools with human confirmation.
  * Keep separate from mobile /hjem capture CTAs.
@@ -34,6 +62,7 @@ export function FortellChat() {
   const navigate = useNavigate();
   const run = useServerFn(runFortell);
   const applyContact = useServerFn(applyFortellContactProposal);
+  const applyRelation = useServerFn(applySuggestedRelation);
   const sendDraft = useServerFn(sendAssistantDraft);
   const runSync = useServerFn(syncTimeEntryToWork);
   const listOrgs = useServerFn(listConnectedModuleOrgs);
@@ -51,6 +80,8 @@ export function FortellChat() {
   const [workStopNote, setWorkStopNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [contactApplied, setContactApplied] = useState(false);
+  const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
+  const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
   );
@@ -90,6 +121,8 @@ export function FortellChat() {
       setWorkStarted(false);
       setWorkStopNote(null);
       setContactApplied(false);
+      setAppliedRelations({});
+      setApplyingRelationKey(null);
       setInstruction("");
       if (res.draft) {
         setDraftTo(res.draft.to);
@@ -152,6 +185,27 @@ export function FortellChat() {
       });
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const relationMut = useMutation({
+    mutationFn: (r: FortellRelationProposal) =>
+      applyRelation({
+        data: {
+          fromName: r.fromName,
+          toName: r.toName,
+          kind: r.kind,
+          role: r.role,
+          fromEntityId: r.fromEntityId,
+          toEntityId: r.toEntityId,
+        },
+      }),
+    onMutate: (r) => setApplyingRelationKey(relationKey(r)),
+    onSuccess: (res, r) => {
+      setAppliedRelations((prev) => ({ ...prev, [relationKey(r)]: true }));
+      toast.success(`Relasjon lagret · ${res.fromName} → ${res.toName}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+    onSettled: () => setApplyingRelationKey(null),
   });
 
   function submit() {
@@ -288,8 +342,8 @@ export function FortellChat() {
           Én inngang · få handlinger
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Mail, Slack, fakturaer, kontakter (inkl. Brreg/nett), start/avslutt økt. Du bekrefter før
-          noe skjer. Samtalen huskes i denne økten.
+          Mail, Slack, fakturaer, kontakter (inkl. Brreg/nett), relasjoner, start/avslutt økt. Du
+          bekrefter før noe skjer. Samtalen huskes i denne økten.
         </p>
       </header>
 
@@ -425,6 +479,64 @@ export function FortellChat() {
                 )}
                 Lagre og åpne kontakt
               </Button>
+            </div>
+          )}
+
+          {(result.relationProposals?.length ?? 0) > 0 && (
+            <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bekreft relasjoner
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Godkjenn for å lagre koblingen. Begge kontakter må finnes i Nexus.
+              </p>
+              <ul className="space-y-2">
+                {result.relationProposals.map((r) => {
+                  const key = relationKey(r);
+                  const done = !!appliedRelations[key];
+                  const busy = applyingRelationKey === key && relationMut.isPending;
+                  return (
+                    <li
+                      key={key}
+                      className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {r.fromName}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            {RELATION_KIND_LABEL[r.kind] ?? r.kind}
+                          </span>{" "}
+                          {r.toName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[r.role, r.reason].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      {done ? (
+                        <span className="shrink-0 text-xs font-medium text-emerald-600">
+                          Lagret
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 gap-1.5 rounded-xl"
+                          disabled={busy}
+                          onClick={() => relationMut.mutate(r)}
+                        >
+                          {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Link2 className="h-3.5 w-3.5" />
+                          )}
+                          Godkjenn
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 

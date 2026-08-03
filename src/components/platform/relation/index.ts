@@ -14,3 +14,4 @@ export { ContactAboutCard } from "./ContactAboutCard";
 export { ContactDetailPanel } from "./ContactDetailPanel";
 export { ContactEmailSection } from "./ContactEmailSection";
 export { ContactRelationsSection } from "./ContactRelationsSection";
+export { CompanyBrregSearch } from "./CompanyBrregSearch";
