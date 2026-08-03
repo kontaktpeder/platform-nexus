@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** Mobile capture nav — Hjem stays here. Desktop primary is /desk in PlatformSideNav. */
 const ITEMS = [
   { to: "/hjem" as const, label: "Hjem", icon: Home, exact: true },
   { to: "/kontakter" as const, label: "Kontakter", icon: Users, exact: false },

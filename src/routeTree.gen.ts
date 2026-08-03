@@ -9,108 +9,64 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthUpdatePasswordRouteImport } from './routes/auth.update-password'
-import { Route as ApiLogoRouteImport } from './routes/api/logo'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
-import { Route as AuthenticatedProfilRouteImport } from './routes/_authenticated/profil'
-import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
-import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
-import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
-import { Route as AuthenticatedKontakterRouteImport } from './routes/_authenticated/kontakter'
-import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
-import { Route as AuthenticatedHjemRouteImport } from './routes/_authenticated/hjem'
-import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/field'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
-import { Route as AuthenticatedKunderIndexRouteImport } from './routes/_authenticated/kunder.index'
-import { Route as AuthenticatedKontakterIndexRouteImport } from './routes/_authenticated/kontakter.index'
+import { Route as AuthenticatedDeskRouteImport } from './routes/_authenticated/desk'
+import { Route as AuthenticatedFieldRouteImport } from './routes/_authenticated/field'
+import { Route as AuthenticatedHjemRouteImport } from './routes/_authenticated/hjem'
+import { Route as AuthenticatedKnowledgeRouteImport } from './routes/_authenticated/knowledge'
+import { Route as AuthenticatedKontakterRouteImport } from './routes/_authenticated/kontakter'
+import { Route as AuthenticatedKunderRouteImport } from './routes/_authenticated/kunder'
+import { Route as AuthenticatedMissionRouteImport } from './routes/_authenticated/mission'
+import { Route as AuthenticatedModulesRouteImport } from './routes/_authenticated/modules'
+import { Route as AuthenticatedProfilRouteImport } from './routes/_authenticated/profil'
+import { Route as AuthenticatedReviewRouteImport } from './routes/_authenticated/review'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as ApiLogoRouteImport } from './routes/api/logo'
+import { Route as AuthUpdatePasswordRouteImport } from './routes/auth.update-password'
 import { Route as AuthenticatedHjemIndexRouteImport } from './routes/_authenticated/hjem.index'
-import { Route as ApiSsoExchangeRouteImport } from './routes/api/sso.exchange'
-import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
-import { Route as AuthenticatedKontakterEntityIdRouteImport } from './routes/_authenticated/kontakter.$entityId'
-import { Route as AuthenticatedHjemOktRouteImport } from './routes/_authenticated/hjem.okt'
-import { Route as AuthenticatedHjemNotatRouteImport } from './routes/_authenticated/hjem.notat'
 import { Route as AuthenticatedHjemKvitteringRouteImport } from './routes/_authenticated/hjem.kvittering'
+import { Route as AuthenticatedHjemNotatRouteImport } from './routes/_authenticated/hjem.notat'
+import { Route as AuthenticatedHjemOktRouteImport } from './routes/_authenticated/hjem.okt'
 import { Route as AuthenticatedHjemSporRouteImport } from './routes/_authenticated/hjem.spor'
+import { Route as AuthenticatedKontakterIndexRouteImport } from './routes/_authenticated/kontakter.index'
+import { Route as AuthenticatedKontakterEntityIdRouteImport } from './routes/_authenticated/kontakter.$entityId'
+import { Route as AuthenticatedKunderIndexRouteImport } from './routes/_authenticated/kunder.index'
+import { Route as AuthenticatedKunderEntityIdRouteImport } from './routes/_authenticated/kunder.$entityId'
+import { Route as ApiSsoExchangeRouteImport } from './routes/api/sso.exchange'
 import { Route as AuthenticatedOOrgSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.index'
-import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
-import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
 import { Route as AuthenticatedOOrgSlugConnectionsRouteImport } from './routes/_authenticated/o.$orgSlug.connections'
+import { Route as AuthenticatedOOrgSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.settings'
+import { Route as AuthenticatedOOrgSlugSlackChannelsRouteImport } from './routes/_authenticated/o.$orgSlug.slack-channels'
 import { Route as AuthenticatedOOrgSlugWWsSlugRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug'
 import { Route as AuthenticatedOOrgSlugWWsSlugIndexRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.index'
-import { Route as AuthenticatedOOrgSlugWWsSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.settings'
 import { Route as AuthenticatedOOrgSlugWWsSlugModulesRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.modules'
+import { Route as AuthenticatedOOrgSlugWWsSlugSettingsRouteImport } from './routes/_authenticated/o.$orgSlug.w.$wsSlug.settings'
 
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthUpdatePasswordRoute = AuthUpdatePasswordRouteImport.update({
-  id: '/update-password',
-  path: '/update-password',
-  getParentRoute: () => AuthRoute,
-} as any)
-const ApiLogoRoute = ApiLogoRouteImport.update({
-  id: '/api/logo',
-  path: '/api/logo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedReviewRoute = AuthenticatedReviewRouteImport.update({
-  id: '/review',
-  path: '/review',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedProfilRoute = AuthenticatedProfilRouteImport.update({
-  id: '/profil',
-  path: '/profil',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedModulesRoute = AuthenticatedModulesRouteImport.update({
-  id: '/modules',
-  path: '/modules',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMissionRoute = AuthenticatedMissionRouteImport.update({
-  id: '/mission',
-  path: '/mission',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
-  id: '/kunder',
-  path: '/kunder',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedKontakterRoute = AuthenticatedKontakterRouteImport.update({
-  id: '/kontakter',
-  path: '/kontakter',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
-  id: '/knowledge',
-  path: '/knowledge',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedHjemRoute = AuthenticatedHjemRouteImport.update({
-  id: '/hjem',
-  path: '/hjem',
+const AuthenticatedDeskRoute = AuthenticatedDeskRouteImport.update({
+  id: '/desk',
+  path: '/desk',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFieldRoute = AuthenticatedFieldRouteImport.update({
@@ -118,53 +74,64 @@ const AuthenticatedFieldRoute = AuthenticatedFieldRouteImport.update({
   path: '/field',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
-  id: '/app',
-  path: '/app',
+const AuthenticatedHjemRoute = AuthenticatedHjemRouteImport.update({
+  id: '/hjem',
+  path: '/hjem',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedKunderIndexRoute =
-  AuthenticatedKunderIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedKunderRoute,
-  } as any)
-const AuthenticatedKontakterIndexRoute =
-  AuthenticatedKontakterIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedKontakterRoute,
-  } as any)
+const AuthenticatedKnowledgeRoute = AuthenticatedKnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKontakterRoute = AuthenticatedKontakterRouteImport.update({
+  id: '/kontakter',
+  path: '/kontakter',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKunderRoute = AuthenticatedKunderRouteImport.update({
+  id: '/kunder',
+  path: '/kunder',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMissionRoute = AuthenticatedMissionRouteImport.update({
+  id: '/mission',
+  path: '/mission',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedModulesRoute = AuthenticatedModulesRouteImport.update({
+  id: '/modules',
+  path: '/modules',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfilRoute = AuthenticatedProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedReviewRoute = AuthenticatedReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiLogoRoute = ApiLogoRouteImport.update({
+  id: '/api/logo',
+  path: '/api/logo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthUpdatePasswordRoute = AuthUpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthenticatedHjemIndexRoute = AuthenticatedHjemIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedHjemRoute,
-} as any)
-const ApiSsoExchangeRoute = ApiSsoExchangeRouteImport.update({
-  id: '/api/sso/exchange',
-  path: '/api/sso/exchange',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedKunderEntityIdRoute =
-  AuthenticatedKunderEntityIdRouteImport.update({
-    id: '/$entityId',
-    path: '/$entityId',
-    getParentRoute: () => AuthenticatedKunderRoute,
-  } as any)
-const AuthenticatedKontakterEntityIdRoute =
-  AuthenticatedKontakterEntityIdRouteImport.update({
-    id: '/$entityId',
-    path: '/$entityId',
-    getParentRoute: () => AuthenticatedKontakterRoute,
-  } as any)
-const AuthenticatedHjemOktRoute = AuthenticatedHjemOktRouteImport.update({
-  id: '/okt',
-  path: '/okt',
-  getParentRoute: () => AuthenticatedHjemRoute,
-} as any)
-const AuthenticatedHjemNotatRoute = AuthenticatedHjemNotatRouteImport.update({
-  id: '/notat',
-  path: '/notat',
   getParentRoute: () => AuthenticatedHjemRoute,
 } as any)
 const AuthenticatedHjemKvitteringRoute =
@@ -173,10 +140,49 @@ const AuthenticatedHjemKvitteringRoute =
     path: '/kvittering',
     getParentRoute: () => AuthenticatedHjemRoute,
   } as any)
+const AuthenticatedHjemNotatRoute = AuthenticatedHjemNotatRouteImport.update({
+  id: '/notat',
+  path: '/notat',
+  getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
+const AuthenticatedHjemOktRoute = AuthenticatedHjemOktRouteImport.update({
+  id: '/okt',
+  path: '/okt',
+  getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
 const AuthenticatedHjemSporRoute = AuthenticatedHjemSporRouteImport.update({
   id: '/spor',
   path: '/spor',
   getParentRoute: () => AuthenticatedHjemRoute,
+} as any)
+const AuthenticatedKontakterIndexRoute =
+  AuthenticatedKontakterIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedKontakterRoute,
+  } as any)
+const AuthenticatedKontakterEntityIdRoute =
+  AuthenticatedKontakterEntityIdRouteImport.update({
+    id: '/$entityId',
+    path: '/$entityId',
+    getParentRoute: () => AuthenticatedKontakterRoute,
+  } as any)
+const AuthenticatedKunderIndexRoute =
+  AuthenticatedKunderIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedKunderRoute,
+  } as any)
+const AuthenticatedKunderEntityIdRoute =
+  AuthenticatedKunderEntityIdRouteImport.update({
+    id: '/$entityId',
+    path: '/$entityId',
+    getParentRoute: () => AuthenticatedKunderRoute,
+  } as any)
+const ApiSsoExchangeRoute = ApiSsoExchangeRouteImport.update({
+  id: '/api/sso/exchange',
+  path: '/api/sso/exchange',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedOOrgSlugIndexRoute =
   AuthenticatedOOrgSlugIndexRouteImport.update({
@@ -184,10 +190,10 @@ const AuthenticatedOOrgSlugIndexRoute =
     path: '/o/$orgSlug/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedOOrgSlugSlackChannelsRoute =
-  AuthenticatedOOrgSlugSlackChannelsRouteImport.update({
-    id: '/o/$orgSlug/slack-channels',
-    path: '/o/$orgSlug/slack-channels',
+const AuthenticatedOOrgSlugConnectionsRoute =
+  AuthenticatedOOrgSlugConnectionsRouteImport.update({
+    id: '/o/$orgSlug/connections',
+    path: '/o/$orgSlug/connections',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOOrgSlugSettingsRoute =
@@ -196,10 +202,10 @@ const AuthenticatedOOrgSlugSettingsRoute =
     path: '/o/$orgSlug/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedOOrgSlugConnectionsRoute =
-  AuthenticatedOOrgSlugConnectionsRouteImport.update({
-    id: '/o/$orgSlug/connections',
-    path: '/o/$orgSlug/connections',
+const AuthenticatedOOrgSlugSlackChannelsRoute =
+  AuthenticatedOOrgSlugSlackChannelsRouteImport.update({
+    id: '/o/$orgSlug/slack-channels',
+    path: '/o/$orgSlug/slack-channels',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedOOrgSlugWWsSlugRoute =
@@ -214,16 +220,16 @@ const AuthenticatedOOrgSlugWWsSlugIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedOOrgSlugWWsSlugRoute,
   } as any)
-const AuthenticatedOOrgSlugWWsSlugSettingsRoute =
-  AuthenticatedOOrgSlugWWsSlugSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => AuthenticatedOOrgSlugWWsSlugRoute,
-  } as any)
 const AuthenticatedOOrgSlugWWsSlugModulesRoute =
   AuthenticatedOOrgSlugWWsSlugModulesRouteImport.update({
     id: '/modules',
     path: '/modules',
+    getParentRoute: () => AuthenticatedOOrgSlugWWsSlugRoute,
+  } as any)
+const AuthenticatedOOrgSlugWWsSlugSettingsRoute =
+  AuthenticatedOOrgSlugWWsSlugSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
     getParentRoute: () => AuthenticatedOOrgSlugWWsSlugRoute,
   } as any)
 
@@ -231,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
+  '/desk': typeof AuthenticatedDeskRoute
   '/field': typeof AuthenticatedFieldRoute
   '/hjem': typeof AuthenticatedHjemRouteWithChildren
   '/knowledge': typeof AuthenticatedKnowledgeRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
   '/app': typeof AuthenticatedAppRoute
+  '/desk': typeof AuthenticatedDeskRoute
   '/field': typeof AuthenticatedFieldRoute
   '/knowledge': typeof AuthenticatedKnowledgeRoute
   '/mission': typeof AuthenticatedMissionRoute
@@ -299,6 +307,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/desk': typeof AuthenticatedDeskRoute
   '/_authenticated/field': typeof AuthenticatedFieldRoute
   '/_authenticated/hjem': typeof AuthenticatedHjemRouteWithChildren
   '/_authenticated/knowledge': typeof AuthenticatedKnowledgeRoute
@@ -336,6 +345,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/desk'
     | '/field'
     | '/hjem'
     | '/knowledge'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/app'
+    | '/desk'
     | '/field'
     | '/knowledge'
     | '/mission'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/app'
+    | '/_authenticated/desk'
     | '/_authenticated/field'
     | '/_authenticated/hjem'
     | '/_authenticated/knowledge'
@@ -445,11 +457,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -459,88 +471,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/update-password': {
-      id: '/auth/update-password'
-      path: '/update-password'
-      fullPath: '/auth/update-password'
-      preLoaderRoute: typeof AuthUpdatePasswordRouteImport
-      parentRoute: typeof AuthRoute
-    }
-    '/api/logo': {
-      id: '/api/logo'
-      path: '/api/logo'
-      fullPath: '/api/logo'
-      preLoaderRoute: typeof ApiLogoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+    '/_authenticated/app': {
+      id: '/_authenticated/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AuthenticatedAppRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/review': {
-      id: '/_authenticated/review'
-      path: '/review'
-      fullPath: '/review'
-      preLoaderRoute: typeof AuthenticatedReviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/profil': {
-      id: '/_authenticated/profil'
-      path: '/profil'
-      fullPath: '/profil'
-      preLoaderRoute: typeof AuthenticatedProfilRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/modules': {
-      id: '/_authenticated/modules'
-      path: '/modules'
-      fullPath: '/modules'
-      preLoaderRoute: typeof AuthenticatedModulesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/mission': {
-      id: '/_authenticated/mission'
-      path: '/mission'
-      fullPath: '/mission'
-      preLoaderRoute: typeof AuthenticatedMissionRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/kunder': {
-      id: '/_authenticated/kunder'
-      path: '/kunder'
-      fullPath: '/kunder'
-      preLoaderRoute: typeof AuthenticatedKunderRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/kontakter': {
-      id: '/_authenticated/kontakter'
-      path: '/kontakter'
-      fullPath: '/kontakter'
-      preLoaderRoute: typeof AuthenticatedKontakterRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/knowledge': {
-      id: '/_authenticated/knowledge'
-      path: '/knowledge'
-      fullPath: '/knowledge'
-      preLoaderRoute: typeof AuthenticatedKnowledgeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/hjem': {
-      id: '/_authenticated/hjem'
-      path: '/hjem'
-      fullPath: '/hjem'
-      preLoaderRoute: typeof AuthenticatedHjemRouteImport
+    '/_authenticated/desk': {
+      id: '/_authenticated/desk'
+      path: '/desk'
+      fullPath: '/desk'
+      preLoaderRoute: typeof AuthenticatedDeskRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/field': {
@@ -550,67 +499,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFieldRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/app': {
-      id: '/_authenticated/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AuthenticatedAppRouteImport
+    '/_authenticated/hjem': {
+      id: '/_authenticated/hjem'
+      path: '/hjem'
+      fullPath: '/hjem'
+      preLoaderRoute: typeof AuthenticatedHjemRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/kunder/': {
-      id: '/_authenticated/kunder/'
-      path: '/'
-      fullPath: '/kunder/'
-      preLoaderRoute: typeof AuthenticatedKunderIndexRouteImport
-      parentRoute: typeof AuthenticatedKunderRoute
+    '/_authenticated/knowledge': {
+      id: '/_authenticated/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof AuthenticatedKnowledgeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/kontakter/': {
-      id: '/_authenticated/kontakter/'
-      path: '/'
-      fullPath: '/kontakter/'
-      preLoaderRoute: typeof AuthenticatedKontakterIndexRouteImport
-      parentRoute: typeof AuthenticatedKontakterRoute
+    '/_authenticated/kontakter': {
+      id: '/_authenticated/kontakter'
+      path: '/kontakter'
+      fullPath: '/kontakter'
+      preLoaderRoute: typeof AuthenticatedKontakterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/kunder': {
+      id: '/_authenticated/kunder'
+      path: '/kunder'
+      fullPath: '/kunder'
+      preLoaderRoute: typeof AuthenticatedKunderRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/mission': {
+      id: '/_authenticated/mission'
+      path: '/mission'
+      fullPath: '/mission'
+      preLoaderRoute: typeof AuthenticatedMissionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/modules': {
+      id: '/_authenticated/modules'
+      path: '/modules'
+      fullPath: '/modules'
+      preLoaderRoute: typeof AuthenticatedModulesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profil': {
+      id: '/_authenticated/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof AuthenticatedProfilRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/review': {
+      id: '/_authenticated/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof AuthenticatedReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/logo': {
+      id: '/api/logo'
+      path: '/api/logo'
+      fullPath: '/api/logo'
+      preLoaderRoute: typeof ApiLogoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/update-password': {
+      id: '/auth/update-password'
+      path: '/update-password'
+      fullPath: '/auth/update-password'
+      preLoaderRoute: typeof AuthUpdatePasswordRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/_authenticated/hjem/': {
       id: '/_authenticated/hjem/'
       path: '/'
       fullPath: '/hjem/'
       preLoaderRoute: typeof AuthenticatedHjemIndexRouteImport
-      parentRoute: typeof AuthenticatedHjemRoute
-    }
-    '/api/sso/exchange': {
-      id: '/api/sso/exchange'
-      path: '/api/sso/exchange'
-      fullPath: '/api/sso/exchange'
-      preLoaderRoute: typeof ApiSsoExchangeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/kunder/$entityId': {
-      id: '/_authenticated/kunder/$entityId'
-      path: '/$entityId'
-      fullPath: '/kunder/$entityId'
-      preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
-      parentRoute: typeof AuthenticatedKunderRoute
-    }
-    '/_authenticated/kontakter/$entityId': {
-      id: '/_authenticated/kontakter/$entityId'
-      path: '/$entityId'
-      fullPath: '/kontakter/$entityId'
-      preLoaderRoute: typeof AuthenticatedKontakterEntityIdRouteImport
-      parentRoute: typeof AuthenticatedKontakterRoute
-    }
-    '/_authenticated/hjem/okt': {
-      id: '/_authenticated/hjem/okt'
-      path: '/okt'
-      fullPath: '/hjem/okt'
-      preLoaderRoute: typeof AuthenticatedHjemOktRouteImport
-      parentRoute: typeof AuthenticatedHjemRoute
-    }
-    '/_authenticated/hjem/notat': {
-      id: '/_authenticated/hjem/notat'
-      path: '/notat'
-      fullPath: '/hjem/notat'
-      preLoaderRoute: typeof AuthenticatedHjemNotatRouteImport
       parentRoute: typeof AuthenticatedHjemRoute
     }
     '/_authenticated/hjem/kvittering': {
@@ -620,12 +590,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHjemKvitteringRouteImport
       parentRoute: typeof AuthenticatedHjemRoute
     }
+    '/_authenticated/hjem/notat': {
+      id: '/_authenticated/hjem/notat'
+      path: '/notat'
+      fullPath: '/hjem/notat'
+      preLoaderRoute: typeof AuthenticatedHjemNotatRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
+    }
+    '/_authenticated/hjem/okt': {
+      id: '/_authenticated/hjem/okt'
+      path: '/okt'
+      fullPath: '/hjem/okt'
+      preLoaderRoute: typeof AuthenticatedHjemOktRouteImport
+      parentRoute: typeof AuthenticatedHjemRoute
+    }
     '/_authenticated/hjem/spor': {
       id: '/_authenticated/hjem/spor'
       path: '/spor'
       fullPath: '/hjem/spor'
       preLoaderRoute: typeof AuthenticatedHjemSporRouteImport
       parentRoute: typeof AuthenticatedHjemRoute
+    }
+    '/_authenticated/kontakter/': {
+      id: '/_authenticated/kontakter/'
+      path: '/'
+      fullPath: '/kontakter/'
+      preLoaderRoute: typeof AuthenticatedKontakterIndexRouteImport
+      parentRoute: typeof AuthenticatedKontakterRoute
+    }
+    '/_authenticated/kontakter/$entityId': {
+      id: '/_authenticated/kontakter/$entityId'
+      path: '/$entityId'
+      fullPath: '/kontakter/$entityId'
+      preLoaderRoute: typeof AuthenticatedKontakterEntityIdRouteImport
+      parentRoute: typeof AuthenticatedKontakterRoute
+    }
+    '/_authenticated/kunder/': {
+      id: '/_authenticated/kunder/'
+      path: '/'
+      fullPath: '/kunder/'
+      preLoaderRoute: typeof AuthenticatedKunderIndexRouteImport
+      parentRoute: typeof AuthenticatedKunderRoute
+    }
+    '/_authenticated/kunder/$entityId': {
+      id: '/_authenticated/kunder/$entityId'
+      path: '/$entityId'
+      fullPath: '/kunder/$entityId'
+      preLoaderRoute: typeof AuthenticatedKunderEntityIdRouteImport
+      parentRoute: typeof AuthenticatedKunderRoute
+    }
+    '/api/sso/exchange': {
+      id: '/api/sso/exchange'
+      path: '/api/sso/exchange'
+      fullPath: '/api/sso/exchange'
+      preLoaderRoute: typeof ApiSsoExchangeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/o/$orgSlug/': {
       id: '/_authenticated/o/$orgSlug/'
@@ -634,11 +653,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgSlugIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/o/$orgSlug/slack-channels': {
-      id: '/_authenticated/o/$orgSlug/slack-channels'
-      path: '/o/$orgSlug/slack-channels'
-      fullPath: '/o/$orgSlug/slack-channels'
-      preLoaderRoute: typeof AuthenticatedOOrgSlugSlackChannelsRouteImport
+    '/_authenticated/o/$orgSlug/connections': {
+      id: '/_authenticated/o/$orgSlug/connections'
+      path: '/o/$orgSlug/connections'
+      fullPath: '/o/$orgSlug/connections'
+      preLoaderRoute: typeof AuthenticatedOOrgSlugConnectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/o/$orgSlug/settings': {
@@ -648,11 +667,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgSlugSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/o/$orgSlug/connections': {
-      id: '/_authenticated/o/$orgSlug/connections'
-      path: '/o/$orgSlug/connections'
-      fullPath: '/o/$orgSlug/connections'
-      preLoaderRoute: typeof AuthenticatedOOrgSlugConnectionsRouteImport
+    '/_authenticated/o/$orgSlug/slack-channels': {
+      id: '/_authenticated/o/$orgSlug/slack-channels'
+      path: '/o/$orgSlug/slack-channels'
+      fullPath: '/o/$orgSlug/slack-channels'
+      preLoaderRoute: typeof AuthenticatedOOrgSlugSlackChannelsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/o/$orgSlug/w/$wsSlug': {
@@ -669,18 +688,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgSlugWWsSlugIndexRouteImport
       parentRoute: typeof AuthenticatedOOrgSlugWWsSlugRoute
     }
-    '/_authenticated/o/$orgSlug/w/$wsSlug/settings': {
-      id: '/_authenticated/o/$orgSlug/w/$wsSlug/settings'
-      path: '/settings'
-      fullPath: '/o/$orgSlug/w/$wsSlug/settings'
-      preLoaderRoute: typeof AuthenticatedOOrgSlugWWsSlugSettingsRouteImport
-      parentRoute: typeof AuthenticatedOOrgSlugWWsSlugRoute
-    }
     '/_authenticated/o/$orgSlug/w/$wsSlug/modules': {
       id: '/_authenticated/o/$orgSlug/w/$wsSlug/modules'
       path: '/modules'
       fullPath: '/o/$orgSlug/w/$wsSlug/modules'
       preLoaderRoute: typeof AuthenticatedOOrgSlugWWsSlugModulesRouteImport
+      parentRoute: typeof AuthenticatedOOrgSlugWWsSlugRoute
+    }
+    '/_authenticated/o/$orgSlug/w/$wsSlug/settings': {
+      id: '/_authenticated/o/$orgSlug/w/$wsSlug/settings'
+      path: '/settings'
+      fullPath: '/o/$orgSlug/w/$wsSlug/settings'
+      preLoaderRoute: typeof AuthenticatedOOrgSlugWWsSlugSettingsRouteImport
       parentRoute: typeof AuthenticatedOOrgSlugWWsSlugRoute
     }
   }
@@ -757,6 +776,7 @@ const AuthenticatedOOrgSlugWWsSlugRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedDeskRoute: typeof AuthenticatedDeskRoute
   AuthenticatedFieldRoute: typeof AuthenticatedFieldRoute
   AuthenticatedHjemRoute: typeof AuthenticatedHjemRouteWithChildren
   AuthenticatedKnowledgeRoute: typeof AuthenticatedKnowledgeRoute
@@ -776,6 +796,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedDeskRoute: AuthenticatedDeskRoute,
   AuthenticatedFieldRoute: AuthenticatedFieldRoute,
   AuthenticatedHjemRoute: AuthenticatedHjemRouteWithChildren,
   AuthenticatedKnowledgeRoute: AuthenticatedKnowledgeRoute,
@@ -818,13 +839,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronsLeft, ChevronsRight, Home, UserRound, Users } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LayoutDashboard, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -16,8 +16,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+/** Desktop sidebar — Desk is primary. Mobile capture Hjem lives in bottom nav only. */
 export const PLATFORM_NAV_ITEMS = [
-  { to: "/hjem" as const, label: "Hjem", icon: Home, exact: true },
+  { to: "/desk" as const, label: "Desk", icon: LayoutDashboard, exact: true },
   { to: "/kontakter" as const, label: "Kontakter", icon: Users, exact: false },
   { to: "/profil" as const, label: "Profil", icon: UserRound, exact: false },
 ] as const;
@@ -31,7 +32,7 @@ export function PlatformSideNav() {
     <Sidebar collapsible="icon" variant="sidebar" className="border-r border-border">
       <SidebarHeader className="border-b border-border/60 px-3 py-4">
         <Link
-          to="/hjem"
+          to="/desk"
           className={cn(
             "flex items-center gap-2 overflow-hidden rounded-lg px-1 py-1 font-heading text-sm font-semibold tracking-tight text-foreground",
             collapsed && "justify-center",

@@ -1,29 +1,32 @@
 import { getAuthenticatedHomeTarget } from "@/lib/last-workspace";
 import { clearPasswordRecoveryPending } from "@/lib/auth-recovery-early";
+import { getLoginSurfaceTarget } from "@/lib/surface";
 
 type NavigateFn = (opts: {
-  to: "/app" | "/hjem" | "/mission" | "/o/$orgSlug/w/$wsSlug";
+  to: "/app" | "/hjem" | "/desk" | "/mission" | "/o/$orgSlug/w/$wsSlug";
   params?: { orgSlug: string; wsSlug: string };
   replace?: boolean;
 }) => unknown | Promise<unknown>;
 
 /**
- * After login land on Hjem — capture-first mobile shell.
+ * After login: desktop → /desk (work zone), mobile → /hjem (capture CTAs).
  * Mission / Felt / Innboks remain under Profil.
  */
 export async function redirectAfterLogin(navigate?: NavigateFn): Promise<void> {
   clearPasswordRecoveryPending();
 
+  const to = getLoginSurfaceTarget();
+
   if (navigate) {
     try {
-      await Promise.resolve(navigate({ to: "/hjem", replace: true }));
+      await Promise.resolve(navigate({ to, replace: true }));
       return;
     } catch {
       /* fall through */
     }
   }
 
-  window.location.assign("/hjem");
+  window.location.assign(to);
 }
 
 /** Optional: resume last workspace only when caller has validated it. */
