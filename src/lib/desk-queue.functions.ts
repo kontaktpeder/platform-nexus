@@ -38,10 +38,15 @@ function sourceLabel(source: DeskQueueSource): string {
   }
 }
 
+function isDraftSignal(signal: MissionSignal): boolean {
+  return signal.tags.includes("draft") || signal.meta?.is_draft === true;
+}
+
 function rank(signal: MissionSignal): number {
   if (signal.tags.includes("unpaid_invoice")) return 100;
   if (signal.tags.includes("invoice_action")) return 95;
   if (signal.source === "finance") return 90;
+  if (isDraftSignal(signal)) return 72;
   if (signal.tags.includes("unread")) return 70;
   if (signal.source === "slack") return 55;
   if (signal.source === "work") return 50;
@@ -50,9 +55,25 @@ function rank(signal: MissionSignal): number {
 
 function toItem(signal: MissionSignal): DeskQueueItem {
   const source = signal.source as DeskQueueSource;
+  const draft = isDraftSignal(signal);
+  const subject = signal.subject.trim() || "(uten emne)";
+  if (draft) {
+    return {
+      id: signal.id,
+      kind: "draft",
+      title: "Fortsett der du slapp",
+      subtitle: [subject, signal.snippet].filter(Boolean).join(" · ").slice(0, 160) || null,
+      source,
+      sourceLabel: "Utkast",
+      href: signal.href,
+      sourceIds: [signal.id],
+      occurredAt: signal.occurred_at,
+    };
+  }
   return {
     id: signal.id,
-    title: signal.subject.trim() || "(uten emne)",
+    kind: source === "gmail" ? "mail" : "signal",
+    title: subject,
     subtitle: [signal.from, signal.snippet].filter(Boolean).join(" · ").slice(0, 160) || null,
     source,
     sourceLabel: sourceLabel(source),

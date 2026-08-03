@@ -32,6 +32,7 @@ export function gmailToSignal(g: GmailRecentSignal): MissionSignal {
       to: g.to,
       is_unread: g.isUnread,
       is_sent: g.isSent,
+      is_draft: g.isDraft,
       thread_id: g.threadId,
     },
   };

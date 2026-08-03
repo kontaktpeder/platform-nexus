@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Check,
   Clock3,
   ExternalLink,
   Loader2,
+  Play,
   RefreshCw,
   Trash2,
 } from "lucide-react";
@@ -21,38 +22,47 @@ import { cn } from "@/lib/utils";
 
 const VISIBLE = 3;
 
-const SOURCE_TONE: Record<DeskQueueSource, string> = {
+const SOURCE_TONE: Record<DeskQueueSource | "draft", string> = {
   gmail: "bg-sky-500/15 text-sky-900 dark:text-sky-100",
   finance: "bg-emerald-500/15 text-emerald-900 dark:text-emerald-100",
   work: "bg-violet-500/15 text-violet-900 dark:text-violet-100",
   slack: "bg-amber-500/15 text-amber-950 dark:text-amber-100",
+  draft: "bg-rose-500/15 text-rose-900 dark:text-rose-100",
 };
 
 function QueueCard({
   item,
   busy,
-  onDone,
+  onPrimary,
   onSnooze,
   onRemove,
 }: {
   item: DeskQueueItem;
   busy: boolean;
-  onDone: () => void;
+  onPrimary: () => void;
   onSnooze: () => void;
   onRemove: () => void;
 }) {
+  const isDraft = item.kind === "draft";
+  const tone = isDraft ? SOURCE_TONE.draft : SOURCE_TONE[item.source];
+
   return (
-    <li className="rounded-2xl border border-border/70 bg-card/95 p-3.5 shadow-sm">
+    <li
+      className={cn(
+        "rounded-2xl border bg-card/95 p-3.5 shadow-sm",
+        isDraft ? "border-rose-300/50" : "border-border/70",
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            SOURCE_TONE[item.source],
+            tone,
           )}
         >
           {item.sourceLabel}
         </span>
-        {item.href && (
+        {item.href && !isDraft && (
           <a
             href={item.href}
             target="_blank"
@@ -74,10 +84,16 @@ function QueueCard({
           size="sm"
           className="h-9 gap-1 rounded-xl text-xs"
           disabled={busy}
-          onClick={onDone}
+          onClick={onPrimary}
         >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          Ferdig
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : isDraft ? (
+            <Play className="h-3.5 w-3.5" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
+          {isDraft ? "Fortsett" : "Ferdig"}
         </Button>
         <Button
           type="button"
@@ -99,7 +115,7 @@ function QueueCard({
           onClick={onRemove}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Fjern
+          {isDraft ? "Slett" : "Fjern"}
         </Button>
       </div>
     </li>
@@ -132,6 +148,7 @@ export function DeskQueuePanel({ className }: { className?: string }) {
   async function act(
     item: DeskQueueItem,
     action: "done" | "snoozed" | "ignored",
+    gmailSideEffect?: "mark_read" | "trash",
   ) {
     setHiddenIds((prev) => new Set(prev).add(item.id));
     setBusyId(item.id);
@@ -142,29 +159,41 @@ export function DeskQueuePanel({ className }: { className?: string }) {
           action,
           snoozePreset: action === "snoozed" ? "tomorrow" : undefined,
           sourceIds: item.sourceIds,
+          gmailSideEffect,
         },
       });
       const label =
-        action === "done" ? "Ferdig" : action === "snoozed" ? "Utsatt til i morgen" : "Fjernet";
+        action === "done"
+          ? item.kind === "draft"
+            ? "Åpnet utkast"
+            : "Ferdig — markert lest"
+          : action === "snoozed"
+            ? "Utsatt til i morgen"
+            : item.kind === "draft"
+              ? "Utkast slettet"
+              : "Fjernet";
       toast(label, {
         duration: 6000,
-        action: {
-          label: "Angre",
-          onClick: async () => {
-            try {
-              await runUndo({ data: { itemId: item.id } });
-              setHiddenIds((prev) => {
-                const next = new Set(prev);
-                next.delete(item.id);
-                return next;
-              });
-              void qc.invalidateQueries({ queryKey: ["desk-queue"] });
-              toast("Gjenopprettet");
-            } catch {
-              toast.error("Kunne ikke angre");
-            }
-          },
-        },
+        action:
+          action === "ignored" && item.kind === "draft"
+            ? undefined
+            : {
+                label: "Angre",
+                onClick: async () => {
+                  try {
+                    await runUndo({ data: { itemId: item.id } });
+                    setHiddenIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(item.id);
+                      return next;
+                    });
+                    void qc.invalidateQueries({ queryKey: ["desk-queue"] });
+                    toast("Gjenopprettet");
+                  } catch {
+                    toast.error("Kunne ikke angre");
+                  }
+                },
+              },
       });
       void qc.invalidateQueries({ queryKey: ["desk-queue"] });
       void qc.invalidateQueries({ queryKey: ["morning-mission"] });
@@ -178,6 +207,18 @@ export function DeskQueuePanel({ className }: { className?: string }) {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function onPrimary(item: DeskQueueItem) {
+    if (item.kind === "draft") {
+      if (item.href) {
+        window.open(item.href, "_blank", "noopener,noreferrer");
+      }
+      // Stay in queue until sent/deleted — just open. Soft-snooze locally? Keep visible.
+      // User asked continue — open draft; don't dismiss from queue.
+      return;
+    }
+    void act(item, "done", item.kind === "mail" ? "mark_read" : undefined);
   }
 
   return (
@@ -233,9 +274,15 @@ export function DeskQueuePanel({ className }: { className?: string }) {
                 key={item.id}
                 item={item}
                 busy={busyId === item.id}
-                onDone={() => void act(item, "done")}
+                onPrimary={() => onPrimary(item)}
                 onSnooze={() => void act(item, "snoozed")}
-                onRemove={() => void act(item, "ignored")}
+                onRemove={() =>
+                  void act(
+                    item,
+                    "ignored",
+                    item.kind === "draft" ? "trash" : undefined,
+                  )
+                }
               />
             ))}
           </ul>

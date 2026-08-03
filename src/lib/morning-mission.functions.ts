@@ -267,6 +267,8 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
         action: z.enum(["done", "snoozed", "waiting", "ignored"]),
         snoozePreset: z.enum(["later_today", "tomorrow", "next_week"]).optional(),
         sourceIds: z.array(z.string()).optional(),
+        /** Desk Gmail effects — mark_read on inbox Ferdig; trash on draft Slett. */
+        gmailSideEffect: z.enum(["mark_read", "trash"]).optional(),
         hint: z
           .object({
             match_kind: z.enum([
@@ -326,6 +328,39 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
         .delete()
         .eq("user_id", context.userId)
         .eq("brief_date", todayOsloISO());
+    }
+
+    const gmailIds = new Set<string>();
+    for (const raw of [data.itemId, ...(data.sourceIds ?? [])]) {
+      const normalized = raw.replace(/^brief:/, "");
+      if (normalized.startsWith("gmail:")) gmailIds.add(normalized);
+    }
+    const effect =
+      data.gmailSideEffect ??
+      (data.action === "done" && gmailIds.size > 0 ? ("mark_read" as const) : undefined);
+    if (effect && gmailIds.size > 0) {
+      try {
+        const {
+          gmailMessageIdFromSignalId,
+          markGmailMessageRead,
+          trashGmailMessage,
+        } = await import("@/lib/inbox/gmail.server");
+        for (const signalId of gmailIds) {
+          const messageId = gmailMessageIdFromSignalId(signalId);
+          if (!messageId) continue;
+          if (effect === "mark_read") {
+            await markGmailMessageRead(messageId).catch((err) => {
+              console.warn("[mission] mark Gmail read failed", messageId, err);
+            });
+          } else if (effect === "trash") {
+            await trashGmailMessage(messageId).catch((err) => {
+              console.warn("[mission] trash Gmail failed", messageId, err);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[mission] Gmail side effect skipped", err);
+      }
     }
 
     return { ok: true as const, learned: !!data.hint };

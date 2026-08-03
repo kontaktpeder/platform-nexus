@@ -200,6 +200,24 @@ export async function archiveGmailMessage(messageId: string): Promise<void> {
   await gmailModify(messageId, { removeLabelIds: ["INBOX", "UNREAD"] });
 }
 
+/** Move a message (incl. draft) to Trash. */
+export async function trashGmailMessage(messageId: string): Promise<void> {
+  const { apiKey, lovableKey } = gmailKeys();
+  await gmailPost(
+    `/users/me/messages/${encodeURIComponent(messageId)}/trash`,
+    apiKey,
+    lovableKey,
+    {},
+  );
+}
+
+/** Strip `gmail:` prefix from Desk/Mission signal ids. */
+export function gmailMessageIdFromSignalId(signalId: string): string | null {
+  const raw = signalId.startsWith("gmail:") ? signalId.slice("gmail:".length) : signalId;
+  const id = raw.trim();
+  return id.length > 0 ? id : null;
+}
+
 // ─── Reply-draft support ────────────────────────────────────────────────────
 
 export type GmailReplyContext = {

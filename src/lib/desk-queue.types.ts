@@ -1,7 +1,10 @@
 export type DeskQueueSource = "gmail" | "finance" | "work" | "slack";
 
+export type DeskQueueKind = "mail" | "draft" | "signal";
+
 export type DeskQueueItem = {
   id: string;
+  kind: DeskQueueKind;
   title: string;
   subtitle: string | null;
   source: DeskQueueSource;

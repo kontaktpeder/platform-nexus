@@ -25,6 +25,7 @@ export type GmailRecentSignal = {
   occurredAt: string | null;
   isUnread: boolean;
   isSent: boolean;
+  isDraft: boolean;
   href: string;
   tags: string[];
 };
@@ -117,8 +118,58 @@ function detectTags(input: {
 
   if (input.labels.includes("SENT")) tags.push("sent");
   if (input.labels.includes("UNREAD")) tags.push("unread");
+  if (input.labels.includes("DRAFT")) tags.push("draft");
 
   return tags;
+}
+
+function metaToSignal(meta: MessageMeta): GmailRecentSignal {
+  const headers = meta.payload?.headers;
+  const labels = meta.labelIds ?? [];
+  const subject = headerValue(headers, "Subject") || "(uten emne)";
+  const from = headerValue(headers, "From") || "Ukjent avsender";
+  const to = headerValue(headers, "To") || "";
+  const parsed = parseEmailFrom(from);
+  const threadId = meta.threadId ?? meta.id;
+  const occurredAt = meta.internalDate
+    ? new Date(Number(meta.internalDate)).toISOString()
+    : null;
+  const isDraft = labels.includes("DRAFT");
+
+  return {
+    id: `gmail:${meta.id}`,
+    threadId,
+    subject: subject.slice(0, 200),
+    from: (parsed.name || from).slice(0, 120),
+    fromEmail: parsed.email,
+    to: to.slice(0, 160),
+    snippet: (meta.snippet ?? "").slice(0, 300),
+    occurredAt,
+    isUnread: labels.includes("UNREAD"),
+    isSent: labels.includes("SENT"),
+    isDraft,
+    href: isDraft
+      ? `https://mail.google.com/mail/u/0/#drafts/${meta.id}`
+      : `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
+    tags: detectTags({ from, fromEmail: parsed.email, subject, headers, labels }),
+  };
+}
+
+async function fetchGmailMessageMetas(
+  ids: string[],
+  apiKey: string,
+  lovableKey: string,
+): Promise<MessageMeta[]> {
+  const metas = await Promise.all(
+    ids.map((id) =>
+      gmailFetch<MessageMeta>(
+        `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Auto-Submitted&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence&metadataHeaders=Message-Id`,
+        apiKey,
+        lovableKey,
+      ).catch(() => null),
+    ),
+  );
+  return metas.filter((m): m is MessageMeta => !!m);
 }
 
 export async function fetchRecentGmailSignals(opts?: {
@@ -134,58 +185,45 @@ export async function fetchRecentGmailSignals(opts?: {
   const days = Math.max(1, Math.ceil(hours / 24));
 
   try {
-    const q = encodeURIComponent(`newer_than:${days}d`);
-    const list = await gmailFetch<ListResponse>(
-      `/users/me/messages?maxResults=${max}&q=${q}`,
-      apiKey,
-      lovableKey,
-    );
-    const ids = (list.messages ?? []).map((m) => m.id);
+    const inboxQ = encodeURIComponent(`newer_than:${days}d -in:drafts`);
+    const draftsQ = encodeURIComponent("in:drafts");
+    const draftMax = Math.min(15, max);
+
+    const [inboxList, draftsList] = await Promise.all([
+      gmailFetch<ListResponse>(
+        `/users/me/messages?maxResults=${max}&q=${inboxQ}`,
+        apiKey,
+        lovableKey,
+      ),
+      gmailFetch<ListResponse>(
+        `/users/me/messages?maxResults=${draftMax}&q=${draftsQ}`,
+        apiKey,
+        lovableKey,
+      ).catch(() => ({ messages: [] as { id: string; threadId: string }[] })),
+    ]);
+
+    const idSet = new Set<string>();
+    const ids: string[] = [];
+    for (const m of [...(inboxList.messages ?? []), ...(draftsList.messages ?? [])]) {
+      if (idSet.has(m.id)) continue;
+      idSet.add(m.id);
+      ids.push(m.id);
+    }
     if (ids.length === 0) return [];
 
-    const metas = await Promise.all(
-      ids.map((id) =>
-        gmailFetch<MessageMeta>(
-          `/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Auto-Submitted&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence&metadataHeaders=Message-Id`,
-          apiKey,
-          lovableKey,
-        ).catch(() => null),
-      ),
-    );
-
+    const metas = await fetchGmailMessageMetas(ids, apiKey, lovableKey);
     const byThread = new Map<string, GmailRecentSignal>();
 
     for (const meta of metas) {
-      if (!meta) continue;
-      const headers = meta.payload?.headers;
-      const labels = meta.labelIds ?? [];
-      const subject = headerValue(headers, "Subject") || "(uten emne)";
-      const from = headerValue(headers, "From") || "Ukjent avsender";
-      const to = headerValue(headers, "To") || "";
-      const parsed = parseEmailFrom(from);
-      const threadId = meta.threadId ?? meta.id;
-      const occurredAt = meta.internalDate
-        ? new Date(Number(meta.internalDate)).toISOString()
-        : null;
-
-      const signal: GmailRecentSignal = {
-        id: `gmail:${meta.id}`,
-        threadId,
-        subject: subject.slice(0, 200),
-        from: (parsed.name || from).slice(0, 120),
-        fromEmail: parsed.email,
-        to: to.slice(0, 160),
-        snippet: (meta.snippet ?? "").slice(0, 300),
-        occurredAt,
-        isUnread: labels.includes("UNREAD"),
-        isSent: labels.includes("SENT"),
-        href: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
-        tags: detectTags({ from, fromEmail: parsed.email, subject, headers, labels }),
-      };
-
-      const prev = byThread.get(threadId);
+      const signal = metaToSignal(meta);
+      // Drafts: keep one card per message id (not collapsed by thread).
+      if (signal.isDraft) {
+        byThread.set(signal.id, signal);
+        continue;
+      }
+      const prev = byThread.get(signal.threadId);
       if (!prev || (signal.occurredAt ?? "") > (prev.occurredAt ?? "")) {
-        byThread.set(threadId, signal);
+        byThread.set(signal.threadId, signal);
       }
     }
 
