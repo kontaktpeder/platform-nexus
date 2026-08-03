@@ -13,12 +13,15 @@ export function PlatformShell({
   className,
   contentClassName,
   hideMobileNav = false,
+  lockMainScroll = false,
 }: {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
   /** Full-screen capture flows hide bottom tabs on mobile. */
   hideMobileNav?: boolean;
+  /** Let the page manage its own column scrolls (e.g. kontakter master–detail). */
+  lockMainScroll?: boolean;
 }) {
   return (
     <SidebarProvider defaultOpen>
@@ -28,7 +31,12 @@ export function PlatformShell({
         </div>
         <SidebarInset className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className={cn("flex h-full min-h-0 flex-col", contentClassName)}>
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 flex-col overscroll-contain",
+                lockMainScroll ? "overflow-hidden" : "overflow-y-auto",
+              )}
+            >
               {children}
             </div>
             {!hideMobileNav && (

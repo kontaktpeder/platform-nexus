@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, ChevronRight, Loader2, Search } from "lucide-react";
@@ -23,6 +23,7 @@ import {
 import { createFieldPlace } from "@/lib/field.functions";
 import { useResolvedLastWorkspace } from "@/lib/last-workspace.hooks";
 import type { OwnerContext } from "@/lib/knowledge/types";
+import { cn } from "@/lib/utils";
 
 const ORG_FILTER_KEY = "mission:kontakterOrgFilter";
 const LEGACY_ORG_FILTER_KEY = "mission:kunderOrgFilter";
@@ -65,13 +66,19 @@ function writeStoredOrgFilter(filter: CustomerOrgFilter) {
   }
 }
 
-/** Contact catalog list — stays mounted under detail sheet. */
+/** Contact catalog list — stays mounted under detail sheet / desktop pane. */
 export function KontakterList() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const fetchList = useServerFn(listCustomers);
   const runCreate = useServerFn(createFieldPlace);
   const lastWs = useResolvedLastWorkspace();
+  const selectedEntityId = useRouterState({
+    select: (s) => {
+      const m = s.location.pathname.match(/^\/kontakter\/([^/]+)/);
+      return m?.[1] ?? null;
+    },
+  });
   const [q, setQ] = useState("");
   const [orgFilter, setOrgFilter] = useState<CustomerOrgFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -155,7 +162,7 @@ export function KontakterList() {
         }
       />
 
-      <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-6 pt-3 md:max-w-3xl">
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 pb-6 pt-3 md:mx-0 md:max-w-none md:px-3">
         <div className="mb-3 space-y-2">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -256,58 +263,72 @@ export function KontakterList() {
           </div>
         )}
 
-        <ul className="space-y-2">
-          {filtered.map((c) => (
-            <li key={c.entityId}>
-              <Link
-                to="/kontakter/$entityId"
-                params={{ entityId: c.entityId }}
-                className="flex min-h-[4.25rem] items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3 active:bg-muted/60"
-              >
-                <RelationAvatar
-                  name={c.name}
-                  entityType={c.entityType}
-                  imageUrl={c.imageUrl}
-                  size="md"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-base font-semibold leading-tight">{c.name}</p>
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${warmthDot(c.warmth)}`}
-                      title={CUSTOMER_WARMTH_LABEL[c.warmth]}
-                      aria-label={CUSTOMER_WARMTH_LABEL[c.warmth]}
-                    />
-                  </div>
-                  {c.companyName ? (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.companyName}</p>
-                  ) : orgFilter === "all" && c.ownerContext !== "unknown" ? (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {CUSTOMER_ORG_FILTER_LABEL[c.ownerContext]}
-                    </p>
-                  ) : null}
-                  {c.followUp ? (
-                    <p
-                      className={`mt-1 truncate text-sm ${c.followUp.overdue ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
-                    >
-                      {c.followUp.overdue ? "Følg opp " : "Neste "}
-                      {c.followUp.dueLabel}
-                      {c.followUp.action ? ` · ${c.followUp.action}` : ""}
-                    </p>
-                  ) : c.summary ? (
-                    <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{c.summary}</p>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground/80">
-                      {c.entityType === "company"
-                        ? `${c.peopleCount} personer · ${c.signalCount} signaler`
-                        : `${c.signalCount} signaler`}
-                    </p>
+        <ul className="space-y-2 md:space-y-1">
+          {filtered.map((c) => {
+            const selected = selectedEntityId === c.entityId;
+            return (
+              <li key={c.entityId}>
+                <Link
+                  to="/kontakter/$entityId"
+                  params={{ entityId: c.entityId }}
+                  className={cn(
+                    "flex min-h-[4.25rem] items-center gap-3 rounded-2xl border px-3.5 py-3 transition-colors active:bg-muted/60",
+                    selected
+                      ? "border-primary/40 bg-primary/10"
+                      : "border-border bg-card hover:bg-muted/40",
+                    "md:min-h-0 md:rounded-xl md:py-2.5",
                   )}
-                </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-              </Link>
-            </li>
-          ))}
+                  aria-current={selected ? "page" : undefined}
+                >
+                  <RelationAvatar
+                    name={c.name}
+                    entityType={c.entityType}
+                    imageUrl={c.imageUrl}
+                    size="md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-base font-semibold leading-tight md:text-sm">
+                        {c.name}
+                      </p>
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${warmthDot(c.warmth)}`}
+                        title={CUSTOMER_WARMTH_LABEL[c.warmth]}
+                        aria-label={CUSTOMER_WARMTH_LABEL[c.warmth]}
+                      />
+                    </div>
+                    {c.companyName ? (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.companyName}</p>
+                    ) : orgFilter === "all" && c.ownerContext !== "unknown" ? (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {CUSTOMER_ORG_FILTER_LABEL[c.ownerContext]}
+                      </p>
+                    ) : null}
+                    {c.followUp ? (
+                      <p
+                        className={`mt-1 truncate text-sm md:text-xs ${c.followUp.overdue ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
+                      >
+                        {c.followUp.overdue ? "Følg opp " : "Neste "}
+                        {c.followUp.dueLabel}
+                        {c.followUp.action ? ` · ${c.followUp.action}` : ""}
+                      </p>
+                    ) : c.summary ? (
+                      <p className="mt-1 line-clamp-1 text-sm text-muted-foreground md:text-xs">
+                        {c.summary}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground/80">
+                        {c.entityType === "company"
+                          ? `${c.peopleCount} personer · ${c.signalCount} signaler`
+                          : `${c.signalCount} signaler`}
+                      </p>
+                    )}
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground md:hidden" />
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </main>
 
