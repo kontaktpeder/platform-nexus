@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
+  Blocks,
   Building2,
   Camera,
   ChevronRight,
@@ -160,6 +161,12 @@ function ProfilPage() {
       label: "Felt (legacy)",
       hint: "Gammel besøkslogg — erstattes av notat",
       icon: MapPin,
+    },
+    {
+      to: "/modules" as const,
+      label: "Moduler",
+      hint: "Koblet, mangler og planlagt",
+      icon: Blocks,
     },
     {
       to: "/app" as const,

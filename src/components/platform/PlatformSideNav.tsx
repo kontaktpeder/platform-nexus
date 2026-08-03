@@ -1,5 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronsLeft, ChevronsRight, LayoutDashboard, UserRound, Users } from "lucide-react";
+import {
+  Blocks,
+  ChevronsLeft,
+  ChevronsRight,
+  LayoutDashboard,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { NexusMark } from "@/components/platform/NexusMark";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +28,7 @@ import {
 export const PLATFORM_NAV_ITEMS = [
   { to: "/desk" as const, label: "Desk", icon: LayoutDashboard, exact: true },
   { to: "/kontakter" as const, label: "Kontakter", icon: Users, exact: false },
+  { to: "/modules" as const, label: "Moduler", icon: Blocks, exact: false },
   { to: "/profil" as const, label: "Profil", icon: UserRound, exact: false },
 ] as const;
 
