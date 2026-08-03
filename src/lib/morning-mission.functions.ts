@@ -127,6 +127,13 @@ async function buildMorningMission(
   });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);
+  const { loadPersonalContextPromptBlock } = await import(
+    "@/lib/personal-context.server"
+  );
+  const personalContextBlock = await loadPersonalContextPromptBlock(
+    supabase,
+    userId,
+  );
   const { forAi, noiseSignals } = prefilterSignals({
     signals: allSignals,
     userEmail,
@@ -143,6 +150,7 @@ async function buildMorningMission(
     userName,
     userEmail,
     hints,
+    personalContextBlock,
     slackStatus,
     contacts: entityIndex.catalog,
   });

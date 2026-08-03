@@ -955,10 +955,16 @@ export const runFortell = createServerFn({ method: "POST" })
       ? `Aktiv økt nå: «${active.projectName}» hos «${active.organizationName}» (startet ${active.startedAt}). Bruk proposeStopWorkSession når brukeren vil avslutte.`
       : "Ingen aktiv arbeidsøkt i Nexus akkurat nå.";
 
+    const { loadPersonalContextPromptBlock } = await import(
+      "@/lib/personal-context.server"
+    );
+    const personalBlock = await loadPersonalContextPromptBlock(supabase, userId);
+
     const system = [
       "Du er Fortell — Peders desk-assistent i Nexus.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
       sessionLine,
+      personalBlock ?? "",
       "Du har samtalehistorikk: les tidligere meldinger og hold kontekst (oppfølgingsspørsmål, tidligere beslutninger).",
       "Du har KUN disse verktøyene:",
       "1) readContact — les person/selskap i Nexus",

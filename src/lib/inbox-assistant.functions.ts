@@ -705,9 +705,15 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       }),
     };
 
+    const { loadPersonalContextPromptBlock } = await import(
+      "@/lib/personal-context.server"
+    );
+    const personalBlock = await loadPersonalContextPromptBlock(supabase, userId);
+
     const system = [
       "Du er Nexus-assistenten til Peder. Du hjelper ham med innboks, nettverk, Brreg-oppslag og konkrete neste steg i arbeid/salg.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
+      personalBlock ?? "",
       "Moduser:",
       "A) Innboks/oppgave: søk Gmail → les → konkluder → evt. createEmailDraft.",
       "B) Analyse/råd om sendte mailer: in:sent / from:me.",

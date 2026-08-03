@@ -201,6 +201,7 @@ export async function generateMorningMissionAi(input: {
   userName: string | null;
   userEmail?: string | null;
   hints?: import("@/lib/mission-hints.types").MissionHint[];
+  personalContextBlock?: string | null;
   slackStatus?: SlackMissionStatus;
   contacts?: Array<{
     id: string;
@@ -239,6 +240,7 @@ export async function generateMorningMissionAi(input: {
 
   const system = [
     `Du er ${input.userName ?? "brukerens"} daglige arbeidsassistent på norsk.`,
+    input.personalContextBlock?.trim() || "",
     "RELASJONSDREVET BRIEF (viktigst):",
     "Hvert kort eies av en person eller et selskap — ikke av Gmail/Slack/Finance.",
     "Spørsmål du svarer på: Hvem trenger noe nå, hvorfor, og hva er neste handling?",

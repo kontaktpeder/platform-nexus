@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
 import { MailSignaturesManager } from "@/components/platform/mail/MailSignaturesManager";
+import { PersonalContextManager } from "@/components/platform/profil/PersonalContextManager";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -258,6 +259,8 @@ function ProfilPage() {
             </>
           )}
         </section>
+
+        <PersonalContextManager />
 
         <MailSignaturesManager />
 
