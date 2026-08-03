@@ -84,6 +84,8 @@ export function FortellChat() {
   const [workStarted, setWorkStarted] = useState(false);
   const [workStopNote, setWorkStopNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [startComment, setStartComment] = useState("");
+  const [stopComment, setStopComment] = useState("");
   const [contactApplied, setContactApplied] = useState(false);
   const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
   const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
@@ -136,6 +138,8 @@ export function FortellChat() {
       setAppliedRelations({});
       setApplyingRelationKey(null);
       setInstruction("");
+      setStartComment(res.workProposal?.comment?.trim() || "");
+      setStopComment(readWorkSession()?.comment?.trim() || "");
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -243,10 +247,11 @@ export function FortellChat() {
         rateId: proposal.rateId,
         rateName: proposal.rateName,
         hourlyRate: proposal.hourlyRate,
-        comment: proposal.comment,
+        comment: startComment.trim() || proposal.comment,
         platformOrgSlug: proposal.platformOrgSlug,
       });
       setActiveSession(session);
+      setStopComment(startComment.trim() || proposal.comment?.trim() || "");
       setWorkStarted(true);
       toast.success(`Økt startet · ${proposal.projectName}`);
     } catch (e) {
@@ -275,7 +280,7 @@ export function FortellChat() {
     }
     setStopping(true);
     const pause = Math.max(0, Math.min(24 * 60, breakMinutes));
-    const entry = stopWorkSession(pause);
+    const entry = stopWorkSession(pause, stopComment);
     setActiveSession(null);
     if (!entry) {
       setStopping(false);
@@ -681,9 +686,18 @@ export function FortellChat() {
                 {proposal.rateName ? ` · ${proposal.rateName}` : ""}
                 {proposal.hourlyRate != null ? ` (${proposal.hourlyRate} kr)` : ""}
               </p>
-              {proposal.comment && (
-                <p className="text-xs text-muted-foreground">{proposal.comment}</p>
-              )}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Kommentar til Work
+                </p>
+                <Textarea
+                  value={startComment}
+                  onChange={(e) => setStartComment(e.target.value.slice(0, 500))}
+                  placeholder="Hva jobber du med?"
+                  rows={3}
+                  className="rounded-xl bg-background text-sm"
+                />
+              </div>
               <Button
                 type="button"
                 className="h-11 gap-2 rounded-xl"
@@ -714,6 +728,19 @@ export function FortellChat() {
                     : ""}
                 </p>
               )}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Kommentar til Work
+                </p>
+                <Textarea
+                  value={stopComment}
+                  onChange={(e) => setStopComment(e.target.value.slice(0, 500))}
+                  placeholder="Hva gjorde du? (synkes til Work)"
+                  rows={3}
+                  disabled={stopping || !activeSession}
+                  className="rounded-xl bg-background text-sm"
+                />
+              </div>
               <Button
                 type="button"
                 className="h-11 gap-2 rounded-xl"

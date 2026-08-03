@@ -307,7 +307,10 @@ export function startWorkSession(input: {
   return session;
 }
 
-export function stopWorkSession(breakMinutes = 0): PendingTimeEntry | null {
+export function stopWorkSession(
+  breakMinutes = 0,
+  commentOverride?: string | null,
+): PendingTimeEntry | null {
   const current = readWorkSession();
   if (!current) return null;
   const endedAt = new Date().toISOString();
@@ -317,6 +320,10 @@ export function stopWorkSession(breakMinutes = 0): PendingTimeEntry | null {
     1,
     Math.round((Date.parse(endedAt) - Date.parse(current.startedAt)) / 60_000) - breakMinutes,
   );
+  const comment =
+    commentOverride !== undefined
+      ? commentOverride?.trim() || null
+      : current.comment;
   const entry: PendingTimeEntry = {
     id: crypto.randomUUID(),
     organizationId: current.organizationId,
@@ -331,7 +338,7 @@ export function stopWorkSession(breakMinutes = 0): PendingTimeEntry | null {
     end_time: end.time.length === 8 ? end.time : `${end.time}:00`.slice(0, 8),
     break_minutes: breakMinutes,
     total_minutes: totalMinutes,
-    comment: current.comment,
+    comment,
     source: "timer",
     started_at: current.startedAt,
     ended_at: endedAt,

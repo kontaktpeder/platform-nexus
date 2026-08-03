@@ -160,7 +160,7 @@ function HjemOktPage() {
 
   async function onStop() {
     const pause = Math.max(0, Math.min(24 * 60, Number.parseInt(breakMin, 10) || 0));
-    const entry = stopWorkSession(pause);
+    const entry = stopWorkSession(pause, comment);
     setSession(null);
     if (!entry) return;
     setPending(readPendingEntries().slice(0, 8));
@@ -286,6 +286,20 @@ function HjemOktPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label htmlFor="stop-comment" className="mb-1 block text-xs font-medium text-muted-foreground">
+                Kommentar til Work
+              </label>
+              <Textarea
+                id="stop-comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value.slice(0, 500))}
+                placeholder="Hva gjorde du?"
+                rows={3}
+                disabled={syncing}
+                className="rounded-xl"
+              />
             </div>
             <Button
               type="button"
