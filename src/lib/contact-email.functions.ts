@@ -29,7 +29,7 @@ export const generateContactEmailDraft = createServerFn({ method: "POST" })
       "You receive: recipient name, the user's instruction describing what the email should say, and optionally a subject the user already wrote.",
       "Write in the same language as the instruction (usually Norwegian).",
       "Body: 2–8 sentences, plain text. A simple greeting with the recipient's first name is fine.",
-      "End with a friendly sign-off but do NOT sign a name — leave the signature blank for the user.",
+      "Do NOT include any sign-off (no «Vennlig hilsen», no name) — Nexus appends the user's signature.",
       "Never invent facts, prices, links, dates, or names not present in the input.",
       'Return ONLY valid JSON on the form {"subject": "...", "body": "..."} — no markdown fences, no commentary.',
       "If the user already wrote a subject, keep it unless the instruction asks otherwise.",
@@ -55,12 +55,18 @@ export const generateContactEmailDraft = createServerFn({ method: "POST" })
         typeof parsed.subject === "string" && parsed.subject.trim()
           ? parsed.subject.trim().slice(0, 300)
           : (data.currentSubject ?? "").trim();
-      const body =
-        typeof parsed.body === "string" && parsed.body.trim() ? parsed.body.trim() : cleaned;
+      const { stripTrailingSignOff } = await import("@/lib/mail-compose");
+      const body = stripTrailingSignOff(
+        typeof parsed.body === "string" && parsed.body.trim() ? parsed.body.trim() : cleaned,
+      );
       return { subject, body };
     } catch {
+      const { stripTrailingSignOff } = await import("@/lib/mail-compose");
       // Model ignored the JSON contract — use raw text as body.
-      return { subject: (data.currentSubject ?? "").trim(), body: cleaned };
+      return {
+        subject: (data.currentSubject ?? "").trim(),
+        body: stripTrailingSignOff(cleaned),
+      };
     }
   });
 
@@ -70,6 +76,9 @@ const SendInput = z.object({
   subject: z.string().min(1).max(300),
   body: z.string().min(1).max(20000),
   mode: z.enum(["send", "draft"]),
+  fromEmail: z.string().email().nullable().optional(),
+  fromDisplayName: z.string().max(80).nullable().optional(),
+  signatureBody: z.string().max(4000).nullable().optional(),
 });
 
 export const sendContactEmail = createServerFn({ method: "POST" })
@@ -88,12 +97,18 @@ export const sendContactEmail = createServerFn({ method: "POST" })
     if (!entity) throw new Error("Kontakt ikke funnet");
 
     const gmail = await import("@/lib/inbox/gmail.server");
+    const { appendMailSignature } = await import("@/lib/mail-compose");
+    const body = appendMailSignature(data.body, data.signatureBody);
+    const from = data.fromEmail
+      ? { email: data.fromEmail, displayName: data.fromDisplayName ?? null }
+      : null;
 
     if (data.mode === "draft") {
       const draft = await gmail.createGmailComposeDraft({
         to: data.to,
         subject: data.subject,
-        body: data.body,
+        body,
+        from,
       });
       return {
         ok: true,
@@ -106,7 +121,8 @@ export const sendContactEmail = createServerFn({ method: "POST" })
     const sent = await gmail.sendGmailMessage({
       to: data.to,
       subject: data.subject,
-      body: data.body,
+      body,
+      from,
     });
 
     const now = new Date().toISOString();

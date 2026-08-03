@@ -2,16 +2,21 @@
 // No address yet? Add one; it is stored as a known identity so future inbound
 // mail auto-links to this contact.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ExternalLink, Loader2, Mail, Pencil, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import {
+  MailComposeControls,
+  type MailComposeSelection,
+} from "@/components/platform/mail/MailComposeControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { generateContactEmailDraft, sendContactEmail } from "@/lib/contact-email.functions";
 import { setContactEmail } from "@/lib/customers.functions";
+import { stripTrailingSignOff } from "@/lib/mail-compose";
 
 export function ContactEmailSection({
   entityId,
@@ -32,6 +37,12 @@ export function ContactEmailSection({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [aiInstruction, setAiInstruction] = useState("");
+  const mailSelRef = useRef<MailComposeSelection>({
+    fromEmail: null,
+    fromDisplayName: null,
+    signatureId: null,
+    signatureBody: null,
+  });
 
   const emailMut = useMutation({
     mutationFn: (value: string) => runSetEmail({ data: { entityId, email: value } }),
@@ -55,23 +66,28 @@ export function ContactEmailSection({
       }),
     onSuccess: (res) => {
       if (res.subject) setSubject(res.subject);
-      setBody(res.body);
-      toast.success("Utkast klart — les gjennom før du sender");
+      setBody(stripTrailingSignOff(res.body));
+      toast.success("Utkast klart — velg avsender/signatur før du sender");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const sendMut = useMutation({
-    mutationFn: (mode: "send" | "draft") =>
-      runSend({
+    mutationFn: (mode: "send" | "draft") => {
+      const sel = mailSelRef.current;
+      return runSend({
         data: {
           entityId,
           to: email ?? "",
           subject: subject.trim(),
           body: body.trim(),
           mode,
+          fromEmail: sel.fromEmail,
+          fromDisplayName: sel.fromDisplayName,
+          signatureBody: sel.signatureBody,
         },
-      }),
+      });
+    },
     onSuccess: async (res) => {
       if (res.mode === "send") {
         toast.success(`E-post sendt til ${contactName}`);
@@ -175,7 +191,7 @@ export function ContactEmailSection({
               className="h-11 rounded-xl"
             />
             <Textarea
-              placeholder={`Skriv til ${contactName}…`}
+              placeholder={`Skriv til ${contactName}… (signatur legges på ved send)`}
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={6}
@@ -208,6 +224,13 @@ export function ContactEmailSection({
                 Utkast
               </Button>
             </div>
+
+            <MailComposeControls
+              disabled={sendMut.isPending}
+              onChange={(sel) => {
+                mailSelRef.current = sel;
+              }}
+            />
 
             <div className="flex gap-2">
               <Button

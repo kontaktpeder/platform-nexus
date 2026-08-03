@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { GlobalTopBar } from "@/components/platform/GlobalTopBar";
+import { MailSignaturesManager } from "@/components/platform/mail/MailSignaturesManager";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -257,6 +258,8 @@ function ProfilPage() {
             </>
           )}
         </section>
+
+        <MailSignaturesManager />
 
         <ul className="mt-4 space-y-2">
           {links.map((item) => {

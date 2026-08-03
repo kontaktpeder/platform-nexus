@@ -1,12 +1,16 @@
 // Ask the Nexus assistant to dig through Gmail and contacts, then act.
 // Drafts are previewed/edited/sent in Nexus. Contact suggestions are opt-in.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { Check, ExternalLink, GitMerge, Link2, Loader2, Send, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import {
+  MailComposeControls,
+  type MailComposeSelection,
+} from "@/components/platform/mail/MailComposeControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +25,7 @@ import {
   type SuggestedMerge,
   type SuggestedRelation,
 } from "@/lib/inbox-assistant.functions";
+import { stripTrailingSignOff } from "@/lib/mail-compose";
 
 const PLACEHOLDER =
   "F.eks: Søk Brygg i Storgata Oslo på nett, finn daglig leder og opprett kontakt. " +
@@ -80,6 +85,13 @@ export function InboxAssistantCard({
   const [draftBody, setDraftBody] = useState("");
   const [draftSent, setDraftSent] = useState(false);
   const [gmailDraftUrl, setGmailDraftUrl] = useState<string | null>(null);
+  const [draftSuggestionKey, setDraftSuggestionKey] = useState(0);
+  const mailSelRef = useRef<MailComposeSelection>({
+    fromEmail: null,
+    fromDisplayName: null,
+    signatureId: null,
+    signatureBody: null,
+  });
 
   const mut = useMutation({
     mutationFn: (text: string) =>
@@ -94,8 +106,9 @@ export function InboxAssistantCard({
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
-        setDraftBody(res.draft.body);
-        toast.success("Utkast klart — les gjennom før du sender");
+        setDraftBody(stripTrailingSignOff(res.draft.body));
+        setDraftSuggestionKey((k) => k + 1);
+        toast.success("Utkast klart — velg avsender/signatur før du sender");
       } else {
         setDraftTo("");
         setDraftSubject("");
@@ -176,15 +189,20 @@ export function InboxAssistantCard({
 
 
   const sendMut = useMutation({
-    mutationFn: (mode: "send" | "draft") =>
-      runSendDraft({
+    mutationFn: (mode: "send" | "draft") => {
+      const sel = mailSelRef.current;
+      return runSendDraft({
         data: {
           to: draftTo.trim(),
           subject: draftSubject.trim(),
           body: draftBody.trim(),
           mode,
+          fromEmail: sel.fromEmail,
+          fromDisplayName: sel.fromDisplayName,
+          signatureBody: sel.signatureBody,
         },
-      }),
+      });
+    },
     onSuccess: (res) => {
       if (res.mode === "send") {
         setDraftSent(true);
@@ -316,11 +334,22 @@ export function InboxAssistantCard({
               <Textarea
                 value={draftBody}
                 onChange={(e) => setDraftBody(e.target.value)}
-                placeholder="Melding…"
+                placeholder="Melding… (signatur legges på ved lagre/send)"
                 disabled={draftSent}
                 rows={8}
                 className="rounded-xl bg-background text-base"
               />
+              {!draftSent && (
+                <MailComposeControls
+                  disabled={sendMut.isPending}
+                  suggestedTone={result.draft?.suggestedTone ?? null}
+                  suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
+                  suggestionKey={draftSuggestionKey}
+                  onChange={(sel) => {
+                    mailSelRef.current = sel;
+                  }}
+                />
+              )}
               {!draftSent ? (
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button

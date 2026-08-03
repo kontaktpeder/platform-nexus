@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -13,6 +13,10 @@ import {
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  MailComposeControls,
+  type MailComposeSelection,
+} from "@/components/platform/mail/MailComposeControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +33,7 @@ import {
   applySuggestedRelation,
   sendAssistantDraft,
 } from "@/lib/inbox-assistant.functions";
+import { stripTrailingSignOff } from "@/lib/mail-compose";
 import { getLastWorkspace } from "@/lib/last-workspace";
 import { listConnectedModuleOrgs } from "@/lib/module-orgs.functions";
 import { syncTimeEntryToWork } from "@/lib/work-timer.functions";
@@ -82,6 +87,13 @@ export function FortellChat() {
   const [contactApplied, setContactApplied] = useState(false);
   const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
   const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
+  const [draftSuggestionKey, setDraftSuggestionKey] = useState(0);
+  const mailSelRef = useRef<MailComposeSelection>({
+    fromEmail: null,
+    fromDisplayName: null,
+    signatureId: null,
+    signatureBody: null,
+  });
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
   );
@@ -127,7 +139,8 @@ export function FortellChat() {
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
-        setDraftBody(res.draft.body);
+        setDraftBody(stripTrailingSignOff(res.draft.body));
+        setDraftSuggestionKey((k) => k + 1);
       } else {
         setDraftTo("");
         setDraftSubject("");
@@ -139,15 +152,20 @@ export function FortellChat() {
   });
 
   const sendMut = useMutation({
-    mutationFn: (mode: "send" | "draft") =>
-      sendDraft({
+    mutationFn: (mode: "send" | "draft") => {
+      const sel = mailSelRef.current;
+      return sendDraft({
         data: {
           to: draftTo.trim(),
           subject: draftSubject.trim(),
           body: draftBody.trim(),
           mode,
+          fromEmail: sel.fromEmail,
+          fromDisplayName: sel.fromDisplayName,
+          signatureBody: sel.signatureBody,
         },
-      }),
+      });
+    },
     onSuccess: (res, mode) => {
       setDraftDone(true);
       if (res.mode === "draft" && res.openUrl) {
@@ -743,11 +761,22 @@ export function FortellChat() {
               <Textarea
                 value={draftBody}
                 onChange={(e) => setDraftBody(e.target.value)}
-                placeholder="Melding…"
+                placeholder="Melding… (signatur legges på ved lagre/send)"
                 disabled={draftDone}
                 rows={7}
                 className="rounded-xl bg-background text-base"
               />
+              {!draftDone && (
+                <MailComposeControls
+                  disabled={sendMut.isPending}
+                  suggestedTone={result.draft?.suggestedTone ?? null}
+                  suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
+                  suggestionKey={draftSuggestionKey}
+                  onChange={(sel) => {
+                    mailSelRef.current = sel;
+                  }}
+                />
+              )}
               {!draftDone ? (
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button

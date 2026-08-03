@@ -20,6 +20,8 @@ export type FortellDraft = {
   to: string;
   subject: string;
   body: string;
+  suggestedTone: "casual" | "professional" | null;
+  suggestedFromEmail: string | null;
 };
 
 export type FortellWorkProposal = {
@@ -874,18 +876,30 @@ export const runFortell = createServerFn({ method: "POST" })
 
       proposeEmailDraft: tool({
         description:
-          "Lag e-postutkast. Sender ALDRI automatisk — brukeren forhåndsviser og lagrer/sender i UI. Bruk når brukeren ber om å skrive mail. Oppgi to (e-post), subject og body.",
+          "Lag e-postutkast. Sender ALDRI automatisk — brukeren forhåndsviser og lagrer/sender i UI. Ikke inkluder signatur/«Vennlig hilsen» — Nexus legger på. Foreslå tone (casual/professional) og evt. avsender-e-post.",
         inputSchema: z.object({
           to: z.string().email(),
           subject: z.string().min(1).max(300),
           body: z.string().min(1).max(20000),
+          suggestedTone: z.enum(["casual", "professional"]).nullable().optional(),
+          suggestedFromEmail: z.string().email().nullable().optional(),
         }),
-        execute: async ({ to, subject, body }) => {
-          out.draft = { to, subject, body };
-          steps.push({ label: `Utkast til ${to}`, detail: subject });
+        execute: async ({ to, subject, body, suggestedTone, suggestedFromEmail }) => {
+          const { stripTrailingSignOff } = await import("@/lib/mail-compose");
+          out.draft = {
+            to,
+            subject,
+            body: stripTrailingSignOff(body),
+            suggestedTone: suggestedTone ?? null,
+            suggestedFromEmail: suggestedFromEmail?.toLowerCase() ?? null,
+          };
+          steps.push({
+            label: `Utkast til ${to}`,
+            detail: [subject, suggestedTone].filter(Boolean).join(" · "),
+          });
           return {
             ok: true,
-            note: "Utkastet vises i Nexus. Brukeren lagrer i Gmail eller sender selv.",
+            note: "Utkastet vises i Nexus. Brukeren velger avsender/signatur før lagre/send.",
           };
         },
       }),
@@ -916,7 +930,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Ved daglig leder / eier / «koble X til Y» / handelsnavn↔juridisk: readContact begge → proposeRelation (member_of, owns, related_to, customer_of).",
       "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
-      "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ikke signer med navn.",
+      "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
       "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");

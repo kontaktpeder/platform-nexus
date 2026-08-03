@@ -526,8 +526,67 @@ function encodeHeaderValue(value: string): string {
   return `=?UTF-8?B?${b64}?=`;
 }
 
-function buildComposeRaw(opts: { to: string; subject: string; body: string }): string {
+export type GmailSendAsAlias = {
+  email: string;
+  displayName: string | null;
+  isPrimary: boolean;
+  isDefault: boolean;
+};
+
+/** List Gmail "Send mail as" aliases (accepted / primary). */
+export async function listGmailSendAs(): Promise<GmailSendAsAlias[]> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const json = await gmailFetch<{
+    sendAs?: Array<{
+      sendAsEmail?: string;
+      displayName?: string;
+      isPrimary?: boolean;
+      isDefault?: boolean;
+      verificationStatus?: string;
+    }>;
+  }>(`/users/me/settings/sendAs`, apiKey, lovableKey);
+
+  const rows = (json.sendAs ?? [])
+    .map((s) => {
+      const email = (s.sendAsEmail ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) return null;
+      const status = (s.verificationStatus ?? "accepted").toLowerCase();
+      if (status && status !== "accepted") return null;
+      return {
+        email,
+        displayName: s.displayName?.trim() || null,
+        isPrimary: !!s.isPrimary,
+        isDefault: !!s.isDefault,
+      } satisfies GmailSendAsAlias;
+    })
+    .filter((x): x is GmailSendAsAlias => !!x);
+
+  rows.sort((a, b) => {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+    if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+    return a.email.localeCompare(b.email);
+  });
+  return rows;
+}
+
+function formatFromHeader(from?: { email: string; displayName?: string | null } | null): string | null {
+  const email = from?.email?.trim().toLowerCase();
+  if (!email || !email.includes("@")) return null;
+  const name = from?.displayName?.trim();
+  if (!name) return email;
+  const safeName = name.replace(/[\r\n"]/g, "").slice(0, 80);
+  return `"${safeName}" <${email}>`;
+}
+
+function buildComposeRaw(opts: {
+  to: string;
+  subject: string;
+  body: string;
+  from?: { email: string; displayName?: string | null } | null;
+}): string {
+  const fromHeader = formatFromHeader(opts.from ?? null);
   const lines = [
+    ...(fromHeader ? [`From: ${fromHeader}`] : []),
     `To: ${opts.to}`,
     `Subject: ${encodeHeaderValue(opts.subject)}`,
     'Content-Type: text/plain; charset="UTF-8"',
@@ -543,6 +602,7 @@ export async function sendGmailMessage(opts: {
   to: string;
   subject: string;
   body: string;
+  from?: { email: string; displayName?: string | null } | null;
 }): Promise<SentGmailMessage> {
   const { apiKey, lovableKey } = gmailKeys();
   const raw = buildComposeRaw(opts);
@@ -560,6 +620,7 @@ export async function createGmailComposeDraft(opts: {
   to: string;
   subject: string;
   body: string;
+  from?: { email: string; displayName?: string | null } | null;
 }): Promise<SavedGmailDraft> {
   const { apiKey, lovableKey } = gmailKeys();
   const raw = buildComposeRaw(opts);

@@ -50,6 +50,10 @@ export type AssistantDraft = {
   to: string;
   subject: string;
   body: string;
+  /** Suggested signature tone — user confirms in UI. */
+  suggestedTone: "casual" | "professional" | null;
+  /** Suggested Gmail sendAs address — user confirms in UI. */
+  suggestedFromEmail: string | null;
 };
 
 export type AssistantResult = {
@@ -572,15 +576,27 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
 
       createEmailDraft: tool({
         description:
-          "Lag et e-postutkast som brukeren kan forhåndsvise, redigere og sende i Nexus. Sender ALDRI automatisk. Bruk når oppgaven ber om å skrive/lage en mail og grunnlaget er bekreftet.",
+          "Lag et e-postutkast som brukeren kan forhåndsvise, redigere og sende i Nexus. Sender ALDRI automatisk. Ikke inkluder signatur/«Vennlig hilsen» — Nexus legger på. Foreslå tone (casual/professional) og evt. avsender-e-post hvis kjent.",
         inputSchema: z.object({
           to: z.string().email(),
           subject: z.string().min(1).max(300),
           body: z.string().min(1).max(20000),
+          suggestedTone: z.enum(["casual", "professional"]).nullable().optional(),
+          suggestedFromEmail: z.string().email().nullable().optional(),
         }),
-        execute: async ({ to, subject, body }) => {
-          draft = { to, subject, body };
-          steps.push({ label: `Lagde utkast til ${to}`, detail: subject });
+        execute: async ({ to, subject, body, suggestedTone, suggestedFromEmail }) => {
+          const { stripTrailingSignOff } = await import("@/lib/mail-compose");
+          draft = {
+            to,
+            subject,
+            body: stripTrailingSignOff(body),
+            suggestedTone: suggestedTone ?? null,
+            suggestedFromEmail: suggestedFromEmail?.toLowerCase() ?? null,
+          };
+          steps.push({
+            label: `Lagde utkast til ${to}`,
+            detail: [subject, suggestedTone].filter(Boolean).join(" · "),
+          });
           await addSuggestion({
             name: nameFromEmailLocal(to),
             email: to,
@@ -588,7 +604,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
           });
           return {
             ok: true,
-            note: "Utkastet vises i Nexus for gjennomgang. Brukeren sender selv.",
+            note: "Utkastet vises i Nexus. Brukeren velger avsender/signatur og sender selv.",
           };
         },
       }),
@@ -708,7 +724,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       "2. searchGmail: in:sent/from:me for sendte mailer. Utvid query hvis tomt.",
       "3. Les tråder med readThread før du konkluderer.",
       "4. Råd: (a) funn (b) hvem som ikke svarte (c) 2–4 neste steg. createEmailDraft når det hjelper.",
-      "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta.",
+      "5. createEmailDraft: norsk, 2–10 setninger, ingen oppdiktede fakta, ingen signatur. Foreslå suggestedTone (casual vs professional) og evt. suggestedFromEmail.",
       "6. suggestContact / suggestRelation / suggestMerge — brukeren godkjenner i UI. ALDRI noreply/bank.",
       "7. Oppfinn ALDRI org.nr eller daglig leder — kun fra Brreg/web-verktøy.",
       "KRITISK: Du MÅ alltid skrive et tekstlig sluttsvar på norsk. Si hva du søkte og fant. Ingen markdown-overskrifter.",
@@ -761,16 +777,25 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
         subject: z.string().min(1).max(300),
         body: z.string().min(1).max(20000),
         mode: z.enum(["send", "draft"]),
+        fromEmail: z.string().email().nullable().optional(),
+        fromDisplayName: z.string().max(80).nullable().optional(),
+        signatureBody: z.string().max(4000).nullable().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
     const gmail = await import("@/lib/inbox/gmail.server");
+    const { appendMailSignature } = await import("@/lib/mail-compose");
+    const body = appendMailSignature(data.body, data.signatureBody);
+    const from = data.fromEmail
+      ? { email: data.fromEmail, displayName: data.fromDisplayName ?? null }
+      : null;
     if (data.mode === "draft") {
       const saved = await gmail.createGmailComposeDraft({
         to: data.to,
         subject: data.subject,
-        body: data.body,
+        body,
+        from,
       });
       return {
         ok: true,
@@ -782,7 +807,8 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
     const sent = await gmail.sendGmailMessage({
       to: data.to,
       subject: data.subject,
-      body: data.body,
+      body,
+      from,
     });
     return {
       ok: true,
