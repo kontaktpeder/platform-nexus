@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Clock,
   ExternalLink,
+  FileSignature,
   Link2,
   Loader2,
   Send,
@@ -29,7 +30,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyFortellContactProposal,
+  applyFortellControlAgreement,
   runFortell,
+  type FortellAgreementProposal,
   type FortellChatMessage,
   type FortellContactProposal,
   type FortellRelationProposal,
@@ -75,6 +78,7 @@ export function FortellChat() {
   const navigate = useNavigate();
   const run = useServerFn(runFortell);
   const applyContact = useServerFn(applyFortellContactProposal);
+  const applyAgreement = useServerFn(applyFortellControlAgreement);
   const applyRelation = useServerFn(applySuggestedRelation);
   const sendDraft = useServerFn(sendAssistantDraft);
   const runSync = useServerFn(syncTimeEntryToWork);
@@ -101,6 +105,8 @@ export function FortellChat() {
   const [stopRateId, setStopRateId] = useState("");
   const [stopBreakMin, setStopBreakMin] = useState("0");
   const [contactApplied, setContactApplied] = useState(false);
+  const [agreementApplied, setAgreementApplied] = useState(false);
+  const [agreementOpenUrl, setAgreementOpenUrl] = useState<string | null>(null);
   const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
   const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
   const [draftSuggestionKey, setDraftSuggestionKey] = useState(0);
@@ -149,6 +155,8 @@ export function FortellChat() {
       setWorkStarted(false);
       setWorkStopNote(null);
       setContactApplied(false);
+      setAgreementApplied(false);
+      setAgreementOpenUrl(null);
       setAppliedRelations({});
       setApplyingRelationKey(null);
       setInstruction("");
@@ -225,6 +233,29 @@ export function FortellChat() {
         to: "/kontakter/$entityId",
         params: { entityId: res.entityId },
       });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const agreementMut = useMutation({
+    mutationFn: (p: FortellAgreementProposal) =>
+      applyAgreement({
+        data: {
+          title: p.title,
+          body: p.body,
+          agreementType: p.agreementType,
+          counterpartyName: p.counterpartyName,
+          platformOrgSlug: p.platformOrgSlug,
+          reason: p.reason,
+        },
+      }),
+    onSuccess: (res) => {
+      setAgreementApplied(true);
+      setAgreementOpenUrl(res.openUrl);
+      toast.success(`Sendt til Control: ${res.title}`);
+      if (res.openUrl) {
+        window.open(res.openUrl, "_blank", "noopener,noreferrer");
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -453,6 +484,7 @@ export function FortellChat() {
   const proposal = result?.workProposal ?? null;
   const stopProposal = result?.stopProposal ?? null;
   const contactProposal = result?.contactProposal ?? null;
+  const agreementProposal = result?.agreementProposal ?? null;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-5">
@@ -462,8 +494,8 @@ export function FortellChat() {
           Én inngang · få handlinger
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Mail, Slack, fakturaer, kontakter (inkl. Brreg/nett), relasjoner, start/avslutt økt. Du
-          bekrefter før noe skjer. Samtalen huskes i denne økten.
+          Mail, Slack, fakturaer, kontakter, Work-økt, og avtaleutkast til Control. Du bekrefter
+          før noe skjer — Control eier signering og arkiv.
         </p>
       </header>
 
@@ -493,7 +525,7 @@ export function FortellChat() {
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         placeholder={
-          "F.eks. «Finn Fredrik / Oslo Bowling på nett og fyll kontakt», «Viktige mail?», «Avslutt økt»"
+          "F.eks. «Lag NDA-utkast til Control», «Finn kontakt på nett», «Avslutt økt»"
         }
         rows={5}
         maxLength={2000}
@@ -599,6 +631,58 @@ export function FortellChat() {
                 )}
                 Lagre og åpne kontakt
               </Button>
+            </div>
+          )}
+
+          {agreementProposal && !agreementApplied && (
+            <div className="space-y-3 rounded-2xl border border-primary/25 bg-primary/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                Bekreft avtale til Control Core
+              </p>
+              <p className="text-sm font-medium">{agreementProposal.title}</p>
+              <p className="text-xs text-muted-foreground">
+                {agreementProposal.agreementType}
+                {agreementProposal.counterpartyName
+                  ? ` · ${agreementProposal.counterpartyName}`
+                  : ""}
+                {agreementProposal.reason ? ` · ${agreementProposal.reason}` : ""}
+              </p>
+              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-background p-3 font-sans text-sm leading-relaxed">
+                {agreementProposal.body}
+              </pre>
+              <p className="text-xs text-muted-foreground">
+                Fortell forbereder utkastet. Control eier signering, versjon og arkiv.
+              </p>
+              <Button
+                type="button"
+                className="h-11 gap-2 rounded-xl"
+                disabled={agreementMut.isPending}
+                onClick={() => agreementMut.mutate(agreementProposal)}
+              >
+                {agreementMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileSignature className="h-4 w-4" />
+                )}
+                {agreementMut.isPending ? "Sender…" : "Send utkast til Control"}
+              </Button>
+            </div>
+          )}
+
+          {agreementApplied && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm">
+              <FileSignature className="h-4 w-4 text-primary" />
+              <span>Utkast lagret i Control Core.</span>
+              {agreementOpenUrl && (
+                <a
+                  href={agreementOpenUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  Åpne <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
             </div>
           )}
 

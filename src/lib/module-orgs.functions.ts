@@ -14,7 +14,7 @@ export type ConnectedModuleOrg = {
 export const listConnectedModuleOrgs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ moduleSlug: z.enum(["work", "finance"]) }).parse(input),
+    z.object({ moduleSlug: z.enum(["work", "finance", "control"]) }).parse(input),
   )
   .handler(async ({ data, context }): Promise<{ orgs: ConnectedModuleOrg[] }> => {
     const { supabase, userId } = context;

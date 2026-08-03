@@ -1,6 +1,6 @@
 /**
- * Fortell Nexus — thin desk agent (contact / work start·stop / mail draft).
- * Never auto-starts, stops, or sends — UI confirms actions.
+ * Fortell Nexus — thin desk agent (contact / work / mail / Control handoff).
+ * Never auto-starts, stops, sends, or writes to Control — UI confirms actions.
  */
 
 import { createServerFn } from "@tanstack/react-start";
@@ -110,6 +110,15 @@ export type FortellRelationProposal = {
   toEntityId: string | null;
 };
 
+export type FortellAgreementProposal = {
+  title: string;
+  body: string;
+  agreementType: "shareholder" | "nda" | "employment" | "contractor" | "other";
+  counterpartyName: string | null;
+  platformOrgSlug: string | null;
+  reason: string | null;
+};
+
 export type FortellChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -126,6 +135,7 @@ export type FortellResult = {
   slackHits: FortellSlackHit[];
   contactProposal: FortellContactProposal | null;
   relationProposals: FortellRelationProposal[];
+  agreementProposal: FortellAgreementProposal | null;
 };
 
 const Input = z.object({
@@ -203,6 +213,7 @@ export const runFortell = createServerFn({ method: "POST" })
       slackHits: FortellSlackHit[];
       contactProposal: FortellContactProposal | null;
       relationProposals: FortellRelationProposal[];
+      agreementProposal: FortellAgreementProposal | null;
     } = {
       draft: null,
       workProposal: null,
@@ -212,6 +223,7 @@ export const runFortell = createServerFn({ method: "POST" })
       slackHits: [],
       contactProposal: null,
       relationProposals: [],
+      agreementProposal: null,
     };
 
     const tools = {
@@ -903,6 +915,40 @@ export const runFortell = createServerFn({ method: "POST" })
           };
         },
       }),
+
+      proposeControlAgreement: tool({
+        description:
+          "Forbered kontrakts-/avtaleutkast til Control Core. Lagrer IKKE i Control — brukeren må bekrefte i UI. Control eier signering, versjon og arkiv. Bruk ved aksjonæravtale, NDA, ansettelseskontrakt o.l. Ikke bruk for e-post.",
+        inputSchema: z.object({
+          title: z.string().min(3).max(300),
+          body: z.string().min(20).max(100000),
+          agreementType: z
+            .enum(["shareholder", "nda", "employment", "contractor", "other"])
+            .optional(),
+          counterpartyName: z.string().max(200).nullable().optional(),
+          platformOrgSlug: z.string().max(80).nullable().optional(),
+          reason: z.string().max(300).nullable().optional(),
+        }),
+        execute: async (input) => {
+          out.agreementProposal = {
+            title: input.title.trim(),
+            body: input.body.trim(),
+            agreementType: input.agreementType ?? "other",
+            counterpartyName: input.counterpartyName?.trim() || null,
+            platformOrgSlug:
+              input.platformOrgSlug?.trim() || preferredOrgSlug || null,
+            reason: input.reason?.trim() || null,
+          };
+          steps.push({
+            label: "Foreslo Control-avtale",
+            detail: out.agreementProposal.title,
+          });
+          return {
+            ok: true,
+            note: "Forslag klart — brukeren må bekrefte før det sendes til Control Core.",
+          };
+        },
+      }),
     };
 
     const sessionLine = active
@@ -924,6 +970,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "7) listUnpaidInvoices — ubetalte fakturaer fra Finance",
       "8) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
       "9) proposeEmailDraft — e-postutkast (sender ikke selv)",
+      "10) proposeControlAgreement — avtaleutkast til Control Core (lagrer ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
@@ -931,6 +978,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
+      "- Ved kontrakt/avtale/NDA/aksjonæravtale: proposeControlAgreement. Fortell er INNGANGEN — Control eier signering/versjon/arkiv. Ikke late som Fortell er kontraktsystemet.",
       "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");
@@ -952,9 +1000,12 @@ export const runFortell = createServerFn({ method: "POST" })
 
     const answer = result.text.trim();
     let fallback =
-      "Si hva du trenger: mail, Slack, fakturaer, kontakt, start/avslutt økt, eller mailutkast.";
+      "Si hva du trenger: mail, Slack, fakturaer, kontakt, start/avslutt økt, mailutkast, eller Control-avtale.";
     if (out.draft) {
       fallback = "Utkastet er klart under — les gjennom før du lagrer eller sender.";
+    }
+    if (out.agreementProposal) {
+      fallback = `Avtaleutkast klart for Control: «${out.agreementProposal.title}». Bekreft under for å sende til Control Core.`;
     }
     if (out.workProposal) {
       fallback = `Klar til å starte økt: ${out.workProposal.projectName} hos ${out.workProposal.organizationName}. Bekreft under.`;
@@ -999,6 +1050,65 @@ export const runFortell = createServerFn({ method: "POST" })
       slackHits: out.slackHits,
       contactProposal: out.contactProposal,
       relationProposals: out.relationProposals,
+      agreementProposal: out.agreementProposal,
+    };
+  });
+
+/** Hand off a Fortell agreement draft to Control Core (user confirmed). */
+export const applyFortellControlAgreement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        title: z.string().min(3).max(300),
+        body: z.string().min(20).max(100000),
+        agreementType: z
+          .enum(["shareholder", "nda", "employment", "contractor", "other"])
+          .optional(),
+        counterpartyName: z.string().max(200).nullable().optional(),
+        platformOrgSlug: z.string().max(80).nullable().optional(),
+        reason: z.string().max(300).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const {
+      createControlAgreementDraft,
+      resolveControlConnection,
+    } = await import("@/lib/control/control-api.server");
+
+    const ctx = await resolveControlConnection({
+      supabaseAdmin,
+      userId,
+      orgSlug: data.platformOrgSlug ?? null,
+    });
+    if (!ctx) {
+      throw new Error(
+        "Control Core er ikke koblet. Gå til Moduler og koble Control før du sender avtaler.",
+      );
+    }
+
+    const result = await createControlAgreementDraft(ctx, {
+      title: data.title,
+      body: data.body,
+      agreement_type: data.agreementType ?? "other",
+      counterparty_name: data.counterpartyName ?? null,
+      source_ref: data.reason ?? null,
+      metadata: {
+        prepared_in: "nexus_fortell",
+        platform_org_slug: ctx.orgSlug,
+      },
+    });
+
+    return {
+      ok: true as const,
+      agreementId: result.agreement.id,
+      title: result.agreement.title,
+      status: result.agreement.status,
+      openUrl: result.deep_links?.agreement ?? null,
+      controlOrg: ctx.connection.external_org_name ?? ctx.orgName,
     };
   });
 
