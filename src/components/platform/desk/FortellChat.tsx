@@ -17,6 +17,7 @@ import {
   MailComposeControls,
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
+import { NexusMark } from "@/components/platform/NexusMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -577,9 +578,9 @@ export function FortellChat() {
 
       {!hasChat ? (
         <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-16 pt-10">
-          <div className="mb-10 max-w-lg text-center">
-            <p className="text-sm font-medium text-muted-foreground">Nexus</p>
-            <h1 className="mt-2 font-heading text-4xl font-semibold tracking-tight sm:text-5xl">
+          <div className="mb-10 flex max-w-lg flex-col items-center text-center">
+            <NexusMark size="hero" className="mb-7" />
+            <h1 className="font-heading text-4xl font-semibold tracking-tight sm:text-5xl">
               Hva skal vi gjøre?
             </h1>
             <p className="mt-3 text-base text-muted-foreground">
@@ -623,7 +624,10 @@ export function FortellChat() {
                   }
                 >
                   {m.role === "assistant" && (
-                    <p className="text-xs font-medium text-muted-foreground">Nexus</p>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <NexusMark size="sm" alt="" />
+                      <p className="text-xs font-medium text-muted-foreground">Nexus</p>
+                    </div>
                   )}
                   <p
                     className={
@@ -638,8 +642,8 @@ export function FortellChat() {
               ))}
 
               {mut.isPending && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <NexusMark size="sm" pulse alt="" />
                   Tenker…
                 </div>
               )}

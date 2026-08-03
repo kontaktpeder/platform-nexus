@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronsLeft, ChevronsRight, LayoutDashboard, UserRound, Users } from "lucide-react";
+import { NexusMark } from "@/components/platform/NexusMark";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -33,14 +34,13 @@ export function PlatformSideNav() {
       <SidebarHeader className="border-b border-border/60 px-3 py-4">
         <Link
           to="/desk"
+          aria-label="Nexus Desk"
           className={cn(
             "flex items-center gap-2 overflow-hidden rounded-lg px-1 py-1 font-heading text-sm font-semibold tracking-tight text-foreground",
             collapsed && "justify-center",
           )}
         >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-            N
-          </span>
+          <NexusMark size="sm" alt="" />
           {!collapsed && <span className="truncate">Nexus</span>}
         </Link>
       </SidebarHeader>

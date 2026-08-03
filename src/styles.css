@@ -186,3 +186,8 @@
     color-mix(in oklab, var(--primary) 100%, transparent),
     color-mix(in oklab, var(--primary) 70%, var(--secondary)));
 }
+
+@keyframes nexus-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.08); }
+}
