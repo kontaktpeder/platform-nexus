@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -19,6 +19,13 @@ import {
 } from "@/components/platform/mail/MailComposeControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyFortellContactProposal,
@@ -36,8 +43,9 @@ import {
 import { stripTrailingSignOff } from "@/lib/mail-compose";
 import { getLastWorkspace } from "@/lib/last-workspace";
 import { listConnectedModuleOrgs } from "@/lib/module-orgs.functions";
-import { syncTimeEntryToWork } from "@/lib/work-timer.functions";
+import { fetchWorkTimerCatalog, syncTimeEntryToWork } from "@/lib/work-timer.functions";
 import {
+  BREAK_OPTIONS,
   markPendingSynced,
   readWorkSession,
   startWorkSession,
@@ -71,6 +79,7 @@ export function FortellChat() {
   const sendDraft = useServerFn(sendAssistantDraft);
   const runSync = useServerFn(syncTimeEntryToWork);
   const listOrgs = useServerFn(listConnectedModuleOrgs);
+  const runCatalog = useServerFn(fetchWorkTimerCatalog);
   const lastWs = useMemo(() => getLastWorkspace(), []);
 
   const [instruction, setInstruction] = useState("");
@@ -85,7 +94,12 @@ export function FortellChat() {
   const [workStopNote, setWorkStopNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [startComment, setStartComment] = useState("");
+  const [startProjectId, setStartProjectId] = useState("");
+  const [startRateId, setStartRateId] = useState("");
   const [stopComment, setStopComment] = useState("");
+  const [stopProjectId, setStopProjectId] = useState("");
+  const [stopRateId, setStopRateId] = useState("");
+  const [stopBreakMin, setStopBreakMin] = useState("0");
   const [contactApplied, setContactApplied] = useState(false);
   const [appliedRelations, setAppliedRelations] = useState<Record<string, true>>({});
   const [applyingRelationKey, setApplyingRelationKey] = useState<string | null>(null);
@@ -139,7 +153,13 @@ export function FortellChat() {
       setApplyingRelationKey(null);
       setInstruction("");
       setStartComment(res.workProposal?.comment?.trim() || "");
-      setStopComment(readWorkSession()?.comment?.trim() || "");
+      setStartProjectId(res.workProposal?.projectId ?? "");
+      setStartRateId(res.workProposal?.rateId ?? "");
+      const sess = readWorkSession();
+      setStopComment(sess?.comment?.trim() || "");
+      setStopProjectId(sess?.projectId ?? "");
+      setStopRateId(sess?.rateId ?? "");
+      setStopBreakMin(String(res.stopProposal?.breakMinutes ?? 0));
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -237,23 +257,76 @@ export function FortellChat() {
     mut.mutate(text);
   }
 
+  const workCatalogSlug =
+    result?.workProposal?.platformOrgSlug ??
+    activeSession?.platformOrgSlug ??
+    lastWs?.orgSlug ??
+    null;
+
+  const catalogQ = useQuery({
+    queryKey: ["work-timer-catalog", workCatalogSlug, "fortell"],
+    enabled: !!(result?.workProposal || result?.stopProposal || activeSession),
+    queryFn: () =>
+      runCatalog({ data: { orgSlug: workCatalogSlug } }) as Promise<{
+        connected: boolean;
+        org: { id: string; name: string } | null;
+        projects: Array<{ id: string; name: string }>;
+        rates: Array<{ id: string; name: string; amount: number }>;
+        error: string | null;
+      }>,
+    staleTime: 30_000,
+  });
+
+  const catalogProjects = catalogQ.data?.projects ?? [];
+  const catalogRates = catalogQ.data?.rates ?? [];
+
+  useEffect(() => {
+    if (!catalogProjects.length) return;
+    if (startProjectId && !catalogProjects.some((p) => p.id === startProjectId)) {
+      setStartProjectId(catalogProjects[0]!.id);
+    }
+    if (stopProjectId && !catalogProjects.some((p) => p.id === stopProjectId)) {
+      setStopProjectId(catalogProjects[0]!.id);
+    }
+  }, [catalogProjects, startProjectId, stopProjectId]);
+
   function confirmWork(proposal: FortellWorkProposal) {
+    const project =
+      catalogProjects.find((p) => p.id === startProjectId) ??
+      (proposal.projectId
+        ? { id: proposal.projectId, name: proposal.projectName }
+        : null);
+    if (!project) {
+      toast.error("Velg prosjekt");
+      return;
+    }
+    const rate =
+      catalogRates.find((r) => r.id === startRateId) ??
+      (proposal.rateId
+        ? {
+            id: proposal.rateId,
+            name: proposal.rateName ?? "Sats",
+            amount: proposal.hourlyRate ?? 0,
+          }
+        : null);
     try {
       const session = startWorkSession({
         organizationId: proposal.organizationId,
         organizationName: proposal.organizationName,
-        projectId: proposal.projectId,
-        projectName: proposal.projectName,
-        rateId: proposal.rateId,
-        rateName: proposal.rateName,
-        hourlyRate: proposal.hourlyRate,
+        projectId: project.id,
+        projectName: project.name,
+        rateId: rate?.id ?? null,
+        rateName: rate?.name ?? null,
+        hourlyRate: rate ? Number(rate.amount) : null,
         comment: startComment.trim() || proposal.comment,
         platformOrgSlug: proposal.platformOrgSlug,
       });
       setActiveSession(session);
       setStopComment(startComment.trim() || proposal.comment?.trim() || "");
+      setStopProjectId(project.id);
+      setStopRateId(rate?.id ?? "");
       setWorkStarted(true);
-      toast.success(`Økt startet · ${proposal.projectName}`);
+      toast.success(`Økt startet · ${project.name}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke starte økt");
     }
@@ -278,8 +351,30 @@ export function FortellChat() {
       toast.error("Ingen aktiv økt å avslutte");
       return;
     }
+    const project =
+      catalogProjects.find((p) => p.id === stopProjectId) ??
+      (sessionBefore.projectId
+        ? { id: sessionBefore.projectId, name: sessionBefore.projectName }
+        : null);
+    if (!project) {
+      toast.error("Velg prosjekt");
+      return;
+    }
+    const rate =
+      catalogRates.find((r) => r.id === stopRateId) ??
+      (sessionBefore.rateId
+        ? {
+            id: sessionBefore.rateId,
+            name: sessionBefore.rateName ?? "Sats",
+            amount: sessionBefore.hourlyRate ?? 0,
+          }
+        : null);
+
     setStopping(true);
-    const pause = Math.max(0, Math.min(24 * 60, breakMinutes));
+    const pause = Math.max(
+      0,
+      Math.min(24 * 60, Number.parseInt(stopBreakMin, 10) || breakMinutes || 0),
+    );
     const entry = stopWorkSession(pause, stopComment);
     setActiveSession(null);
     if (!entry) {
@@ -287,8 +382,11 @@ export function FortellChat() {
       toast.error("Ingen aktiv økt å avslutte");
       return;
     }
+    const projectId = project.id;
+    const rateId = rate?.id ?? null;
+    const projectName = project.name;
     try {
-      if (!/^[0-9a-f-]{36}$/i.test(entry.projectId)) {
+      if (!/^[0-9a-f-]{36}$/i.test(projectId)) {
         setWorkStopNote(
           "Økten er stoppet lokalt, men prosjektet mangler Work-id — synk manuelt under Arbeidsøkt.",
         );
@@ -311,14 +409,13 @@ export function FortellChat() {
       const res = await runSync({
         data: {
           id: entry.id,
-          projectId: entry.projectId,
-          rateId:
-            entry.rateId && /^[0-9a-f-]{36}$/i.test(entry.rateId) ? entry.rateId : null,
+          projectId,
+          rateId: rateId && /^[0-9a-f-]{36}$/i.test(rateId) ? rateId : null,
           date: entry.date,
           start_time: entry.start_time,
           end_time: entry.end_time,
           break_minutes: entry.break_minutes,
-          comment: entry.comment,
+          comment: stopComment.trim() || entry.comment,
           orgSlug,
         },
       });
@@ -332,7 +429,7 @@ export function FortellChat() {
         res.duplicate
           ? `Allerede i Work · ${entry.total_minutes} min`
           : `Synket til Work · ${entry.total_minutes} min`,
-        { description: entry.projectName },
+        { description: projectName },
       );
     } catch (e) {
       markPendingSynced(entry.id, "failed");
@@ -679,13 +776,51 @@ export function FortellChat() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Bekreft arbeidsøkt
               </p>
-              <p className="text-sm">
-                <span className="font-medium">{proposal.projectName}</span>
-                {" · "}
-                {proposal.organizationName}
-                {proposal.rateName ? ` · ${proposal.rateName}` : ""}
-                {proposal.hourlyRate != null ? ` (${proposal.hourlyRate} kr)` : ""}
-              </p>
+              <p className="text-sm text-muted-foreground">{proposal.organizationName}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Prosjekt
+                  </p>
+                  <Select value={startProjectId || undefined} onValueChange={setStartProjectId}>
+                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                      <SelectValue placeholder="Velg prosjekt" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalogProjects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                      {startProjectId &&
+                        !catalogProjects.some((p) => p.id === startProjectId) && (
+                          <SelectItem value={startProjectId}>{proposal.projectName}</SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Sats
+                  </p>
+                  <Select
+                    value={startRateId || "__none__"}
+                    onValueChange={(v) => setStartRateId(v === "__none__" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                      <SelectValue placeholder="Velg sats" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Ingen sats</SelectItem>
+                      {catalogRates.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name} · {r.amount} kr
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Kommentar til Work
@@ -701,6 +836,7 @@ export function FortellChat() {
               <Button
                 type="button"
                 className="h-11 gap-2 rounded-xl"
+                disabled={!startProjectId}
                 onClick={() => confirmWork(proposal)}
               >
                 <Clock className="h-4 w-4" />
@@ -719,15 +855,81 @@ export function FortellChat() {
                 Bekreft avslutning
               </p>
               {activeSession && (
-                <p className="text-sm">
-                  <span className="font-medium">{activeSession.projectName}</span>
-                  {" · "}
-                  {activeSession.organizationName}
-                  {stopProposal.breakMinutes > 0
-                    ? ` · pause ${stopProposal.breakMinutes} min`
-                    : ""}
-                </p>
+                <p className="text-sm text-muted-foreground">{activeSession.organizationName}</p>
               )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Prosjekt
+                  </p>
+                  <Select
+                    value={stopProjectId || undefined}
+                    onValueChange={setStopProjectId}
+                    disabled={stopping || !activeSession}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                      <SelectValue placeholder="Velg prosjekt" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalogProjects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                      {stopProjectId &&
+                        !catalogProjects.some((p) => p.id === stopProjectId) &&
+                        activeSession && (
+                          <SelectItem value={stopProjectId}>
+                            {activeSession.projectName}
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Sats
+                  </p>
+                  <Select
+                    value={stopRateId || "__none__"}
+                    onValueChange={(v) => setStopRateId(v === "__none__" ? "" : v)}
+                    disabled={stopping || !activeSession}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl bg-background">
+                      <SelectValue placeholder="Velg sats" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Ingen sats</SelectItem>
+                      {catalogRates.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.name} · {r.amount} kr
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Pause
+                </p>
+                <Select
+                  value={stopBreakMin}
+                  onValueChange={setStopBreakMin}
+                  disabled={stopping || !activeSession}
+                >
+                  <SelectTrigger className="h-11 rounded-xl bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BREAK_OPTIONS.map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m === 0 ? "Ingen pause" : `${m} minutter`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Kommentar til Work
@@ -744,7 +946,7 @@ export function FortellChat() {
               <Button
                 type="button"
                 className="h-11 gap-2 rounded-xl"
-                disabled={stopping || !activeSession}
+                disabled={stopping || !activeSession || !stopProjectId}
                 onClick={() => void confirmStop(stopProposal.breakMinutes)}
               >
                 {stopping ? (
