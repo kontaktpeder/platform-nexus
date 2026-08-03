@@ -29,6 +29,35 @@ export type ControlAgreementCreateResult = {
   };
 };
 
+export type ControlAgreementListItem = {
+  id: string;
+  title: string;
+  status: string;
+  agreement_type: string;
+  counterparty_name: string | null;
+  version: number;
+  source: string;
+  updated_at: string;
+  created_at: string;
+  body_preview: string;
+  deep_link: string;
+};
+
+export type ControlAgreementDetail = {
+  id: string;
+  org_id: string;
+  title: string;
+  body: string;
+  status: string;
+  agreement_type: string;
+  counterparty_name: string | null;
+  version: number;
+  source: string;
+  source_ref: string | null;
+  updated_at: string;
+  created_at: string;
+};
+
 function normalizeBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
@@ -154,6 +183,70 @@ export async function createControlAgreementDraft(
         source: "nexus_fortell",
         source_ref: input.source_ref ?? null,
         metadata: input.metadata ?? {},
+      }),
+    },
+  );
+}
+
+export async function listControlAgreements(
+  ctx: ControlConnectionContext,
+  input?: { q?: string | null; status?: string | null; limit?: number },
+): Promise<{ agreements: ControlAgreementListItem[] }> {
+  const params = new URLSearchParams();
+  if (input?.q?.trim()) params.set("q", input.q.trim());
+  if (input?.status?.trim()) params.set("status", input.status.trim());
+  if (input?.limit) params.set("limit", String(input.limit));
+  const qs = params.toString();
+  return controlFetch<{ agreements: ControlAgreementListItem[] }>(
+    ctx.connection.external_base_url,
+    ctx.apiKey,
+    `/api/public/v1/agreements${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function getControlAgreement(
+  ctx: ControlConnectionContext,
+  id: string,
+): Promise<{
+  agreement: ControlAgreementDetail;
+  deep_links?: { agreement?: string };
+}> {
+  return controlFetch(
+    ctx.connection.external_base_url,
+    ctx.apiKey,
+    `/api/public/v1/agreements/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function updateControlAgreementDraft(
+  ctx: ControlConnectionContext,
+  id: string,
+  input: {
+    title?: string;
+    body?: string;
+    agreement_type?: string;
+    counterparty_name?: string | null;
+    source_ref?: string | null;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<ControlAgreementCreateResult> {
+  return controlFetch<ControlAgreementCreateResult>(
+    ctx.connection.external_base_url,
+    ctx.apiKey,
+    `/api/public/v1/agreements/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.body !== undefined ? { body: input.body } : {}),
+        ...(input.agreement_type !== undefined
+          ? { agreement_type: input.agreement_type }
+          : {}),
+        ...(input.counterparty_name !== undefined
+          ? { counterparty_name: input.counterparty_name }
+          : {}),
+        ...(input.source_ref !== undefined ? { source_ref: input.source_ref } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
       }),
     },
   );

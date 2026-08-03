@@ -241,6 +241,8 @@ export function FortellChat() {
     mutationFn: (p: FortellAgreementProposal) =>
       applyAgreement({
         data: {
+          mode: p.mode,
+          agreementId: p.agreementId,
           title: p.title,
           body: p.body,
           agreementType: p.agreementType,
@@ -252,7 +254,11 @@ export function FortellChat() {
     onSuccess: (res) => {
       setAgreementApplied(true);
       setAgreementOpenUrl(res.openUrl);
-      toast.success(`Sendt til Control: ${res.title}`);
+      toast.success(
+        res.mode === "update"
+          ? `Oppdatert i Control: ${res.title}`
+          : `Sendt til Control: ${res.title}`,
+      );
       if (res.openUrl) {
         window.open(res.openUrl, "_blank", "noopener,noreferrer");
       }
@@ -637,10 +643,13 @@ export function FortellChat() {
           {agreementProposal && !agreementApplied && (
             <div className="space-y-3 rounded-2xl border border-primary/25 bg-primary/5 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                Bekreft avtale til Control Core
+                {agreementProposal.mode === "update"
+                  ? "Bekreft oppdatering i Control Core"
+                  : "Bekreft ny avtale til Control Core"}
               </p>
               <p className="text-sm font-medium">{agreementProposal.title}</p>
               <p className="text-xs text-muted-foreground">
+                {agreementProposal.mode === "update" ? "Oppdater eksisterende · " : "Nytt utkast · "}
                 {agreementProposal.agreementType}
                 {agreementProposal.counterpartyName
                   ? ` · ${agreementProposal.counterpartyName}`
@@ -651,7 +660,9 @@ export function FortellChat() {
                 {agreementProposal.body}
               </pre>
               <p className="text-xs text-muted-foreground">
-                Fortell forbereder utkastet. Control eier signering, versjon og arkiv.
+                {agreementProposal.mode === "update"
+                  ? "Erstatter teksten i eksisterende draft. Control eier signering og arkiv."
+                  : "Fortell forbereder et nytt utkast. Control eier signering, versjon og arkiv."}
               </p>
               <Button
                 type="button"
@@ -664,7 +675,11 @@ export function FortellChat() {
                 ) : (
                   <FileSignature className="h-4 w-4" />
                 )}
-                {agreementMut.isPending ? "Sender…" : "Send utkast til Control"}
+                {agreementMut.isPending
+                  ? "Sender…"
+                  : agreementProposal.mode === "update"
+                    ? "Lagre oppdatering i Control"
+                    : "Send nytt utkast til Control"}
               </Button>
             </div>
           )}
@@ -672,7 +687,11 @@ export function FortellChat() {
           {agreementApplied && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-sm">
               <FileSignature className="h-4 w-4 text-primary" />
-              <span>Utkast lagret i Control Core.</span>
+              <span>
+                {agreementProposal?.mode === "update"
+                  ? "Utkast oppdatert i Control Core."
+                  : "Utkast lagret i Control Core."}
+              </span>
               {agreementOpenUrl && (
                 <a
                   href={agreementOpenUrl}

@@ -111,6 +111,9 @@ export type FortellRelationProposal = {
 };
 
 export type FortellAgreementProposal = {
+  mode: "create" | "update";
+  /** Required when mode is update — existing Control agreement id. */
+  agreementId: string | null;
   title: string;
   body: string;
   agreementType: "shareholder" | "nda" | "employment" | "contractor" | "other";
@@ -916,9 +919,107 @@ export const runFortell = createServerFn({ method: "POST" })
         },
       }),
 
+      listControlAgreements: tool({
+        description:
+          "List avtaler i Control Core. Bruk når brukeren nevner eksisterende utkast, «se på utkast», «jobb videre», eller en motpart (f.eks. Oslo Bar). Returnerer id, tittel, status, motpart — ikke full body.",
+        inputSchema: z.object({
+          q: z.string().max(120).nullable().optional(),
+          status: z
+            .enum(["draft", "review", "signing", "signed", "archived"])
+            .nullable()
+            .optional(),
+          platformOrgSlug: z.string().max(80).nullable().optional(),
+        }),
+        execute: async (input) => {
+          const { supabaseAdmin } = await import(
+            "@/integrations/supabase/client.server"
+          );
+          const { listControlAgreements, resolveControlConnection } = await import(
+            "@/lib/control/control-api.server"
+          );
+          const ctx = await resolveControlConnection({
+            supabaseAdmin,
+            userId,
+            orgSlug: input.platformOrgSlug?.trim() || preferredOrgSlug,
+          });
+          if (!ctx) {
+            return {
+              ok: false,
+              note: "Control Core er ikke koblet. Be brukeren koble Control under Moduler.",
+            };
+          }
+          const res = await listControlAgreements(ctx, {
+            q: input.q,
+            status: input.status ?? "draft",
+            limit: 20,
+          });
+          steps.push({
+            label: "Listet Control-avtaler",
+            detail: input.q?.trim() || input.status || "draft",
+          });
+          return {
+            ok: true,
+            count: res.agreements.length,
+            agreements: res.agreements.map((a) => ({
+              id: a.id,
+              title: a.title,
+              status: a.status,
+              counterparty: a.counterparty_name,
+              version: a.version,
+              updated_at: a.updated_at,
+              preview: a.body_preview,
+            })),
+          };
+        },
+      }),
+
+      readControlAgreement: tool({
+        description:
+          "Les full tekst for én avtale i Control Core (krever agreement id fra listControlAgreements). Bruk før du foreslår oppdatering.",
+        inputSchema: z.object({
+          agreementId: z.string().uuid(),
+          platformOrgSlug: z.string().max(80).nullable().optional(),
+        }),
+        execute: async (input) => {
+          const { supabaseAdmin } = await import(
+            "@/integrations/supabase/client.server"
+          );
+          const { getControlAgreement, resolveControlConnection } = await import(
+            "@/lib/control/control-api.server"
+          );
+          const ctx = await resolveControlConnection({
+            supabaseAdmin,
+            userId,
+            orgSlug: input.platformOrgSlug?.trim() || preferredOrgSlug,
+          });
+          if (!ctx) {
+            return { ok: false, note: "Control Core er ikke koblet." };
+          }
+          const res = await getControlAgreement(ctx, input.agreementId);
+          steps.push({
+            label: "Leste Control-avtale",
+            detail: res.agreement.title,
+          });
+          return {
+            ok: true,
+            agreement: {
+              id: res.agreement.id,
+              title: res.agreement.title,
+              body: res.agreement.body,
+              status: res.agreement.status,
+              agreement_type: res.agreement.agreement_type,
+              counterparty_name: res.agreement.counterparty_name,
+              version: res.agreement.version,
+              updated_at: res.agreement.updated_at,
+            },
+            openUrl: res.deep_links?.agreement ?? null,
+          };
+        },
+      }),
+
       proposeControlAgreement: tool({
         description:
-          "Forbered kontrakts-/avtaleutkast til Control Core. Lagrer IKKE i Control — brukeren må bekrefte i UI. Control eier signering, versjon og arkiv. Bruk ved aksjonæravtale, NDA, ansettelseskontrakt o.l. Ikke bruk for e-post.",
+          "Forbered NYTT kontrakts-/avtaleutkast til Control Core. Lagrer IKKE — brukeren bekrefter i UI. Bruk KUN når brukeren eksplisitt vil ha et nytt utkast. Ved eksisterende utkast: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate.",
         inputSchema: z.object({
           title: z.string().min(3).max(300),
           body: z.string().min(20).max(100000),
@@ -931,6 +1032,8 @@ export const runFortell = createServerFn({ method: "POST" })
         }),
         execute: async (input) => {
           out.agreementProposal = {
+            mode: "create",
+            agreementId: null,
             title: input.title.trim(),
             body: input.body.trim(),
             agreementType: input.agreementType ?? "other",
@@ -940,12 +1043,49 @@ export const runFortell = createServerFn({ method: "POST" })
             reason: input.reason?.trim() || null,
           };
           steps.push({
-            label: "Foreslo Control-avtale",
+            label: "Foreslo ny Control-avtale",
             detail: out.agreementProposal.title,
           });
           return {
             ok: true,
-            note: "Forslag klart — brukeren må bekrefte før det sendes til Control Core.",
+            note: "Nytt utkast klart — brukeren må bekrefte før det opprettes i Control.",
+          };
+        },
+      }),
+
+      proposeControlAgreementUpdate: tool({
+        description:
+          "Forbered OPPDATERING av eksisterende Control-utkast (draft). Lagrer IKKE — brukeren bekrefter i UI. agreementId må komme fra list/read. Bruk når brukeren sier jobb videre / se på utkast / forbedre eksisterende.",
+        inputSchema: z.object({
+          agreementId: z.string().uuid(),
+          title: z.string().min(3).max(300),
+          body: z.string().min(20).max(100000),
+          agreementType: z
+            .enum(["shareholder", "nda", "employment", "contractor", "other"])
+            .optional(),
+          counterpartyName: z.string().max(200).nullable().optional(),
+          platformOrgSlug: z.string().max(80).nullable().optional(),
+          reason: z.string().max(300).nullable().optional(),
+        }),
+        execute: async (input) => {
+          out.agreementProposal = {
+            mode: "update",
+            agreementId: input.agreementId,
+            title: input.title.trim(),
+            body: input.body.trim(),
+            agreementType: input.agreementType ?? "other",
+            counterpartyName: input.counterpartyName?.trim() || null,
+            platformOrgSlug:
+              input.platformOrgSlug?.trim() || preferredOrgSlug || null,
+            reason: input.reason?.trim() || null,
+          };
+          steps.push({
+            label: "Foreslo oppdatering av Control-avtale",
+            detail: out.agreementProposal.title,
+          });
+          return {
+            ok: true,
+            note: "Oppdateringsforslag klart — brukeren må bekrefte før Control oppdateres.",
           };
         },
       }),
@@ -976,7 +1116,9 @@ export const runFortell = createServerFn({ method: "POST" })
       "7) listUnpaidInvoices — ubetalte fakturaer fra Finance",
       "8) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
       "9) proposeEmailDraft — e-postutkast (sender ikke selv)",
-      "10) proposeControlAgreement — avtaleutkast til Control Core (lagrer ikke selv)",
+      "10) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
+      "11) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
+      "12) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
@@ -984,7 +1126,9 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
-      "- Ved kontrakt/avtale/NDA/aksjonæravtale: proposeControlAgreement. Fortell er INNGANGEN — Control eier signering/versjon/arkiv. Ikke late som Fortell er kontraktsystemet.",
+      "- Control-avtaler: Fortell er INNGANGEN — Control eier signering/versjon/arkiv.",
+      "- Ved «eksisterende utkast», «se på utkast», «jobb videre», «oppdater avtalen» eller navngitt motpart/utkast i Control: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate. ALDRI opprett nytt i disse tilfellene.",
+      "- proposeControlAgreement KUN når brukeren eksplisitt ber om et nytt utkast.",
       "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");
@@ -1001,7 +1145,7 @@ export const runFortell = createServerFn({ method: "POST" })
         { role: "user" as const, content: data.instruction },
       ],
       tools,
-      stopWhen: stepCountIs(14),
+      stopWhen: stepCountIs(18),
     });
 
     const answer = result.text.trim();
@@ -1011,7 +1155,10 @@ export const runFortell = createServerFn({ method: "POST" })
       fallback = "Utkastet er klart under — les gjennom før du lagrer eller sender.";
     }
     if (out.agreementProposal) {
-      fallback = `Avtaleutkast klart for Control: «${out.agreementProposal.title}». Bekreft under for å sende til Control Core.`;
+      fallback =
+        out.agreementProposal.mode === "update"
+          ? `Oppdatering klar for Control: «${out.agreementProposal.title}». Bekreft under for å lagre i eksisterende utkast.`
+          : `Nytt avtaleutkast klart for Control: «${out.agreementProposal.title}». Bekreft under for å opprette i Control Core.`;
     }
     if (out.workProposal) {
       fallback = `Klar til å starte økt: ${out.workProposal.projectName} hos ${out.workProposal.organizationName}. Bekreft under.`;
@@ -1060,12 +1207,14 @@ export const runFortell = createServerFn({ method: "POST" })
     };
   });
 
-/** Hand off a Fortell agreement draft to Control Core (user confirmed). */
+/** Hand off a Fortell agreement create/update to Control Core (user confirmed). */
 export const applyFortellControlAgreement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
     z
       .object({
+        mode: z.enum(["create", "update"]).optional(),
+        agreementId: z.string().uuid().nullable().optional(),
         title: z.string().min(3).max(300),
         body: z.string().min(20).max(100000),
         agreementType: z
@@ -1083,6 +1232,7 @@ export const applyFortellControlAgreement = createServerFn({ method: "POST" })
     const {
       createControlAgreementDraft,
       resolveControlConnection,
+      updateControlAgreementDraft,
     } = await import("@/lib/control/control-api.server");
 
     const ctx = await resolveControlConnection({
@@ -1094,6 +1244,35 @@ export const applyFortellControlAgreement = createServerFn({ method: "POST" })
       throw new Error(
         "Control Core er ikke koblet. Gå til Moduler og koble Control før du sender avtaler.",
       );
+    }
+
+    const mode =
+      data.mode === "update" || data.agreementId ? ("update" as const) : ("create" as const);
+
+    if (mode === "update") {
+      if (!data.agreementId) {
+        throw new Error("Mangler agreementId for oppdatering av Control-utkast.");
+      }
+      const result = await updateControlAgreementDraft(ctx, data.agreementId, {
+        title: data.title,
+        body: data.body,
+        agreement_type: data.agreementType ?? "other",
+        counterparty_name: data.counterpartyName ?? null,
+        source_ref: data.reason ?? null,
+        metadata: {
+          last_prepared_in: "nexus_fortell",
+          platform_org_slug: ctx.orgSlug,
+        },
+      });
+      return {
+        ok: true as const,
+        mode: "update" as const,
+        agreementId: result.agreement.id,
+        title: result.agreement.title,
+        status: result.agreement.status,
+        openUrl: result.deep_links?.agreement ?? null,
+        controlOrg: ctx.connection.external_org_name ?? ctx.orgName,
+      };
     }
 
     const result = await createControlAgreementDraft(ctx, {
@@ -1110,6 +1289,7 @@ export const applyFortellControlAgreement = createServerFn({ method: "POST" })
 
     return {
       ok: true as const,
+      mode: "create" as const,
       agreementId: result.agreement.id,
       title: result.agreement.title,
       status: result.agreement.status,
