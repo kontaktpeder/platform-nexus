@@ -9,7 +9,6 @@ import {
   Link2,
   Loader2,
   Send,
-  Sparkles,
   Square,
   UserRound,
 } from "lucide-react";
@@ -141,13 +140,9 @@ export function FortellChat() {
         },
       }) as Promise<FortellResult>;
     },
-    onSuccess: (res, text) => {
+    onSuccess: (res) => {
       setHistory((prev) =>
-        [
-          ...prev,
-          { role: "user" as const, content: text },
-          { role: "assistant" as const, content: res.answer },
-        ].slice(-16),
+        [...prev, { role: "assistant" as const, content: res.answer }].slice(-16),
       );
       setResult(res);
       setDraftDone(false);
@@ -180,7 +175,14 @@ export function FortellChat() {
       }
       setActiveSession(readWorkSession());
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      setHistory((prev) =>
+        prev.length > 0 && prev[prev.length - 1]?.role === "user"
+          ? prev.slice(0, -1)
+          : prev,
+      );
+      toast.error(e.message);
+    },
   });
 
   const sendMut = useMutation({
@@ -291,8 +293,21 @@ export function FortellChat() {
     const text = instruction.trim();
     if (!text || mut.isPending) return;
     setResult(null);
+    setInstruction("");
+    setHistory((prev) =>
+      [...prev, { role: "user" as const, content: text }].slice(-16),
+    );
     mut.mutate(text);
   }
+
+  const hasChat = history.length > 0 || !!result || mut.isPending;
+  const threadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [history, result, mut.isPending]);
 
   const workCatalogSlug =
     result?.workProposal?.platformOrgSlug ??
@@ -492,105 +507,155 @@ export function FortellChat() {
   const contactProposal = result?.contactProposal ?? null;
   const agreementProposal = result?.agreementProposal ?? null;
 
-  return (
-    <section className="flex min-h-0 flex-1 flex-col gap-5">
-      <header className="space-y-1">
-        <p className="text-sm font-medium text-muted-foreground">Fortell Nexus</p>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Én inngang · få handlinger
-        </h1>
-        <p className="max-w-xl text-sm text-muted-foreground">
-          Mail, Slack, fakturaer, kontakter, Work-økt, og avtaleutkast til Control. Du bekrefter
-          før noe skjer — Control eier signering og arkiv.
-        </p>
-      </header>
-
-      {history.length > 0 && (
-        <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-          {history.slice(-6).map((m, i) => (
-            <p key={`${m.role}-${i}`}>
-              <span className="font-medium text-foreground">
-                {m.role === "user" ? "Deg" : "Fortell"}:
-              </span>{" "}
-              {m.content.length > 160 ? `${m.content.slice(0, 160)}…` : m.content}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {activeSession && (
-        <div className="flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
-          <Clock className="h-4 w-4 text-primary" />
-          <span>
-            Aktiv økt · {activeSession.projectName} · {activeSession.organizationName}
-          </span>
-        </div>
-      )}
-
-      <Textarea
-        value={instruction}
-        onChange={(e) => setInstruction(e.target.value)}
-        placeholder={
-          "F.eks. «Lag NDA-utkast til Control», «Finn kontakt på nett», «Avslutt økt»"
-        }
-        rows={5}
-        maxLength={2000}
-        className="min-h-[8rem] resize-none rounded-2xl border-border bg-card p-4 text-base leading-relaxed shadow-sm"
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-        }}
-      />
-
-      <div className="flex items-center justify-between gap-3">
+  const composer = (
+    <div className="w-full space-y-2">
+      <div className="relative rounded-[1.75rem] border border-border/80 bg-card/90 shadow-soft backdrop-blur-sm">
+        <Textarea
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder={
+            hasChat
+              ? "Skriv videre…"
+              : "Hva skal vi gjøre? Mail, notat, økt, kontakt, faktura…"
+          }
+          rows={hasChat ? 2 : 3}
+          maxLength={2000}
+          className="min-h-[3.5rem] resize-none rounded-[1.75rem] border-0 bg-transparent px-5 py-4 pr-16 text-base leading-relaxed shadow-none focus-visible:ring-0"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+          }}
+        />
+        <Button
+          type="button"
+          size="icon"
+          className="absolute bottom-3 right-3 h-10 w-10 rounded-2xl"
+          disabled={!instruction.trim() || mut.isPending}
+          onClick={submit}
+          aria-label={mut.isPending ? "Jobber" : "Send"}
+        >
+          {mut.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted-foreground">
           {mut.isPending ? "Tenker og bruker verktøy…" : "⌘+Enter for å sende"}
         </p>
-        <div className="flex gap-2">
-          {history.length > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 rounded-xl px-3 text-muted-foreground"
-              onClick={() => {
-                setHistory([]);
-                setResult(null);
-                setWorkStopNote(null);
-              }}
-            >
-              Nullstill chat
-            </Button>
-          )}
-          <Button
+        {hasChat && (
+          <button
             type="button"
-            className="h-11 gap-2 rounded-xl px-5"
-            disabled={!instruction.trim() || mut.isPending}
-            onClick={submit}
+            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => {
+              setHistory([]);
+              setResult(null);
+              setWorkStopNote(null);
+            }}
           >
-            {mut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            {mut.isPending ? "Jobber…" : "Fortell"}
-          </Button>
-        </div>
+            Ny chat
+          </button>
+        )}
       </div>
+    </div>
+  );
 
-      {result && (
-        <div className="space-y-4 border-t border-border pt-5">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{result.answer}</p>
+  return (
+    <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(55% 40% at 18% 12%, oklch(0.92 0.04 20 / 0.55), transparent 70%)," +
+            "radial-gradient(50% 38% at 88% 18%, oklch(0.93 0.03 250 / 0.45), transparent 70%)," +
+            "radial-gradient(60% 50% at 70% 95%, oklch(0.93 0.035 160 / 0.4), transparent 70%)," +
+            "radial-gradient(50% 40% at 8% 90%, oklch(0.93 0.04 300 / 0.35), transparent 70%)",
+        }}
+      />
 
-          {result.steps.length > 0 && (
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {result.steps.map((s, i) => (
-                <li key={`${s.label}-${i}`}>
-                  {s.label}
-                  {s.detail ? ` · ${s.detail}` : ""}
-                </li>
-              ))}
-            </ul>
+      {!hasChat ? (
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-16 pt-10">
+          <div className="mb-10 max-w-lg text-center">
+            <p className="text-sm font-medium text-muted-foreground">Nexus</p>
+            <h1 className="mt-2 font-heading text-4xl font-semibold tracking-tight sm:text-5xl">
+              Hva skal vi gjøre?
+            </h1>
+            <p className="mt-3 text-base text-muted-foreground">
+              Én inngang til alt — skriv det du trenger, så skjønner Nexus resten.
+            </p>
+          </div>
+          {activeSession && (
+            <div className="mb-4 flex w-full max-w-2xl items-center gap-2 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm">
+              <Clock className="h-4 w-4 shrink-0 text-primary" />
+              <span>
+                Aktiv økt · {activeSession.projectName} · {activeSession.organizationName}
+              </span>
+            </div>
           )}
+          <div className="w-full max-w-2xl">{composer}</div>
+        </div>
+      ) : (
+        <>
+          <div
+            ref={threadRef}
+            className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-8"
+          >
+            <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+              {activeSession && (
+                <div className="flex items-center gap-2 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm">
+                  <Clock className="h-4 w-4 shrink-0 text-primary" />
+                  <span>
+                    Aktiv økt · {activeSession.projectName} ·{" "}
+                    {activeSession.organizationName}
+                  </span>
+                </div>
+              )}
 
+              {history.map((m, i) => (
+                <div
+                  key={`${m.role}-${i}-${m.content.slice(0, 24)}`}
+                  className={
+                    m.role === "user"
+                      ? "ml-auto max-w-[85%] rounded-3xl rounded-br-lg bg-foreground px-4 py-3 text-sm leading-relaxed text-background"
+                      : "max-w-[95%] space-y-1"
+                  }
+                >
+                  {m.role === "assistant" && (
+                    <p className="text-xs font-medium text-muted-foreground">Nexus</p>
+                  )}
+                  <p
+                    className={
+                      m.role === "user"
+                        ? "whitespace-pre-wrap"
+                        : "whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                    }
+                  >
+                    {m.content}
+                  </p>
+                </div>
+              ))}
+
+              {mut.isPending && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Tenker…
+                </div>
+              )}
+
+              {result && !mut.isPending && (
+                <div className="space-y-4">
+                  {result.steps.length > 0 && (
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {result.steps.map((s, i) => (
+                        <li key={`${s.label}-${i}`}>
+                          {s.label}
+                          {s.detail ? ` · ${s.detail}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
           {contactProposal && !contactApplied && (
             <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1157,7 +1222,16 @@ export function FortellChat() {
               )}
             </div>
           )}
-        </div>
+
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="relative z-10 shrink-0 border-t border-border/50 bg-background/70 px-4 py-4 backdrop-blur-md sm:px-8">
+            <div className="mx-auto w-full max-w-2xl">{composer}</div>
+          </div>
+        </>
       )}
     </section>
   );

@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_authenticated/desk")({
 
 function DeskPage() {
   return (
-    <PlatformShell>
+    <PlatformShell lockMainScroll>
       <DeskHome />
     </PlatformShell>
   );
