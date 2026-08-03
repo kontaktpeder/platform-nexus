@@ -28,6 +28,8 @@ export type WorkSession = {
   rateName: string | null;
   hourlyRate: number | null;
   comment: string | null;
+  /** Platform org slug for Work module sync (optional). */
+  platformOrgSlug?: string | null;
 };
 
 export type PendingTimeEntry = {
@@ -270,6 +272,8 @@ export function readWorkSession(): WorkSession | null {
       rateName: parsed.rateName ?? null,
       hourlyRate: typeof parsed.hourlyRate === "number" ? parsed.hourlyRate : null,
       comment: parsed.comment ?? null,
+      platformOrgSlug:
+        typeof parsed.platformOrgSlug === "string" ? parsed.platformOrgSlug : null,
     };
   } catch {
     return null;
@@ -285,6 +289,7 @@ export function startWorkSession(input: {
   rateName?: string | null;
   hourlyRate?: number | null;
   comment?: string | null;
+  platformOrgSlug?: string | null;
 }): WorkSession {
   const session: WorkSession = {
     startedAt: new Date().toISOString(),
@@ -296,6 +301,7 @@ export function startWorkSession(input: {
     rateName: input.rateName?.trim() || null,
     hourlyRate: input.hourlyRate ?? null,
     comment: input.comment?.trim() || null,
+    platformOrgSlug: input.platformOrgSlug?.trim() || null,
   };
   window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   return session;

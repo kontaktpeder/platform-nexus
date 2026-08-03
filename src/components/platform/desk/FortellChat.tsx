@@ -1,18 +1,23 @@
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Clock, ExternalLink, Loader2, Send, Sparkles, Square } from "lucide-react";
+import { Clock, ExternalLink, Loader2, Send, Sparkles, Square, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  applyFortellContactProposal,
   runFortell,
+  type FortellChatMessage,
+  type FortellContactProposal,
   type FortellResult,
   type FortellWorkProposal,
 } from "@/lib/fortell.functions";
 import { sendAssistantDraft } from "@/lib/inbox-assistant.functions";
 import { getLastWorkspace } from "@/lib/last-workspace";
+import { listConnectedModuleOrgs } from "@/lib/module-orgs.functions";
 import { syncTimeEntryToWork } from "@/lib/work-timer.functions";
 import {
   markPendingSynced,
@@ -26,12 +31,16 @@ import {
  * Keep separate from mobile /hjem capture CTAs.
  */
 export function FortellChat() {
+  const navigate = useNavigate();
   const run = useServerFn(runFortell);
+  const applyContact = useServerFn(applyFortellContactProposal);
   const sendDraft = useServerFn(sendAssistantDraft);
   const runSync = useServerFn(syncTimeEntryToWork);
+  const listOrgs = useServerFn(listConnectedModuleOrgs);
   const lastWs = useMemo(() => getLastWorkspace(), []);
 
   const [instruction, setInstruction] = useState("");
+  const [history, setHistory] = useState<FortellChatMessage[]>([]);
   const [result, setResult] = useState<FortellResult | null>(null);
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
@@ -39,8 +48,9 @@ export function FortellChat() {
   const [draftDone, setDraftDone] = useState(false);
   const [gmailUrl, setGmailUrl] = useState<string | null>(null);
   const [workStarted, setWorkStarted] = useState(false);
-  const [workStopped, setWorkStopped] = useState(false);
+  const [workStopNote, setWorkStopNote] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [contactApplied, setContactApplied] = useState(false);
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
   );
@@ -51,24 +61,36 @@ export function FortellChat() {
       return run({
         data: {
           instruction: text,
-          preferredOrgSlug: lastWs?.orgSlug ?? null,
+          history,
+          preferredOrgSlug:
+            session?.platformOrgSlug ?? lastWs?.orgSlug ?? null,
           activeSession: session
             ? {
                 projectName: session.projectName,
                 organizationName: session.organizationName,
                 startedAt: session.startedAt,
-                platformOrgSlug: lastWs?.orgSlug ?? null,
+                platformOrgSlug:
+                  session.platformOrgSlug ?? lastWs?.orgSlug ?? null,
               }
             : null,
         },
       }) as Promise<FortellResult>;
     },
-    onSuccess: (res) => {
+    onSuccess: (res, text) => {
+      setHistory((prev) =>
+        [
+          ...prev,
+          { role: "user" as const, content: text },
+          { role: "assistant" as const, content: res.answer },
+        ].slice(-16),
+      );
       setResult(res);
       setDraftDone(false);
       setGmailUrl(null);
       setWorkStarted(false);
-      setWorkStopped(false);
+      setWorkStopNote(null);
+      setContactApplied(false);
+      setInstruction("");
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -106,6 +128,32 @@ export function FortellChat() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const contactMut = useMutation({
+    mutationFn: (p: FortellContactProposal) =>
+      applyContact({
+        data: {
+          entityId: p.entityId,
+          email: p.email,
+          role: p.role,
+          phone: p.phone,
+          website: p.website,
+          orgNr: p.orgNr,
+          address: p.address,
+          industry: p.industry,
+          summary: p.summary,
+        },
+      }),
+    onSuccess: async (res) => {
+      setContactApplied(true);
+      toast.success(`Oppdatert ${res.name}`);
+      await navigate({
+        to: "/kontakter/$entityId",
+        params: { entityId: res.entityId },
+      });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function submit() {
     const text = instruction.trim();
     if (!text || mut.isPending) return;
@@ -124,6 +172,7 @@ export function FortellChat() {
         rateName: proposal.rateName,
         hourlyRate: proposal.hourlyRate,
         comment: proposal.comment,
+        platformOrgSlug: proposal.platformOrgSlug,
       });
       setActiveSession(session);
       setWorkStarted(true);
@@ -133,19 +182,54 @@ export function FortellChat() {
     }
   }
 
+  async function resolveWorkOrgSlug(preferred: string | null | undefined): Promise<string | null> {
+    if (preferred?.trim()) return preferred.trim();
+    if (lastWs?.orgSlug) return lastWs.orgSlug;
+    try {
+      const res = (await listOrgs({ data: { moduleSlug: "work" } })) as {
+        orgs: Array<{ platformOrgSlug: string }>;
+      };
+      return res.orgs[0]?.platformOrgSlug ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async function confirmStop(breakMinutes: number) {
+    const sessionBefore = readWorkSession();
+    if (!sessionBefore) {
+      toast.error("Ingen aktiv økt å avslutte");
+      return;
+    }
+    setStopping(true);
     const pause = Math.max(0, Math.min(24 * 60, breakMinutes));
     const entry = stopWorkSession(pause);
     setActiveSession(null);
     if (!entry) {
+      setStopping(false);
       toast.error("Ingen aktiv økt å avslutte");
       return;
     }
-    setWorkStopped(true);
-    setStopping(true);
     try {
       if (!/^[0-9a-f-]{36}$/i.test(entry.projectId)) {
-        throw new Error("Prosjekt mangler Work-id — synk manuelt under Arbeidsøkt");
+        setWorkStopNote(
+          "Økten er stoppet lokalt, men prosjektet mangler Work-id — synk manuelt under Arbeidsøkt.",
+        );
+        toast.error("Stoppet lokalt — ikke synket til Work", {
+          description: "Prosjekt mangler Work-id",
+        });
+        return;
+      }
+      const orgSlug = await resolveWorkOrgSlug(sessionBefore?.platformOrgSlug);
+      if (!orgSlug) {
+        setWorkStopNote(
+          "Økten er stoppet lokalt. Fant ingen koblet Work-organisasjon — synk under Arbeidsøkt.",
+        );
+        toast.error("Stoppet lokalt — ikke synket til Work", {
+          description: "Ingen koblet Work-organisasjon",
+        });
+        markPendingSynced(entry.id, "failed");
+        return;
       }
       const res = await runSync({
         data: {
@@ -158,10 +242,15 @@ export function FortellChat() {
           end_time: entry.end_time,
           break_minutes: entry.break_minutes,
           comment: entry.comment,
-          orgSlug: lastWs?.orgSlug ?? null,
+          orgSlug,
         },
       });
       markPendingSynced(entry.id, "synced");
+      setWorkStopNote(
+        res.duplicate
+          ? `Allerede i Work · ${entry.total_minutes} min`
+          : `Synket til Work · ${entry.total_minutes} min`,
+      );
       toast.success(
         res.duplicate
           ? `Allerede i Work · ${entry.total_minutes} min`
@@ -170,7 +259,9 @@ export function FortellChat() {
       );
     } catch (e) {
       markPendingSynced(entry.id, "failed");
-      toast.error(e instanceof Error ? e.message : "Kunne ikke synke til Work", {
+      const msg = e instanceof Error ? e.message : "Kunne ikke synke til Work";
+      setWorkStopNote(`Økten er stoppet lokalt. Synk feilet: ${msg}`);
+      toast.error(msg, {
         description: "Økten er stoppet lokalt — prøv synk under Arbeidsøkt",
       });
     } finally {
@@ -187,6 +278,7 @@ export function FortellChat() {
 
   const proposal = result?.workProposal ?? null;
   const stopProposal = result?.stopProposal ?? null;
+  const contactProposal = result?.contactProposal ?? null;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-5">
@@ -196,10 +288,23 @@ export function FortellChat() {
           Én inngang · få handlinger
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Mail, Slack, fakturaer, kontakter, start/avslutt økt, mailutkast. Du bekrefter før noe
-          skjer.
+          Mail, Slack, fakturaer, kontakter (inkl. Brreg/nett), start/avslutt økt. Du bekrefter før
+          noe skjer. Samtalen huskes i denne økten.
         </p>
       </header>
+
+      {history.length > 0 && (
+        <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          {history.slice(-6).map((m, i) => (
+            <p key={`${m.role}-${i}`}>
+              <span className="font-medium text-foreground">
+                {m.role === "user" ? "Deg" : "Fortell"}:
+              </span>{" "}
+              {m.content.length > 160 ? `${m.content.slice(0, 160)}…` : m.content}
+            </p>
+          ))}
+        </div>
+      )}
 
       {activeSession && (
         <div className="flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
@@ -214,7 +319,7 @@ export function FortellChat() {
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         placeholder={
-          "F.eks. «Viktige mail?», «Noe i #drift om eSkjenk?», «Ubetalte fakturaer?», «Avslutt økt»"
+          "F.eks. «Finn Fredrik / Oslo Bowling på nett og fyll kontakt», «Viktige mail?», «Avslutt økt»"
         }
         rows={5}
         maxLength={2000}
@@ -228,19 +333,35 @@ export function FortellChat() {
         <p className="text-xs text-muted-foreground">
           {mut.isPending ? "Tenker og bruker verktøy…" : "⌘+Enter for å sende"}
         </p>
-        <Button
-          type="button"
-          className="h-11 gap-2 rounded-xl px-5"
-          disabled={!instruction.trim() || mut.isPending}
-          onClick={submit}
-        >
-          {mut.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
+        <div className="flex gap-2">
+          {history.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-11 rounded-xl px-3 text-muted-foreground"
+              onClick={() => {
+                setHistory([]);
+                setResult(null);
+                setWorkStopNote(null);
+              }}
+            >
+              Nullstill chat
+            </Button>
           )}
-          {mut.isPending ? "Jobber…" : "Fortell"}
-        </Button>
+          <Button
+            type="button"
+            className="h-11 gap-2 rounded-xl px-5"
+            disabled={!instruction.trim() || mut.isPending}
+            onClick={submit}
+          >
+            {mut.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            {mut.isPending ? "Jobber…" : "Fortell"}
+          </Button>
+        </div>
       </div>
 
       {result && (
@@ -256,6 +377,55 @@ export function FortellChat() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {contactProposal && !contactApplied && (
+            <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bekreft kontaktoppdatering
+              </p>
+              <p className="text-sm font-medium">{contactProposal.name}</p>
+              {contactProposal.reason && (
+                <p className="text-xs text-muted-foreground">{contactProposal.reason}</p>
+              )}
+              <dl className="grid gap-1.5 text-sm">
+                {[
+                  ["E-post", contactProposal.email],
+                  ["Rolle", contactProposal.role],
+                  ["Telefon", contactProposal.phone],
+                  ["Nettsted", contactProposal.website],
+                  ["Org.nr", contactProposal.orgNr],
+                  ["Adresse", contactProposal.address],
+                  ["Bransje", contactProposal.industry],
+                ].map(([label, value]) =>
+                  value ? (
+                    <div key={label as string} className="flex gap-2">
+                      <dt className="w-20 shrink-0 text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 break-words">{value}</dd>
+                    </div>
+                  ) : null,
+                )}
+                {contactProposal.summary && (
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-muted-foreground">Sammendrag</dt>
+                    <dd className="min-w-0 break-words">{contactProposal.summary}</dd>
+                  </div>
+                )}
+              </dl>
+              <Button
+                type="button"
+                className="h-11 gap-2 rounded-xl"
+                disabled={contactMut.isPending}
+                onClick={() => contactMut.mutate(contactProposal)}
+              >
+                {contactMut.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserRound className="h-4 w-4" />
+                )}
+                Lagre og åpne kontakt
+              </Button>
+            </div>
           )}
 
           {(result.mailHits?.length ?? 0) > 0 && (
@@ -331,7 +501,10 @@ export function FortellChat() {
               </p>
               <ul className="divide-y divide-border">
                 {result.unpaidInvoices.map((inv) => (
-                  <li key={`${inv.orgSlug}:${inv.id}`} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <li
+                    key={`${inv.orgSlug}:${inv.id}`}
+                    className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                  >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
                         {inv.invoiceNumber ? `#${inv.invoiceNumber}` : "Uten nummer"}
@@ -393,26 +566,28 @@ export function FortellChat() {
           )}
 
           {workStarted && (
-            <p className="text-sm font-medium text-primary">Økt startet.</p>
+            <p className="text-sm font-medium text-primary">Økt startet lokalt i Nexus.</p>
           )}
 
-          {stopProposal && !workStopped && activeSession && (
+          {stopProposal && !workStopNote && (activeSession || stopping) && (
             <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Bekreft avslutning
               </p>
-              <p className="text-sm">
-                <span className="font-medium">{activeSession.projectName}</span>
-                {" · "}
-                {activeSession.organizationName}
-                {stopProposal.breakMinutes > 0
-                  ? ` · pause ${stopProposal.breakMinutes} min`
-                  : ""}
-              </p>
+              {activeSession && (
+                <p className="text-sm">
+                  <span className="font-medium">{activeSession.projectName}</span>
+                  {" · "}
+                  {activeSession.organizationName}
+                  {stopProposal.breakMinutes > 0
+                    ? ` · pause ${stopProposal.breakMinutes} min`
+                    : ""}
+                </p>
+              )}
               <Button
                 type="button"
                 className="h-11 gap-2 rounded-xl"
-                disabled={stopping}
+                disabled={stopping || !activeSession}
                 onClick={() => void confirmStop(stopProposal.breakMinutes)}
               >
                 {stopping ? (
@@ -425,12 +600,12 @@ export function FortellChat() {
             </div>
           )}
 
-          {stopProposal && !workStopped && !activeSession && (
+          {stopProposal && !workStopNote && !activeSession && !stopping && (
             <p className="text-sm text-muted-foreground">Ingen aktiv økt å avslutte.</p>
           )}
 
-          {workStopped && (
-            <p className="text-sm font-medium text-primary">Økt avsluttet.</p>
+          {workStopNote && (
+            <p className="text-sm font-medium text-foreground">{workStopNote}</p>
           )}
 
           {(result.draft || draftTo || draftSubject || draftBody) && (

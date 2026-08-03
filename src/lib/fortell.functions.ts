@@ -7,7 +7,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText, stepCountIs, tool } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
+import {
+  createGeminiProvider,
+  getGeminiApiKey,
+  getGeminiModel,
+} from "@/lib/ai-gateway.server";
+import { getBrregRoles, searchBrregCompanies } from "@/lib/brreg.server";
 
 export type FortellStep = { label: string; detail: string | null };
 
@@ -68,6 +73,25 @@ export type FortellSlackHit = {
   at: string | null;
 };
 
+export type FortellContactProposal = {
+  entityId: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+  phone: string | null;
+  website: string | null;
+  orgNr: string | null;
+  address: string | null;
+  industry: string | null;
+  summary: string | null;
+  reason: string | null;
+};
+
+export type FortellChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type FortellResult = {
   answer: string;
   steps: FortellStep[];
@@ -77,11 +101,21 @@ export type FortellResult = {
   unpaidInvoices: FortellUnpaidInvoice[];
   mailHits: FortellMailHit[];
   slackHits: FortellSlackHit[];
+  contactProposal: FortellContactProposal | null;
 };
 
 const Input = z.object({
   instruction: z.string().min(2).max(2000),
   preferredOrgSlug: z.string().max(80).nullable().optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000),
+      }),
+    )
+    .max(16)
+    .optional(),
   activeSession: z
     .object({
       projectName: z.string().min(1).max(120),
@@ -143,6 +177,7 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: FortellUnpaidInvoice[];
       mailHits: FortellMailHit[];
       slackHits: FortellSlackHit[];
+      contactProposal: FortellContactProposal | null;
     } = {
       draft: null,
       workProposal: null,
@@ -150,6 +185,7 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: [],
       mailHits: [],
       slackHits: [],
+      contactProposal: null,
     };
 
     const tools = {
@@ -244,6 +280,149 @@ export const runFortell = createServerFn({ method: "POST" })
           }
 
           return { count: contacts.length, contacts };
+        },
+      }),
+
+      searchWeb: tool({
+        description:
+          "Søk på nett etter person/selskap (adresse, nettside, daglig leder, handelsnavn). Bruk før proposeContactUpdate når brukeren ber om å finne mer info.",
+        inputSchema: z.object({
+          query: z.string().min(3).max(300),
+        }),
+        execute: async ({ query }) => {
+          steps.push({ label: "Søkte på nett", detail: query });
+          try {
+            const google = createGeminiProvider();
+            const grounded = await generateText({
+              model: google("gemini-3.5-flash-lite"),
+              tools: {
+                google_search: google.tools.googleSearch({}) as never,
+              },
+              prompt: [
+                "Du hjelper med oppslag for et norsk CRM.",
+                "Svar kort på norsk. Trekk ut konkrete fakta: juridisk selskapsnavn, org.nr (9 siffer), adresse, nettside, e-post, telefon, daglig leder/eiere hvis nevnt.",
+                "Ikke finn på org.nr eller e-post. Hvis usikkert, si det.",
+                `Søk: ${query}`,
+              ].join("\n"),
+            });
+            const sources = (grounded.sources ?? [])
+              .slice(0, 8)
+              .map((s) => {
+                const url = "url" in s && typeof s.url === "string" ? s.url : null;
+                const title = "title" in s && typeof s.title === "string" ? s.title : null;
+                return url ? { title, url } : null;
+              })
+              .filter((s): s is { title: string | null; url: string } => !!s);
+            return { summary: grounded.text.trim(), sources };
+          } catch (e) {
+            return {
+              summary: "",
+              sources: [],
+              error: e instanceof Error ? e.message : "Nettsøk feilet",
+            };
+          }
+        },
+      }),
+
+      lookupBrregCompany: tool({
+        description:
+          "Søk Brønnøysund etter norsk selskap. Bruk etter searchWeb eller når org.nr/juridisk navn er kjent.",
+        inputSchema: z.object({
+          name: z.string().min(2).max(120),
+          city: z.string().max(80).nullable().optional(),
+          addressHint: z.string().max(120).nullable().optional(),
+        }),
+        execute: async ({ name, city, addressHint }) => {
+          steps.push({
+            label: "Søkte i Brreg",
+            detail: [name, city, addressHint].filter(Boolean).join(" · "),
+          });
+          try {
+            const companies = await searchBrregCompanies({
+              name,
+              city: city ?? null,
+              addressHint: addressHint ?? null,
+            });
+            return { companies, count: companies.length };
+          } catch (e) {
+            return {
+              companies: [],
+              count: 0,
+              error: e instanceof Error ? e.message : "Brreg-feil",
+            };
+          }
+        },
+      }),
+
+      getBrregRoles: tool({
+        description:
+          "Hent roller (daglig leder, styre) for org.nr fra Brreg. Bruk etter lookupBrregCompany.",
+        inputSchema: z.object({
+          orgNr: z.string().min(9).max(20),
+        }),
+        execute: async ({ orgNr }) => {
+          steps.push({ label: "Hentet Brreg-roller", detail: orgNr });
+          try {
+            return await getBrregRoles(orgNr);
+          } catch (e) {
+            return {
+              orgNr,
+              roles: [],
+              dagligLeder: null,
+              error: e instanceof Error ? e.message : "Brreg-feil",
+            };
+          }
+        },
+      }),
+
+      proposeContactUpdate: tool({
+        description:
+          "Foreslå oppdatering av eksisterende Nexus-kontakt etter oppslag. Lagrer IKKE — brukeren godkjenner i UI og åpner kontaktsiden. Bruk entityId fra readContact. Bare fyll felt du faktisk fant.",
+        inputSchema: z.object({
+          entityId: z.string().uuid(),
+          email: z.string().email().nullable().optional(),
+          role: z.string().max(120).nullable().optional(),
+          phone: z.string().max(40).nullable().optional(),
+          website: z.string().max(200).nullable().optional(),
+          orgNr: z.string().max(20).nullable().optional(),
+          address: z.string().max(200).nullable().optional(),
+          industry: z.string().max(120).nullable().optional(),
+          summary: z.string().max(500).nullable().optional(),
+          reason: z.string().max(300).optional(),
+        }),
+        execute: async (input) => {
+          const { data: row } = await supabase
+            .from("entities")
+            .select("id, name, type")
+            .eq("id", input.entityId)
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (!row) {
+            steps.push({ label: "Kontaktforslag", detail: "Fant ikke entityId" });
+            return { ok: false, error: "Kontakt ikke funnet" };
+          }
+          out.contactProposal = {
+            entityId: row.id as string,
+            name: row.name as string,
+            email: input.email ?? null,
+            role: input.role ?? null,
+            phone: input.phone ?? null,
+            website: input.website ?? null,
+            orgNr: input.orgNr ?? null,
+            address: input.address ?? null,
+            industry: input.industry ?? null,
+            summary: input.summary ?? null,
+            reason: input.reason ?? "Foreslått etter oppslag",
+          };
+          steps.push({
+            label: "Foreslo kontaktoppdatering",
+            detail: row.name as string,
+          });
+          return {
+            ok: true,
+            note: "Forslag klart — brukeren må bekrefte i UI før lagring.",
+            proposal: out.contactProposal,
+          };
         },
       }),
 
@@ -655,32 +834,39 @@ export const runFortell = createServerFn({ method: "POST" })
       "Du er Fortell — Peders desk-assistent i Nexus.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
       sessionLine,
+      "Du har samtalehistorikk: les tidligere meldinger og hold kontekst (oppfølgingsspørsmål, tidligere beslutninger).",
       "Du har KUN disse verktøyene:",
       "1) readContact — les person/selskap i Nexus",
-      "2) searchImportantMail — søk Gmail (viktige/uleste)",
-      "3) searchSlack — les Slack denne uken (#drift, mentions, DM)",
-      "4) listUnpaidInvoices — hent ubetalte fakturaer fra Finance",
-      "5) proposeWorkSession — foreslå start av arbeidsøkt (starter ikke selv)",
-      "6) proposeStopWorkSession — foreslå å avslutte aktiv økt (stopper ikke selv)",
-      "7) proposeEmailDraft — foreslå e-postutkast (sender ikke selv)",
+      "2) searchWeb / lookupBrregCompany / getBrregRoles — finn mer info på nett/Brreg",
+      "3) proposeContactUpdate — foreslå felt på eksisterende kontakt (lagrer ikke selv)",
+      "4) searchImportantMail — søk Gmail (viktige/uleste)",
+      "5) searchSlack — les Slack denne uken (#drift, mentions, DM)",
+      "6) listUnpaidInvoices — ubetalte fakturaer fra Finance",
+      "7) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
+      "8) proposeEmailDraft — e-postutkast (sender ikke selv)",
       "Regler:",
-      "- Bruk verktøy når det trengs. Oppfinn ikke e-post, Slack-innhold, beløp eller fakta.",
-      "- Ved «viktige mail / noe å svare på»: kall searchImportantMail (ikke bare readContact).",
-      "- Ved Slack, vakt, eSkjenk, #drift: kall searchSlack med query/channelHint.",
-      "- Ved ubetalte fakturaer: kall listUnpaidInvoices.",
-      "- Ved «avslutt/stopp økt»: kall proposeStopWorkSession hvis det finnes aktiv økt.",
-      "- Ved arbeidsøkt-start: hvis prosjekt er uklart, spør eller list forslag fra tool-feil.",
-      "- Ved mailutkast: kort norsk body, ingen oppdiktede fakta. Ikke signer med navn.",
-      "- Du utfører ALDRI handlinger uten foreslå-tools — brukeren bekrefter i UI.",
+      "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
+      "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
+      "- Oppfinn ALDRI e-post, org.nr, telefon eller Slack-innhold.",
+      "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
+      "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ikke signer med navn.",
+      "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");
 
+    const history = (data.history ?? []).slice(-12);
     const result = await generateText({
       model: getGeminiModel("flash"),
       system,
-      prompt: data.instruction,
+      messages: [
+        ...history.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+        { role: "user" as const, content: data.instruction },
+      ],
       tools,
-      stopWhen: stepCountIs(12),
+      stopWhen: stepCountIs(14),
     });
 
     const answer = result.text.trim();
@@ -711,6 +897,9 @@ export const runFortell = createServerFn({ method: "POST" })
     } else if (steps.some((s) => s.label === "Leste Slack")) {
       fallback = "Ingen matchende Slack-meldinger denne uken.";
     }
+    if (out.contactProposal) {
+      fallback = `Forslag til oppdatering av ${out.contactProposal.name} er klart — bekreft under.`;
+    }
 
     return {
       answer: answer || fallback,
@@ -721,5 +910,117 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: out.unpaidInvoices,
       mailHits: out.mailHits,
       slackHits: out.slackHits,
+      contactProposal: out.contactProposal,
     };
+  });
+
+/** Apply a Fortell contact proposal (user confirmed). */
+export const applyFortellContactProposal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        entityId: z.string().uuid(),
+        email: z.string().email().nullable().optional(),
+        role: z.string().max(120).nullable().optional(),
+        phone: z.string().max(40).nullable().optional(),
+        website: z.string().max(200).nullable().optional(),
+        orgNr: z.string().max(20).nullable().optional(),
+        address: z.string().max(200).nullable().optional(),
+        industry: z.string().max(120).nullable().optional(),
+        summary: z.string().max(500).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("entities")
+      .select("id, name, type, metadata, summary")
+      .eq("id", data.entityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Kontakt ikke funnet");
+    if (row.type !== "person" && row.type !== "company") {
+      throw new Error("Bare person/selskap kan oppdateres");
+    }
+
+    const meta: Record<string, unknown> = {
+      ...((row.metadata ?? {}) as Record<string, unknown>),
+    };
+    const setField = (key: string, value: string | null | undefined) => {
+      if (value === undefined) return;
+      const t = (value ?? "").trim();
+      if (!t) return;
+      meta[key] = t;
+    };
+
+    if (data.email?.trim()) {
+      const email = data.email.trim().toLowerCase();
+      meta.email = email;
+      const domain = email.split("@")[1] ?? null;
+      if (domain) meta.email_domain = domain;
+    }
+    setField("role", data.role);
+    if (data.phone?.trim()) {
+      meta.phone = data.phone.trim().replace(/\s+/g, " ").slice(0, 40);
+    }
+    if (data.website?.trim()) {
+      let website = data.website.trim().slice(0, 200);
+      if (!/^https?:\/\//i.test(website) && /^[\w.-]+\.[a-z]{2,}/i.test(website)) {
+        website = `https://${website}`;
+      }
+      meta.website = website;
+    }
+    if (data.orgNr) {
+      const digits = data.orgNr.replace(/\D/g, "").slice(0, 9);
+      if (digits) meta.org_nr = digits;
+    }
+    setField("address", data.address);
+    setField("industry", data.industry);
+
+    const patch: Record<string, unknown> = {
+      metadata: meta,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.summary?.trim()) {
+      patch.summary = data.summary.trim().slice(0, 500);
+    }
+
+    const { error: upErr } = await supabase
+      .from("entities")
+      .update(patch as never)
+      .eq("id", data.entityId)
+      .eq("user_id", userId);
+    if (upErr) throw upErr;
+
+    if (data.email?.trim()) {
+      const email = data.email.trim().toLowerCase();
+      const now = new Date().toISOString();
+      const { data: existing } = await supabase
+        .from("known_identities")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("identity_type", "email_address")
+        .eq("external_key", email)
+        .maybeSingle();
+      if (existing?.id) {
+        await supabase
+          .from("known_identities")
+          .update({ entity_id: data.entityId, ignored_at: null, updated_at: now })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("known_identities").insert({
+          user_id: userId,
+          identity_type: "email_address",
+          external_key: email,
+          entity_id: data.entityId,
+          created_at: now,
+          updated_at: now,
+        } as never);
+      }
+    }
+
+    return { ok: true as const, entityId: data.entityId, name: row.name as string };
   });
