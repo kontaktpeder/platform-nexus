@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Clock, ExternalLink, Loader2, Send, Sparkles } from "lucide-react";
+import { Clock, ExternalLink, Loader2, Send, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,15 +12,24 @@ import {
   type FortellWorkProposal,
 } from "@/lib/fortell.functions";
 import { sendAssistantDraft } from "@/lib/inbox-assistant.functions";
-import { readWorkSession, startWorkSession } from "@/lib/work-session";
+import { getLastWorkspace } from "@/lib/last-workspace";
+import { syncTimeEntryToWork } from "@/lib/work-timer.functions";
+import {
+  markPendingSynced,
+  readWorkSession,
+  startWorkSession,
+  stopWorkSession,
+} from "@/lib/work-session";
 
 /**
- * Desk-only Fortell surface — 3 tools with human confirmation.
+ * Desk-only Fortell surface — tools with human confirmation.
  * Keep separate from mobile /hjem capture CTAs.
  */
 export function FortellChat() {
   const run = useServerFn(runFortell);
   const sendDraft = useServerFn(sendAssistantDraft);
+  const runSync = useServerFn(syncTimeEntryToWork);
+  const lastWs = useMemo(() => getLastWorkspace(), []);
 
   const [instruction, setInstruction] = useState("");
   const [result, setResult] = useState<FortellResult | null>(null);
@@ -30,18 +39,36 @@ export function FortellChat() {
   const [draftDone, setDraftDone] = useState(false);
   const [gmailUrl, setGmailUrl] = useState<string | null>(null);
   const [workStarted, setWorkStarted] = useState(false);
+  const [workStopped, setWorkStopped] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
   );
 
   const mut = useMutation({
-    mutationFn: (text: string) =>
-      run({ data: { instruction: text } }) as Promise<FortellResult>,
+    mutationFn: (text: string) => {
+      const session = readWorkSession();
+      return run({
+        data: {
+          instruction: text,
+          preferredOrgSlug: lastWs?.orgSlug ?? null,
+          activeSession: session
+            ? {
+                projectName: session.projectName,
+                organizationName: session.organizationName,
+                startedAt: session.startedAt,
+                platformOrgSlug: lastWs?.orgSlug ?? null,
+              }
+            : null,
+        },
+      }) as Promise<FortellResult>;
+    },
     onSuccess: (res) => {
       setResult(res);
       setDraftDone(false);
       setGmailUrl(null);
       setWorkStarted(false);
+      setWorkStopped(false);
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -106,6 +133,51 @@ export function FortellChat() {
     }
   }
 
+  async function confirmStop(breakMinutes: number) {
+    const pause = Math.max(0, Math.min(24 * 60, breakMinutes));
+    const entry = stopWorkSession(pause);
+    setActiveSession(null);
+    if (!entry) {
+      toast.error("Ingen aktiv økt å avslutte");
+      return;
+    }
+    setWorkStopped(true);
+    setStopping(true);
+    try {
+      if (!/^[0-9a-f-]{36}$/i.test(entry.projectId)) {
+        throw new Error("Prosjekt mangler Work-id — synk manuelt under Arbeidsøkt");
+      }
+      const res = await runSync({
+        data: {
+          id: entry.id,
+          projectId: entry.projectId,
+          rateId:
+            entry.rateId && /^[0-9a-f-]{36}$/i.test(entry.rateId) ? entry.rateId : null,
+          date: entry.date,
+          start_time: entry.start_time,
+          end_time: entry.end_time,
+          break_minutes: entry.break_minutes,
+          comment: entry.comment,
+          orgSlug: lastWs?.orgSlug ?? null,
+        },
+      });
+      markPendingSynced(entry.id, "synced");
+      toast.success(
+        res.duplicate
+          ? `Allerede i Work · ${entry.total_minutes} min`
+          : `Synket til Work · ${entry.total_minutes} min`,
+        { description: entry.projectName },
+      );
+    } catch (e) {
+      markPendingSynced(entry.id, "failed");
+      toast.error(e instanceof Error ? e.message : "Kunne ikke synke til Work", {
+        description: "Økten er stoppet lokalt — prøv synk under Arbeidsøkt",
+      });
+    } finally {
+      setStopping(false);
+    }
+  }
+
   const canSendDraft =
     !!draftTo.trim() &&
     !!draftSubject.trim() &&
@@ -114,16 +186,18 @@ export function FortellChat() {
     !sendMut.isPending;
 
   const proposal = result?.workProposal ?? null;
+  const stopProposal = result?.stopProposal ?? null;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-5">
       <header className="space-y-1">
         <p className="text-sm font-medium text-muted-foreground">Fortell Nexus</p>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Én inngang · tre handlinger
+          Én inngang · få handlinger
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Les kontakt, foreslå arbeidsøkt, lag mailutkast. Du bekrefter før noe skjer.
+          Mail, Slack, fakturaer, kontakter, start/avslutt økt, mailutkast. Du bekrefter før noe
+          skjer.
         </p>
       </header>
 
@@ -140,7 +214,7 @@ export function FortellChat() {
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         placeholder={
-          "F.eks. «Hva vet vi om Kari?», «Start økt på Drift», «Skriv mail til kari@… om tilbud»"
+          "F.eks. «Viktige mail?», «Noe i #drift om eSkjenk?», «Ubetalte fakturaer?», «Avslutt økt»"
         }
         rows={5}
         maxLength={2000}
@@ -184,6 +258,114 @@ export function FortellChat() {
             </ul>
           )}
 
+          {(result.mailHits?.length ?? 0) > 0 && (
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Gmail
+              </p>
+              <ul className="divide-y divide-border">
+                {result.mailHits.map((m) => (
+                  <li key={m.href} className="py-2.5 first:pt-0 last:pb-0">
+                    <a
+                      href={m.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block min-w-0 hover:opacity-90"
+                    >
+                      <p className="truncate text-sm font-medium">{m.subject}</p>
+                      <p className="truncate text-xs text-muted-foreground">{m.from}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                        {m.snippet}
+                      </p>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(result.slackHits?.length ?? 0) > 0 && (
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Slack
+              </p>
+              <ul className="divide-y divide-border">
+                {result.slackHits.map((s, i) => (
+                  <li key={`${s.channel}-${s.at ?? i}`} className="py-2.5 first:pt-0 last:pb-0">
+                    {s.href ? (
+                      <a
+                        href={s.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block min-w-0 hover:opacity-90"
+                      >
+                        <p className="truncate text-sm font-medium">
+                          {s.channel}
+                          {s.from ? ` · ${s.from}` : ""}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {s.snippet}
+                        </p>
+                      </a>
+                    ) : (
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {s.channel}
+                          {s.from ? ` · ${s.from}` : ""}
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {s.snippet}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(result.unpaidInvoices?.length ?? 0) > 0 && (
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Ubetalte fakturaer
+              </p>
+              <ul className="divide-y divide-border">
+                {result.unpaidInvoices.map((inv) => (
+                  <li key={`${inv.orgSlug}:${inv.id}`} className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {inv.invoiceNumber ? `#${inv.invoiceNumber}` : "Uten nummer"}
+                        {" · "}
+                        {inv.customerName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {inv.orgName}
+                        {inv.dueDate
+                          ? ` · forfall ${new Date(inv.dueDate).toLocaleDateString("nb-NO")}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-medium tabular-nums">
+                        {Math.round(inv.total).toLocaleString("nb-NO")} kr
+                      </p>
+                      {inv.href && (
+                        <a
+                          href={inv.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          Åpne
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {proposal && !workStarted && (
             <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -212,6 +394,43 @@ export function FortellChat() {
 
           {workStarted && (
             <p className="text-sm font-medium text-primary">Økt startet.</p>
+          )}
+
+          {stopProposal && !workStopped && activeSession && (
+            <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Bekreft avslutning
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">{activeSession.projectName}</span>
+                {" · "}
+                {activeSession.organizationName}
+                {stopProposal.breakMinutes > 0
+                  ? ` · pause ${stopProposal.breakMinutes} min`
+                  : ""}
+              </p>
+              <Button
+                type="button"
+                className="h-11 gap-2 rounded-xl"
+                disabled={stopping}
+                onClick={() => void confirmStop(stopProposal.breakMinutes)}
+              >
+                {stopping ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                {stopping ? "Avslutter…" : "Avslutt økt og synk til Work"}
+              </Button>
+            </div>
+          )}
+
+          {stopProposal && !workStopped && !activeSession && (
+            <p className="text-sm text-muted-foreground">Ingen aktiv økt å avslutte.</p>
+          )}
+
+          {workStopped && (
+            <p className="text-sm font-medium text-primary">Økt avsluttet.</p>
           )}
 
           {(result.draft || draftTo || draftSubject || draftBody) && (
