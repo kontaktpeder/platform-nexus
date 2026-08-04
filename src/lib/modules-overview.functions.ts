@@ -20,11 +20,6 @@ const PLANNED: Array<{
   description: string;
 }> = [
   {
-    id: "google_calendar",
-    name: "Google Calendar",
-    description: "Hendelser i dag / snart som kø-signaler.",
-  },
-  {
     id: "whatsapp",
     name: "WhatsApp",
     description: "Meldinger og folk — først via manuelt signal, senere API der mulig.",
@@ -330,6 +325,38 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
           ? "Koblet via Lovable Cloud (alle organisasjoner)."
           : null,
         gaps: ok ? [] : ["GOOGLE_MAIL_API_KEY mangler i miljøet."],
+        enabledOnActiveWorkspace: null,
+        canToggle: false,
+        connectedOrgs: [],
+        configureHref: activeWorkspace
+          ? `/o/${activeWorkspace.orgSlug}/connections`
+          : "/app",
+      });
+    }
+
+    // Google Calendar (deployment)
+    {
+      const ok =
+        !!process.env.LOVABLE_API_KEY &&
+        !!(process.env.GOOGLE_CALENDAR_API_KEY || process.env.GOOGLE_MAIL_API_KEY);
+      const { status, statusLabel } = statusOf(ok ? "connected" : "unavailable");
+      rows.push({
+        id: "google_calendar",
+        name: "Google Calendar",
+        description: "Hendelser i dag / snart som kø-signaler og Fortell-kontekst.",
+        kind: "integration",
+        moduleId: null,
+        moduleSlug: null,
+        status,
+        statusLabel,
+        detail: ok
+          ? process.env.GOOGLE_CALENDAR_API_KEY
+            ? "Koblet via Lovable Calendar-connector."
+            : "Bruker Gmail-connector-nøkkel som fallback."
+          : null,
+        gaps: ok
+          ? []
+          : ["GOOGLE_CALENDAR_API_KEY (eller GOOGLE_MAIL_API_KEY) mangler i miljøet."],
         enabledOnActiveWorkspace: null,
         canToggle: false,
         connectedOrgs: [],

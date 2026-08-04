@@ -75,6 +75,14 @@ export type FortellSlackHit = {
   at: string | null;
 };
 
+export type FortellCalendarHit = {
+  title: string;
+  start: string;
+  location: string | null;
+  href: string | null;
+  allDay: boolean;
+};
+
 export type FortellContactProposal = {
   entityId: string;
   name: string;
@@ -136,9 +144,11 @@ export type FortellResult = {
   unpaidInvoices: FortellUnpaidInvoice[];
   mailHits: FortellMailHit[];
   slackHits: FortellSlackHit[];
+  calendarHits: FortellCalendarHit[];
   contactProposal: FortellContactProposal | null;
   relationProposals: FortellRelationProposal[];
   agreementProposal: FortellAgreementProposal | null;
+  manualSignalSaved: boolean;
 };
 
 const Input = z.object({
@@ -177,6 +187,18 @@ function osloToday(): string {
   }).format(new Date());
 }
 
+/** Sleep / evening / tomorrow — must prefetch mail + calendar before advising. */
+function needsForcedContextCheck(instruction: string): boolean {
+  const t = instruction.toLowerCase();
+  return (
+    /\b(legge\s*meg|legg\s*meg|gå\s*og\s*legge|sove|god\s*natt)\b/i.test(t) ||
+    /\b(kveld|i\s*morgen|imorgen)\b/i.test(t) ||
+    /\bhva\s+(bør|skal|må)\s+jeg\s+(huske|vite|gjøre)\b/i.test(t) ||
+    /\b(prioriter|prioritering)\b/i.test(t) ||
+    /\ber\s+det\s+noe\s+(viktig|jeg\s+må)\b/i.test(t)
+  );
+}
+
 function matchByName<T extends { name: string }>(
   items: T[],
   query: string,
@@ -206,7 +228,6 @@ export const runFortell = createServerFn({ method: "POST" })
       data.activeSession?.platformOrgSlug?.trim() ||
       null;
 
-    /** Mutable bag — TS does not track assignments inside tool closures. */
     const out: {
       draft: FortellDraft | null;
       workProposal: FortellWorkProposal | null;
@@ -214,9 +235,11 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: FortellUnpaidInvoice[];
       mailHits: FortellMailHit[];
       slackHits: FortellSlackHit[];
+      calendarHits: FortellCalendarHit[];
       contactProposal: FortellContactProposal | null;
       relationProposals: FortellRelationProposal[];
       agreementProposal: FortellAgreementProposal | null;
+      manualSignalSaved: boolean;
     } = {
       draft: null,
       workProposal: null,
@@ -224,9 +247,11 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: [],
       mailHits: [],
       slackHits: [],
+      calendarHits: [],
       contactProposal: null,
       relationProposals: [],
       agreementProposal: null,
+      manualSignalSaved: false,
     };
 
     const tools = {
@@ -786,6 +811,77 @@ export const runFortell = createServerFn({ method: "POST" })
         },
       }),
 
+      listUpcomingEvents: tool({
+        description:
+          "List kommende Google Calendar-hendelser (i dag / snart). Bruk ved spørsmål om i morgen, kveld, prioritering, eller hva brukeren må huske.",
+        inputSchema: z.object({
+          days: z.number().int().min(1).max(14).optional(),
+          max: z.number().int().min(1).max(20).optional(),
+        }),
+        execute: async ({ days, max }) => {
+          const cal = await import("@/lib/inbox/calendar-recent.server");
+          steps.push({
+            label: "Leste Google Calendar",
+            detail: `${days ?? 3} dager`,
+          });
+          const { events, error } = await cal.listUpcomingCalendarEvents({
+            days: days ?? 3,
+            max: max ?? 12,
+          });
+          out.calendarHits = events.map((e) => ({
+            title: e.title,
+            start: e.start,
+            location: e.location,
+            href: e.href,
+            allDay: e.allDay,
+          }));
+          if (error && events.length === 0) {
+            return { ok: false, error, events: [] };
+          }
+          return {
+            ok: true,
+            count: events.length,
+            events: events.map((e) => ({
+              title: e.title,
+              start: e.start,
+              location: e.location,
+              allDay: e.allDay,
+            })),
+          };
+        },
+      }),
+
+      captureManualSignal: tool({
+        description:
+          "Lagre et manuelt signal i Desk-køen. Bruk når brukeren sier «noter dette», limer inn fra WhatsApp/muntlig, eller ber Nexus huske noe som ikke kommer fra API.",
+        inputSchema: z.object({
+          text: z.string().min(1).max(4000),
+          channel: z.string().max(40).nullable().optional(),
+        }),
+        execute: async ({ text, channel }) => {
+          const { insertManualDeskSignal } = await import(
+            "@/lib/morning-mission/manual-signals.server"
+          );
+          try {
+            const row = await insertManualDeskSignal({
+              supabase,
+              userId,
+              text,
+              channel: channel ?? "fortell",
+            });
+            out.manualSignalSaved = true;
+            steps.push({
+              label: "Lagret manuelt signal",
+              detail: text.slice(0, 80),
+            });
+            return { ok: true, id: row.id };
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "Kunne ikke lagre";
+            return { ok: false, error: msg };
+          }
+        },
+      }),
+
       searchSlack: tool({
         description:
           "Les Slack denne uken (mentions, DM, #drift/ops og whitelisted kanaler). Bruk når brukeren spør om Slack, vakt, eSkjenk, drift, eller hva som skjer i kanaler. Valgfri filtertekst (f.eks. eskjenk, vakt).",
@@ -1100,11 +1196,97 @@ export const runFortell = createServerFn({ method: "POST" })
     );
     const personalBlock = await loadPersonalContextPromptBlock(supabase, userId);
 
+    // Hard evening / tomorrow check — do not rely on the model choosing tools.
+    let forcedContextBlock = "";
+    if (needsForcedContextCheck(data.instruction)) {
+      const gmail = await import("@/lib/inbox/gmail.server");
+      const cal = await import("@/lib/inbox/calendar-recent.server");
+      const appointmentQ =
+        "(subject:(påminnelse OR timeavtale OR avtale OR vaksine) OR from:easypractice) newer_than:14d";
+      steps.push({ label: "Pålagt kveldssjekk", detail: "mail + kalender" });
+      try {
+        const hits = await gmail.searchGmailMessages(appointmentQ, 10);
+        const unread = await gmail.searchGmailMessages(
+          "is:unread label:inbox -category:promotions -category:social -category:forums newer_than:3d",
+          8,
+        );
+        const byKey = new Map<string, (typeof hits)[number]>();
+        for (const h of [...hits, ...unread]) {
+          byKey.set(`${h.threadId}:${h.subject}`, h);
+        }
+        out.mailHits = [...byKey.values()].slice(0, 12).map((h) => ({
+          subject: h.subject,
+          from: h.from,
+          snippet: h.snippet,
+          href: `https://mail.google.com/mail/u/0/#inbox/${h.threadId}`,
+          date: h.date,
+        }));
+        steps.push({
+          label: "Søkte i Gmail",
+          detail: `${out.mailHits.length} treff (pålagt)`,
+        });
+      } catch (e) {
+        steps.push({
+          label: "Gmail-feil",
+          detail: e instanceof Error ? e.message : "Gmail-feil",
+        });
+      }
+      try {
+        const { events, error } = await cal.listUpcomingCalendarEvents({
+          days: 3,
+          max: 12,
+        });
+        out.calendarHits = events.map((e) => ({
+          title: e.title,
+          start: e.start,
+          location: e.location,
+          href: e.href,
+          allDay: e.allDay,
+        }));
+        steps.push({
+          label: "Leste Google Calendar",
+          detail: error && !events.length ? error : `${events.length} hendelser (pålagt)`,
+        });
+      } catch (e) {
+        steps.push({
+          label: "Calendar-feil",
+          detail: e instanceof Error ? e.message : "Calendar-feil",
+        });
+      }
+
+      const mailLines =
+        out.mailHits.length === 0
+          ? "- Ingen relevante mailtreff."
+          : out.mailHits
+              .map(
+                (m) =>
+                  `- «${m.subject}» fra ${m.from}${m.date ? ` (${m.date})` : ""}: ${m.snippet}`,
+              )
+              .join("\n");
+      const calLines =
+        out.calendarHits.length === 0
+          ? "- Ingen kalenderhendelser de neste dagene (eller Calendar ikke koblet)."
+          : out.calendarHits
+              .map(
+                (c) =>
+                  `- ${c.start}: ${c.title}${c.location ? ` @ ${c.location}` : ""}${c.allDay ? " (hele dagen)" : ""}`,
+              )
+              .join("\n");
+      forcedContextBlock = [
+        "PÅLAGT KONTEKST (allerede hentet — bruk dette i svaret, ikke gjett «ingenting»):",
+        "Mail:",
+        mailLines,
+        "Kalender:",
+        calLines,
+      ].join("\n");
+    }
+
     const system = [
       "Du er Fortell — Peders desk-assistent i Nexus.",
       `I dag er ${osloToday()} (Europe/Oslo).`,
       sessionLine,
       personalBlock ?? "",
+      forcedContextBlock,
       "Du har samtalehistorikk: les tidligere meldinger og hold kontekst (oppfølgingsspørsmål, tidligere beslutninger).",
       "Du har KUN disse verktøyene:",
       "1) readContact — les person/selskap i Nexus",
@@ -1112,25 +1294,28 @@ export const runFortell = createServerFn({ method: "POST" })
       "3) proposeContactUpdate — foreslå felt på eksisterende kontakt (lagrer ikke selv)",
       "4) proposeRelation — foreslå kobling mellom to kontakter (lagrer ikke selv)",
       "5) searchImportantMail — søk Gmail (viktige/uleste)",
-      "6) searchSlack — les Slack denne uken (#drift, mentions, DM)",
-      "7) listUnpaidInvoices — ubetalte fakturaer fra Finance",
-      "8) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
-      "9) proposeEmailDraft — e-postutkast (sender ikke selv)",
-      "10) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
-      "11) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
-      "12) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
+      "6) listUpcomingEvents — Google Calendar i dag/snart",
+      "7) captureManualSignal — lagre manuelt signal i Desk-køen",
+      "8) searchSlack — les Slack denne uken (#drift, mentions, DM)",
+      "9) listUnpaidInvoices — ubetalte fakturaer fra Finance",
+      "10) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
+      "11) proposeEmailDraft — e-postutkast (sender ikke selv)",
+      "12) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
+      "13) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
+      "14) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
       "- Ved daglig leder / eier / «koble X til Y» / handelsnavn↔juridisk: readContact begge → proposeRelation (member_of, owns, related_to, customer_of).",
       "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
-      "- Ved spørsmål om legge seg, kveld, i morgen, prioritering i dag/i morgen, eller «hva bør jeg huske»: ALLTID kall searchImportantMail FØRST — søk etter påminnelse/time/avtale (f.eks. subject:(påminnelse OR timeavtale OR avtale) newer_than:14d) før du gir råd. Nevn avtaler og klokkeslett eksplisitt i svaret. Ikke gjett at det er «ingenting».",
+      "- Ved spørsmål om legge seg, kveld, i morgen, prioritering, eller «hva bør jeg huske»: systemet har allerede hentet mail+kalender (se PÅLAGT KONTEKST). Nevn avtaler og klokkeslett eksplisitt. Ikke gjett at det er «ingenting».",
+      "- Ved «noter dette» / WhatsApp / muntlig info: captureManualSignal.",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
       "- Control-avtaler: Fortell er INNGANGEN — Control eier signering/versjon/arkiv.",
       "- Ved «eksisterende utkast», «se på utkast», «jobb videre», «oppdater avtalen» eller navngitt motpart/utkast i Control: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate. ALDRI opprett nytt i disse tilfellene.",
       "- proposeControlAgreement KUN når brukeren eksplisitt ber om et nytt utkast.",
-      "- Du lagrer/sender/starter ALDRI uten foreslå-tools — brukeren bekrefter i UI.",
+      "- Du lagrer/sender/starter ALDRI uten foreslå-tools — unntak: captureManualSignal når brukeren ber om å notere. Ellers bekrefter brukeren i UI.",
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");
 
@@ -1183,6 +1368,12 @@ export const runFortell = createServerFn({ method: "POST" })
     } else if (steps.some((s) => s.label === "Leste Slack")) {
       fallback = "Ingen matchende Slack-meldinger denne uken.";
     }
+    if (out.calendarHits.length > 0) {
+      fallback = `Du har ${out.calendarHits.length} kalenderhendelser snart. Se listen under.`;
+    }
+    if (out.manualSignalSaved) {
+      fallback = "Notert — signalet ligger i Desk-køen.";
+    }
     if (out.contactProposal) {
       fallback = `Forslag til oppdatering av ${out.contactProposal.name} er klart — bekreft under.`;
     }
@@ -1202,9 +1393,11 @@ export const runFortell = createServerFn({ method: "POST" })
       unpaidInvoices: out.unpaidInvoices,
       mailHits: out.mailHits,
       slackHits: out.slackHits,
+      calendarHits: out.calendarHits,
       contactProposal: out.contactProposal,
       relationProposals: out.relationProposals,
       agreementProposal: out.agreementProposal,
+      manualSignalSaved: out.manualSignalSaved,
     };
   });
 

@@ -4,6 +4,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { MissionActionState } from "@/lib/mission-action-state";
 import type { MissionSignal } from "@/lib/morning-mission/signal-prefilter.server";
@@ -35,6 +36,12 @@ function sourceLabel(source: DeskQueueSource): string {
       return "Work";
     case "slack":
       return "Slack";
+    case "field":
+      return "Field";
+    case "manual":
+      return "Manuelt";
+    case "calendar":
+      return "Kalender";
   }
 }
 
@@ -43,10 +50,13 @@ function isDraftSignal(signal: MissionSignal): boolean {
 }
 
 function isAppointmentSignal(signal: MissionSignal): boolean {
-  return signal.tags.includes("appointment");
+  return signal.tags.includes("appointment") || signal.source === "calendar";
 }
 
 function appointmentTitle(signal: MissionSignal): string {
+  if (signal.source === "calendar") {
+    return signal.subject.trim() || "Kalender";
+  }
   const text = `${signal.subject} ${signal.snippet}`;
   const m = text.match(/(?:klokken|kl\.?)\s*(\d{1,2})[:.](\d{2})/i);
   if (m) {
@@ -62,8 +72,12 @@ function appointmentTitle(signal: MissionSignal): string {
 function rank(signal: MissionSignal): number {
   if (signal.tags.includes("unpaid_invoice")) return 100;
   if (signal.tags.includes("invoice_action")) return 95;
+  if (signal.tags.includes("overdue")) return 94;
   if (isAppointmentSignal(signal)) return 92;
+  if (signal.tags.includes("follow_up") || signal.tags.includes("due")) return 91;
   if (signal.source === "finance") return 90;
+  if (signal.tags.includes("no_plan")) return 78;
+  if (signal.source === "manual") return 75;
   if (isDraftSignal(signal)) return 72;
   if (signal.tags.includes("unread")) return 70;
   if (signal.source === "slack") return 55;
@@ -76,6 +90,7 @@ function toItem(signal: MissionSignal): DeskQueueItem {
   const draft = isDraftSignal(signal);
   const appointment = isAppointmentSignal(signal);
   const subject = signal.subject.trim() || "(uten emne)";
+
   if (draft) {
     return {
       id: signal.id,
@@ -94,9 +109,51 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       id: signal.id,
       kind: "appointment",
       title: appointmentTitle(signal),
-      subtitle: [subject, signal.from].filter(Boolean).join(" · ").slice(0, 160) || null,
+      subtitle:
+        signal.source === "calendar"
+          ? signal.snippet || null
+          : [subject, signal.from].filter(Boolean).join(" · ").slice(0, 160) || null,
       source,
-      sourceLabel: "Avtale",
+      sourceLabel: signal.source === "calendar" ? "Kalender" : "Avtale",
+      href: signal.href,
+      sourceIds: [signal.id],
+      occurredAt: signal.occurred_at,
+    };
+  }
+  if (signal.tags.includes("follow_up")) {
+    return {
+      id: signal.id,
+      kind: "follow_up",
+      title: subject,
+      subtitle: signal.snippet || null,
+      source: "field",
+      sourceLabel: "Oppfølging",
+      href: signal.href,
+      sourceIds: [signal.id],
+      occurredAt: signal.occurred_at,
+    };
+  }
+  if (signal.tags.includes("no_plan")) {
+    return {
+      id: signal.id,
+      kind: "no_plan",
+      title: subject,
+      subtitle: signal.snippet || null,
+      source: "field",
+      sourceLabel: "Field",
+      href: signal.href,
+      sourceIds: [signal.id],
+      occurredAt: signal.occurred_at,
+    };
+  }
+  if (signal.source === "manual") {
+    return {
+      id: signal.id,
+      kind: "manual",
+      title: subject,
+      subtitle: signal.from !== "Manuelt" ? signal.from : signal.snippet || null,
+      source: "manual",
+      sourceLabel: "Manuelt",
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
@@ -173,7 +230,7 @@ export const getDeskQueue = createServerFn({ method: "GET" })
     }
 
     const [{ signals: allSignals }, actionStates] = await Promise.all([
-      gatherMorningSignals({ workspaces, userId }),
+      gatherMorningSignals({ workspaces, userId, supabase }),
       listMissionActionStates(supabase, userId),
     ]);
 
@@ -183,7 +240,6 @@ export const getDeskQueue = createServerFn({ method: "GET" })
       actionStates,
     });
 
-    // Keep actionable signals; drop noise. No AI reordering.
     const open = [...forAi]
       .filter((s) => !isHidden(s.id, actionStates))
       .filter((s) => !noiseSignals.some((n) => n.id === s.id))
@@ -200,4 +256,28 @@ export const getDeskQueue = createServerFn({ method: "GET" })
       totalOpen: open.length,
       generatedAt: new Date().toISOString(),
     };
+  });
+
+/** Quick manual intake for Desk queue (oral / WhatsApp / no API). */
+export const createDeskManualSignal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        text: z.string().min(1).max(4000),
+        channel: z.string().max(40).nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { insertManualDeskSignal } = await import(
+      "@/lib/morning-mission/manual-signals.server"
+    );
+    const row = await insertManualDeskSignal({
+      supabase: context.supabase,
+      userId: context.userId,
+      text: data.text,
+      channel: data.channel ?? "manual",
+    });
+    return { ok: true as const, id: row.id };
   });

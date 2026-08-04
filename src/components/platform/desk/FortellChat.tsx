@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -76,6 +76,7 @@ function relationKey(r: FortellRelationProposal): string {
  */
 export function FortellChat() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const run = useServerFn(runFortell);
   const applyContact = useServerFn(applyFortellContactProposal);
   const applyAgreement = useServerFn(applyFortellControlAgreement);
@@ -164,6 +165,10 @@ export function FortellChat() {
       setStopProjectId(sess?.projectId ?? "");
       setStopRateId(sess?.rateId ?? "");
       setStopBreakMin(String(res.stopProposal?.breakMinutes ?? 0));
+      if (res.manualSignalSaved) {
+        void qc.invalidateQueries({ queryKey: ["desk-queue"] });
+        toast.success("Signal lagret i køen");
+      }
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -852,6 +857,43 @@ export function FortellChat() {
                         {m.snippet}
                       </p>
                     </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(result.calendarHits?.length ?? 0) > 0 && (
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Kalender
+              </p>
+              <ul className="divide-y divide-border">
+                {result.calendarHits.map((c, i) => (
+                  <li key={`${c.start}-${c.title}-${i}`} className="py-2.5 first:pt-0 last:pb-0">
+                    {c.href ? (
+                      <a
+                        href={c.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block min-w-0 hover:opacity-90"
+                      >
+                        <p className="truncate text-sm font-medium">{c.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {c.start}
+                          {c.location ? ` · ${c.location}` : ""}
+                          {c.allDay ? " · hele dagen" : ""}
+                        </p>
+                      </a>
+                    ) : (
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{c.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {c.start}
+                          {c.location ? ` · ${c.location}` : ""}
+                        </p>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

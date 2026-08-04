@@ -160,6 +160,9 @@ export async function gatherMorningSignals(input: {
   workspaces: MorningWorkspaceInput[];
   userId: string;
   forceSlack?: boolean;
+  /** Auth'd supabase client for user-scoped tables (field / manual). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase?: any;
 }): Promise<{
   signals: MissionSignal[];
   slackStatus: import("@/lib/morning-mission.types").SlackMissionStatus;
@@ -167,16 +170,37 @@ export async function gatherMorningSignals(input: {
   const { fetchSlackMissionSignals } = await import("@/lib/morning-mission/slack-mission.server");
   const organizationIds = [...new Set(input.workspaces.map((w) => w.orgId).filter(Boolean))];
 
-  const [gmailRaw, slackResult, workspaceSignals] = await Promise.all([
-    fetchRecentGmailSignals({ hours: 72, max: 40 }),
-    fetchSlackMissionSignals({ force: input.forceSlack, organizationIds }),
-    gatherWorkspaceSignals(input.workspaces, input.userId),
-  ]);
+  const supabase =
+    input.supabase ??
+    (await import("@/integrations/supabase/client.server")).supabaseAdmin;
+
+  const [gmailRaw, slackResult, workspaceSignals, fieldSignals, manualSignals, calendarSignals] =
+    await Promise.all([
+      fetchRecentGmailSignals({ hours: 72, max: 40 }),
+      fetchSlackMissionSignals({ force: input.forceSlack, organizationIds }),
+      gatherWorkspaceSignals(input.workspaces, input.userId),
+      import("@/lib/morning-mission/field-signals.server").then((m) =>
+        m.fetchFieldQueueSignals({ supabase, userId: input.userId }),
+      ),
+      import("@/lib/morning-mission/manual-signals.server").then((m) =>
+        m.fetchManualQueueSignals({ supabase, userId: input.userId }),
+      ),
+      import("@/lib/inbox/calendar-recent.server").then((m) =>
+        m.fetchCalendarQueueSignals({ days: 3, max: 12 }),
+      ),
+    ]);
 
   const gmail = gmailRaw.map(gmailToSignal);
 
   return {
-    signals: [...gmail, ...slackResult.signals, ...workspaceSignals],
+    signals: [
+      ...gmail,
+      ...slackResult.signals,
+      ...workspaceSignals,
+      ...fieldSignals,
+      ...manualSignals,
+      ...calendarSignals,
+    ],
     slackStatus: slackResult.status,
   };
 }

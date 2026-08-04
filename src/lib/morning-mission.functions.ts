@@ -124,6 +124,7 @@ async function buildMorningMission(
     workspaces,
     userId,
     forceSlack,
+    supabase,
   });
   const actionStates = await listMissionActionStates(supabase, userId);
   const hints = await listMissionHints(supabase, userId);

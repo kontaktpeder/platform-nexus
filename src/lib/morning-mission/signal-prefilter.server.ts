@@ -5,9 +5,18 @@ import type { MissionHint } from "@/lib/mission-hints.types";
 import { isOwnNoiseMail } from "@/lib/morning-mission/morning-mission-trust.server";
 import { signalMatchesHint } from "@/lib/morning-mission/mission-hint-match.server";
 
+export type MissionSignalSource =
+  | "gmail"
+  | "finance"
+  | "work"
+  | "slack"
+  | "field"
+  | "manual"
+  | "calendar";
+
 export type MissionSignal = {
   id: string;
-  source: "gmail" | "finance" | "work" | "slack";
+  source: MissionSignalSource;
   subject: string;
   from: string;
   snippet: string;

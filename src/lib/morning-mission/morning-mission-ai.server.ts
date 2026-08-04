@@ -64,6 +64,9 @@ function labelForSignalIds(ids: string[], signals: MissionSignal[]): string | nu
     if (s.source === "gmail") return "Gmail";
     if (s.source === "finance") return "Finance";
     if (s.source === "work") return "Work";
+    if (s.source === "field") return "Field";
+    if (s.source === "manual") return "Manuelt";
+    if (s.source === "calendar") return "Kalender";
   }
   return null;
 }

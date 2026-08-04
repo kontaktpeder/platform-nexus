@@ -1,6 +1,21 @@
-export type DeskQueueSource = "gmail" | "finance" | "work" | "slack";
+export type DeskQueueSource =
+  | "gmail"
+  | "finance"
+  | "work"
+  | "slack"
+  | "field"
+  | "manual"
+  | "calendar";
 
-export type DeskQueueKind = "mail" | "draft" | "appointment" | "signal";
+export type DeskQueueKind =
+  | "mail"
+  | "draft"
+  | "appointment"
+  | "follow_up"
+  | "no_plan"
+  | "manual"
+  | "work_session"
+  | "signal";
 
 export type DeskQueueItem = {
   id: string;
