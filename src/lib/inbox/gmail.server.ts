@@ -474,8 +474,10 @@ export type GmailMessageBrief = {
   from: string;
   snippet: string;
   bodyText: string;
-  /** http(s) links found in HTML/text body, de-duped, tracking filtered. */
+  /** http(s) links from `<a href>` (+ plain text), de-duped, assets filtered. */
   links: string[];
+  /** Anchor label per URL (for CTA ranking: Verify, Bekreft, …). */
+  linkLabels: Record<string, string>;
   /** Keyword / List-Unsubscribe detection — not AI. */
   unsubscribe: GmailUnsubscribeInfo;
 };
@@ -484,18 +486,33 @@ export type GmailMessageBrief = {
 const SKIP_CTA_LINK_RE =
   /unsubscribe|list-manage|mailto:|fonts\.google|google-analytics|doubleclick|facebook\.com\/tr|pixel|tracking|utm_medium=email.*favicon|schema\.org/i;
 
+/** Stylesheets, fonts, images — never a queue CTA (e.g. knak.io HelveticaNeue.css). */
+const JUNK_ASSET_URL_RE =
+  /\.(?:css|js|mjs|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|otf)(?:$|\?)|\/custom-fonts\/|\/fonts\/|assets\.knak\.io|cdn\.jsdelivr|fonts\.gstatic|use\.typekit/i;
+
 /** Anchor text / URL keywords that mark an unsubscribe action. */
 const UNSUBSCRIBE_KEYWORD_RE =
   /unsubscribe|opt[\s-_]?out|avmeld|meld\s*deg\s*av|email[\s-_]?preferences|manage[\s-_]?preferences|stop\s+receiving|list-unsubscribe|preferanser\s+for\s+e-?post|si\s+opp\s+abonnement/i;
 
-function extractLinksFromHtml(html: string): string[] {
-  const out: string[] = [];
-  const re = /href\s*=\s*["'](https?:\/\/[^"']+)["']/gi;
+function isJunkAssetUrl(url: string): boolean {
+  return JUNK_ASSET_URL_RE.test(url) || SKIP_CTA_LINK_RE.test(url);
+}
+
+/**
+ * Only `<a href>` links — not `<link rel=stylesheet>`, img src, etc.
+ * Returns url + anchor label for better CTA scoring.
+ */
+function extractAnchorLinksFromHtml(
+  html: string,
+): Array<{ url: string; label: string }> {
+  const out: Array<{ url: string; label: string }> = [];
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
-    const url = m[1].replace(/&amp;/g, "&").trim();
-    if (!url || SKIP_CTA_LINK_RE.test(url)) continue;
-    out.push(url);
+    const url = decodeHref(m[1] ?? "");
+    if (!/^https?:\/\//i.test(url) || isJunkAssetUrl(url)) continue;
+    const label = htmlToText(m[2] ?? "").slice(0, 120);
+    out.push({ url, label });
   }
   return out;
 }
@@ -506,7 +523,7 @@ function extractLinksFromText(text: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const url = m[0].replace(/[.,;:!?)]+$/, "");
-    if (!url || SKIP_CTA_LINK_RE.test(url)) continue;
+    if (!url || isJunkAssetUrl(url)) continue;
     out.push(url);
   }
   return out;
@@ -632,8 +649,12 @@ export async function readGmailMessageBrief(
   if (!body) body = msg.snippet ?? "";
 
   const linkSet = new Set<string>();
+  const linkLabels: Record<string, string> = {};
   for (const html of collected.htmls) {
-    for (const u of extractLinksFromHtml(html)) linkSet.add(u);
+    for (const a of extractAnchorLinksFromHtml(html)) {
+      linkSet.add(a.url);
+      if (a.label && !linkLabels[a.url]) linkLabels[a.url] = a.label;
+    }
   }
   for (const u of extractLinksFromText(body)) linkSet.add(u);
   for (const u of extractLinksFromText(msg.snippet ?? "")) linkSet.add(u);
@@ -652,7 +673,8 @@ export async function readGmailMessageBrief(
     from: headerValue(headers, "From"),
     snippet: (msg.snippet ?? "").slice(0, 400),
     bodyText: body.slice(0, maxChars),
-    links: [...linkSet].slice(0, 12),
+    links: [...linkSet].slice(0, 20),
+    linkLabels,
     unsubscribe,
   };
 }

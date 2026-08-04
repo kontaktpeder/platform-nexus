@@ -47,19 +47,40 @@ export function cleanMailText(input: string | null | undefined): string {
     .trim();
 }
 
-function scoreLink(url: string, fromEmail: string | null, subject: string): number {
+function scoreLink(
+  url: string,
+  fromEmail: string | null,
+  subject: string,
+  label?: string | null,
+): number {
   const u = url.toLowerCase();
   const from = (fromEmail ?? "").toLowerCase();
   const subj = subject.toLowerCase();
+  const lab = (label ?? "").toLowerCase();
+  const hay = `${u} ${lab}`;
   let score = 1;
+
+  // Hard reject leftover assets (CSS/fonts) if any slip through.
+  if (/\.(?:css|js|png|jpe?g|gif|svg|woff2?|ttf)(?:$|\?)|\/custom-fonts\//i.test(u)) {
+    return -100;
+  }
+
+  if (/verify|confirm|activate|bekreft|aktiver|fullf[øo]r/i.test(hay)) score += 45;
+  if (/verify|confirm|activate|bekreft/i.test(lab)) score += 25;
+
   if (/search\.google\.com\/search-console|google\.com\/webmasters/i.test(u)) score += 40;
   if (/myaccount\.google\.com|accounts\.google\.com/i.test(u) && /sikkerhet|security|alert|varsel/i.test(subj + from)) {
     score += 35;
   }
   if (/accounts\.google\.com/i.test(u) && /search console|søk/i.test(subj)) score += 20;
-  if (/github\.com|linear\.app|notion\.so|stripe\.com|vercel\.com/i.test(u)) score += 15;
+  if (/github\.com|linear\.app|notion\.so|stripe\.com|vercel\.com|vimeo\.com/i.test(u)) score += 15;
   if (/docs\.google\.com|drive\.google\.com|calendar\.google\.com/i.test(u)) score += 12;
   if (/native\.no|ads?\./i.test(u) && from.includes("native")) score += 10;
+
+  // Prefer same registrable domain as sender (vimeo@vimeo.com → vimeo.com).
+  const domain = from.includes("@") ? from.split("@")[1]! : "";
+  if (domain && u.includes(domain)) score += 20;
+
   if (/\/unsubscribe|opt[-_]?out|email-preferences/i.test(u)) score -= 50;
   if (/\/view\/|click\.|track\.|redirect/i.test(u)) score += 3;
   if (u.length > 180) score -= 2;
@@ -70,13 +91,16 @@ function pickBestLink(
   links: string[],
   fromEmail: string | null,
   subject: string,
+  linkLabels?: Record<string, string>,
 ): string | null {
   if (!links.length) return null;
   const ranked = [...links].sort(
-    (a, b) => scoreLink(b, fromEmail, subject) - scoreLink(a, fromEmail, subject),
+    (a, b) =>
+      scoreLink(b, fromEmail, subject, linkLabels?.[b]) -
+      scoreLink(a, fromEmail, subject, linkLabels?.[a]),
   );
   const best = ranked[0]!;
-  if (scoreLink(best, fromEmail, subject) < 1) return null;
+  if (scoreLink(best, fromEmail, subject, linkLabels?.[best]) < 1) return null;
   return best;
 }
 
@@ -87,13 +111,15 @@ function heuristicCta(input: {
   snippet: string;
   bodyText: string;
   links: string[];
+  linkLabels?: Record<string, string>;
   hasUnsubscribe?: boolean;
 }): HeuristicCta {
   const subject = cleanMailText(input.subject);
   const snippet = cleanMailText(input.snippet);
   const fromEmail = input.fromEmail?.toLowerCase() ?? null;
   const blob = `${subject} ${snippet} ${input.bodyText}`.toLowerCase();
-  const ctaUrl = pickBestLink(input.links, fromEmail, subject);
+  const labels = input.linkLabels ?? {};
+  const ctaUrl = pickBestLink(input.links, fromEmail, subject, labels);
 
   if (
     fromEmail?.includes("sc-noreply@google.com") ||
@@ -122,9 +148,25 @@ function heuristicCta(input: {
     };
   }
 
+  // Verify / confirm account emails (Vimeo etc.)
+  if (/bekreft e-post|verify your email|confirm your email|aktiver konto|fullføre oppsettet/i.test(blob)) {
+    const url =
+      input.links.find((l) =>
+        /verify|confirm|activate|bekreft/i.test(`${l} ${labels[l] ?? ""}`),
+      ) ?? ctaUrl;
+    return {
+      ctaUrl: url,
+      ctaLabel: url ? "Bekreft e-post" : null,
+      ctaKind: url ? "open_link" : "fyi",
+    };
+  }
+
   if (ctaUrl) {
+    const anchor = labels[ctaUrl]?.trim();
     let label = "Åpne lenke";
-    if (input.hasUnsubscribe || /nyhetsbrev|newsletter|proud to launch/i.test(blob)) {
+    if (anchor && anchor.length <= 28) label = anchor;
+    else if (/verify|confirm|bekreft/i.test(`${ctaUrl} ${anchor ?? ""}`)) label = "Bekreft e-post";
+    else if (input.hasUnsubscribe || /nyhetsbrev|newsletter|proud to launch/i.test(blob)) {
       label = "Åpne";
     }
     return { ctaUrl, ctaLabel: label, ctaKind: "open_link" };
@@ -319,6 +361,7 @@ export async function enrichDeskGmailItems(
     const subject = cleanMailText(brief?.subject ?? item.title);
     const snippet = cleanMailText(brief?.snippet ?? item.subtitle ?? "");
     const links = brief?.links ?? [];
+    const linkLabels = brief?.linkLabels ?? {};
     const unsub = brief?.unsubscribe;
     const hasUnsub = !!(
       unsub?.url ||
@@ -339,6 +382,7 @@ export async function enrichDeskGmailItems(
       snippet,
       bodyText: brief?.bodyText ?? "",
       links,
+      linkLabels,
       hasUnsubscribe: hasUnsub,
     });
 
