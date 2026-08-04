@@ -34,6 +34,13 @@ export type DeskQueueItem = {
   entityId?: string | null;
   /** Gmail message id without `gmail:` prefix (inbox / drafts). */
   gmailMessageId?: string | null;
+  /**
+   * Soft mailbox orientation for AI (not a hard rule).
+   * sent = user wrote it; inbox = typically to the user; draft = unfinished.
+   */
+  gmailLane?: "inbox" | "sent" | "draft" | "spam" | "trash" | "other" | null;
+  /** Recipients (useful when lane is sent). */
+  toEmail?: string | null;
   /** List-Unsubscribe / keyword detect — show Meld av on card. */
   hasUnsubscribe?: boolean;
   /** Browser-safe https unsubscribe (body link preferred). */

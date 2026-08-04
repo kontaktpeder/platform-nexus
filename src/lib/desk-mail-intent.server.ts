@@ -193,6 +193,8 @@ async function aiEnrichBatch(
     id: string;
     subject: string;
     from: string;
+    to: string | null;
+    mailLane: string;
     snippet: string;
     body: string;
     links: string[];
@@ -208,6 +210,8 @@ async function aiEnrichBatch(
     id: r.id,
     subject: cleanMailText(r.subject).slice(0, 160),
     from: r.from.slice(0, 120),
+    to: r.to,
+    mailLane: r.mailLane,
     snippet: cleanMailText(r.snippet).slice(0, 280),
     body: cleanMailText(r.body).slice(0, 900),
     links: r.links.slice(0, 6),
@@ -219,19 +223,21 @@ async function aiEnrichBatch(
     const { text } = await generateText({
       model: getGeminiModel("flash-lite"),
       system: [
-        "You write short Norwegian queue-card copy for inbox emails.",
+        "You write short Norwegian queue-card copy for the user's personal OS.",
         "Return ONLY a JSON array. Each item:",
-        "id, intent (max 85 chars — concrete: what this mail is about / asks of the user),",
-        "nextStep (max 100 chars — specific action, e.g. 'Bekreft om innloggingen var deg' or 'Les Native Ads-lansering hvis relevant, ellers arkiver'),",
+        "id, intent (max 85 chars — what this mail means for the USER right now),",
+        "nextStep (max 100 chars — the user's likely next move, or null),",
         "ctaUrl (use preferredCtaUrl if set and in links[], else best link from links[], else null),",
         "ctaLabel (short Norwegian button, or preferredCtaLabel),",
         "ctaKind: open_link | reply | fyi | other.",
-        "Rules:",
-        "- NEVER use generic lines like 'Klikk lenken og gjør det mailen ber om' or 'Skum produktet via lenken'.",
-        "- Security alerts: say what to verify (new login, device, location) if present in body/snippet.",
-        "- Newsletters/product launches: name the product/topic; nextStep = read if relevant else archive.",
-        "- Search Console: name the domain/property if present.",
-        "- Never invent URLs not in links[] / preferredCtaUrl.",
+        "mailLane is a soft orientation signal only — interpret neutrally from the full facts:",
+        "- inbox: often addressed to the user.",
+        "- sent: the user already wrote/sent this; requests in the body ('se over', 'gi innspill') are often for the recipient (to:), not for the user. Waiting on a reply may fit — but only if the content supports it.",
+        "- draft: unfinished compose by the user.",
+        "- spam/trash: usually low value; archive/delete unless clearly important.",
+        "Do not invent waiting/purring or force a lane stereotype. Prefer content + from/to + mailLane together.",
+        "NEVER use generic lines like 'Klikk lenken og gjør det mailen ber om'.",
+        "Never invent URLs not in links[] / preferredCtaUrl.",
       ].join(" "),
       prompt: JSON.stringify(payload),
     });
@@ -349,6 +355,8 @@ export async function enrichDeskGmailItems(
     id: string;
     subject: string;
     from: string;
+    to: string | null;
+    mailLane: string;
     snippet: string;
     body: string;
     links: string[];
@@ -394,6 +402,8 @@ export async function enrichDeskGmailItems(
         id: item.id,
         subject,
         from: `${item.fromName ?? ""} <${item.fromEmail ?? ""}>`,
+        to: item.toEmail ?? null,
+        mailLane: item.gmailLane ?? (item.kind === "draft" ? "draft" : "inbox"),
         snippet,
         body: brief.bodyText,
         links,

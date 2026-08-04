@@ -85,9 +85,19 @@ function rank(signal: MissionSignal): number {
   return 40;
 }
 
+function gmailLaneOf(
+  signal: MissionSignal,
+): NonNullable<DeskQueueItem["gmailLane"]> {
+  if (signal.tags.includes("draft") || signal.meta?.is_draft === true) return "draft";
+  if (signal.tags.includes("spam") || signal.meta?.is_spam === true) return "spam";
+  if (signal.tags.includes("trash") || signal.meta?.is_trash === true) return "trash";
+  if (signal.tags.includes("sent") || signal.meta?.is_sent === true) return "sent";
+  return "inbox";
+}
+
 function gmailFields(signal: MissionSignal): Pick<
   DeskQueueItem,
-  "fromName" | "fromEmail" | "gmailMessageId" | "hasUnsubscribe"
+  "fromName" | "fromEmail" | "gmailMessageId" | "hasUnsubscribe" | "gmailLane" | "toEmail"
 > {
   if (signal.source !== "gmail") {
     return {
@@ -95,18 +105,26 @@ function gmailFields(signal: MissionSignal): Pick<
       fromEmail: null,
       gmailMessageId: null,
       hasUnsubscribe: false,
+      gmailLane: null,
+      toEmail: null,
     };
   }
   const fromEmail =
     typeof signal.meta?.from_email === "string" && signal.meta.from_email.includes("@")
       ? signal.meta.from_email.toLowerCase()
       : null;
+  const toRaw = typeof signal.meta?.to === "string" ? signal.meta.to : "";
+  const toMatch = toRaw.match(/[^\s"<>]+@[^\s"<>]+/);
+  const toEmail = toMatch ? toMatch[0]!.toLowerCase() : null;
   const messageId = signal.id.startsWith("gmail:") ? signal.id.slice("gmail:".length) : null;
+  const lane = gmailLaneOf(signal);
   return {
     fromName: signal.from?.trim() || null,
     fromEmail,
     gmailMessageId: messageId,
     hasUnsubscribe: signal.tags.includes("has_unsubscribe"),
+    gmailLane: lane,
+    toEmail,
   };
 }
 
@@ -130,6 +148,7 @@ function toItem(signal: MissionSignal, entityByEmail: Map<string, string>): Desk
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
       ...gmail,
+      gmailLane: "draft",
       entityId,
     };
   }
@@ -196,13 +215,25 @@ function toItem(signal: MissionSignal, entityByEmail: Map<string, string>): Desk
       occurredAt: signal.occurred_at,
     };
   }
+  const laneLabel =
+    source === "gmail" && gmail.gmailLane === "sent"
+      ? "Sendt"
+      : source === "gmail" && gmail.gmailLane === "spam"
+        ? "Spam"
+        : source === "gmail" && gmail.gmailLane === "trash"
+          ? "Papirkurv"
+          : sourceLabel(source);
+
   return {
     id: signal.id,
     kind: source === "gmail" ? "mail" : "signal",
     title: subject,
-    subtitle: [signal.from, signal.snippet].filter(Boolean).join(" · ").slice(0, 160) || null,
+    subtitle:
+      source === "gmail" && gmail.gmailLane === "sent" && gmail.toEmail
+        ? [`Til ${gmail.toEmail}`, signal.snippet].filter(Boolean).join(" · ").slice(0, 160)
+        : [signal.from, signal.snippet].filter(Boolean).join(" · ").slice(0, 160) || null,
     source,
-    sourceLabel: sourceLabel(source),
+    sourceLabel: laneLabel,
     href: signal.href,
     sourceIds: [signal.id],
     occurredAt: signal.occurred_at,
