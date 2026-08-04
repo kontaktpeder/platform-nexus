@@ -221,10 +221,20 @@ export function gmailMessageIdFromSignalId(signalId: string): string | null {
 // ─── Reply-draft support ────────────────────────────────────────────────────
 
 export type GmailUnsubscribeInfo = {
-  /** First mailto: target from List-Unsubscribe, if any. */
+  /** mailto: target (header or body). */
   mailto: string | null;
-  /** First https? URL from List-Unsubscribe, if any. */
+  /**
+   * Browser-safe https URL to open (prefer HTML body “Unsubscribe” link).
+   * Do not put one-click List-Unsubscribe endpoints here — they often 404 on GET.
+   */
   url: string | null;
+  /**
+   * Machine one-click URL from List-Unsubscribe header.
+   * Use with POST List-Unsubscribe=One-Click when present.
+   */
+  oneClickUrl: string | null;
+  /** True when List-Unsubscribe-Post advertises one-click. */
+  oneClick: boolean;
   raw: string | null;
 };
 
@@ -247,28 +257,61 @@ export type GmailAttachmentBytes = {
 };
 
 /** Parse RFC 2369 List-Unsubscribe header into mailto + http(s) targets. */
-export function parseListUnsubscribe(raw: string | null | undefined): GmailUnsubscribeInfo {
+export function parseListUnsubscribe(
+  raw: string | null | undefined,
+  postHeader?: string | null,
+): GmailUnsubscribeInfo {
   const header = (raw ?? "").trim();
-  if (!header) return { mailto: null, url: null, raw: null };
+  const oneClick = /List-Unsubscribe\s*=\s*One-Click/i.test(postHeader ?? "");
+  if (!header) {
+    return { mailto: null, url: null, oneClickUrl: null, oneClick, raw: null };
+  }
   let mailto: string | null = null;
-  let url: string | null = null;
+  let headerUrl: string | null = null;
   const re = /<([^>]+)>/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(header))) {
     const target = m[1].trim();
     if (!mailto && /^mailto:/i.test(target)) {
       mailto = target.replace(/^mailto:/i, "").split("?")[0]?.trim() || null;
-    } else if (!url && /^https?:\/\//i.test(target)) {
-      url = target;
+    } else if (!headerUrl && /^https?:\/\//i.test(target)) {
+      headerUrl = target;
     }
   }
-  if (!mailto && !url) {
+  if (!mailto && !headerUrl) {
     const bareMailto = header.match(/mailto:([^\s>,]+)/i);
     if (bareMailto) mailto = bareMailto[1].split("?")[0]?.trim() || null;
     const bareUrl = header.match(/https?:\/\/[^\s>,]+/i);
-    if (bareUrl) url = bareUrl[0].replace(/[>]+$/, "");
+    if (bareUrl) headerUrl = bareUrl[0].replace(/[>]+$/, "");
   }
-  return { mailto, url, raw: header.slice(0, 500) };
+  // Header https is one-click / machine endpoint — never treat as browser url.
+  return {
+    mailto,
+    url: null,
+    oneClickUrl: headerUrl,
+    oneClick: oneClick || !!headerUrl,
+    raw: header.slice(0, 500),
+  };
+}
+
+/** RFC 8058 one-click unsubscribe POST (server-side; avoids browser GET 404). */
+export async function performOneClickUnsubscribe(oneClickUrl: string): Promise<void> {
+  const url = oneClickUrl.trim();
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error("Ugyldig avmeldings-URL");
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "List-Unsubscribe=One-Click",
+    redirect: "follow",
+  });
+  // Many providers return 2xx/3xx; 404 here means endpoint truly dead.
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Avmelding feilet (${res.status})`);
+  }
 }
 
 function parseEmail(from: string): { name: string; email: string } {
@@ -280,7 +323,7 @@ function parseEmail(from: string): { name: string; email: string } {
 export async function getGmailReplyContext(messageId: string): Promise<GmailReplyContext> {
   const { apiKey, lovableKey } = gmailKeys();
   const meta = await gmailFetch<MessageMeta>(
-    `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To&metadataHeaders=List-Unsubscribe`,
+    `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To&metadataHeaders=List-Unsubscribe&metadataHeaders=List-Unsubscribe-Post`,
     apiKey,
     lovableKey,
   );
@@ -301,7 +344,10 @@ export async function getGmailReplyContext(messageId: string): Promise<GmailRepl
     snippet: (meta.snippet ?? "").slice(0, 500),
     rfcMessageId,
     references,
-    unsubscribe: parseListUnsubscribe(headerValue(headers, "List-Unsubscribe")),
+    unsubscribe: parseListUnsubscribe(
+      headerValue(headers, "List-Unsubscribe"),
+      headerValue(headers, "List-Unsubscribe-Post"),
+    ),
   };
 }
 
@@ -481,6 +527,10 @@ export function detectUnsubscribeFromHtml(html: string): GmailUnsubscribeInfo {
     const label = htmlToText(m[2] ?? "").slice(0, 200);
     const hay = `${href} ${label}`;
     if (!UNSUBSCRIBE_KEYWORD_RE.test(hay)) continue;
+    // Skip obvious one-click callback hosts in body if they look like machine endpoints.
+    if (/^https?:\/\//i.test(href) && /\/callback\/|email_unsubscribe\?/i.test(href)) {
+      continue;
+    }
     if (/^mailto:/i.test(href)) {
       if (!mailto) {
         mailto = href.replace(/^mailto:/i, "").split("?")[0]?.trim() || null;
@@ -490,7 +540,13 @@ export function detectUnsubscribeFromHtml(html: string): GmailUnsubscribeInfo {
     }
     if (mailto && url) break;
   }
-  return { mailto, url, raw: mailto || url ? "body-keyword" : null };
+  return {
+    mailto,
+    url,
+    oneClickUrl: null,
+    oneClick: false,
+    raw: mailto || url ? "body-keyword" : null,
+  };
 }
 
 /** Bare URLs in plain text that look like unsubscribe. */
@@ -510,26 +566,44 @@ export function detectUnsubscribeFromText(text: string): GmailUnsubscribeInfo {
   const urlRe = /https?:\/\/[^\s<>)"']+/gi;
   while ((m = urlRe.exec(text))) {
     const candidate = m[0].replace(/[.,;:!?)]+$/, "");
+    if (/\/callback\/|email_unsubscribe\?/i.test(candidate)) continue;
     if (UNSUBSCRIBE_KEYWORD_RE.test(candidate)) {
       url = candidate;
       break;
     }
   }
-  return { mailto, url, raw: mailto || url ? "text-keyword" : null };
+  return {
+    mailto,
+    url,
+    oneClickUrl: null,
+    oneClick: false,
+    raw: mailto || url ? "text-keyword" : null,
+  };
 }
 
-function mergeUnsubscribe(
-  ...parts: GmailUnsubscribeInfo[]
+/**
+ * Prefer body browser URL for click; keep header as oneClickUrl.
+ * Order of parts: header first, then body detections.
+ */
+export function mergeUnsubscribe(
+  header: GmailUnsubscribeInfo,
+  ...bodyParts: GmailUnsubscribeInfo[]
 ): GmailUnsubscribeInfo {
-  let mailto: string | null = null;
+  let mailto: string | null = header.mailto;
   let url: string | null = null;
-  let raw: string | null = null;
-  for (const p of parts) {
+  let oneClickUrl: string | null = header.oneClickUrl;
+  let oneClick = header.oneClick;
+  let raw: string | null = header.raw;
+
+  for (const p of bodyParts) {
     if (!mailto && p.mailto) mailto = p.mailto;
     if (!url && p.url) url = p.url;
+    if (!oneClickUrl && p.oneClickUrl) oneClickUrl = p.oneClickUrl;
+    if (p.oneClick) oneClick = true;
     if (!raw && p.raw) raw = p.raw;
   }
-  return { mailto, url, raw };
+
+  return { mailto, url, oneClickUrl, oneClick, raw };
 }
 
 /** Single-message body + actionable links + unsubscribe for Desk. */
@@ -564,7 +638,10 @@ export async function readGmailMessageBrief(
   for (const u of extractLinksFromText(body)) linkSet.add(u);
   for (const u of extractLinksFromText(msg.snippet ?? "")) linkSet.add(u);
 
-  const fromHeader = parseListUnsubscribe(headerValue(headers, "List-Unsubscribe"));
+  const fromHeader = parseListUnsubscribe(
+    headerValue(headers, "List-Unsubscribe"),
+    headerValue(headers, "List-Unsubscribe-Post"),
+  );
   const fromHtml = collected.htmls.map(detectUnsubscribeFromHtml);
   const fromText = detectUnsubscribeFromText(`${body}\n${msg.snippet ?? ""}`);
   const unsubscribe = mergeUnsubscribe(fromHeader, ...fromHtml, fromText);

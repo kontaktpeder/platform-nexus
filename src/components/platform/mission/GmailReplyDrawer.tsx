@@ -40,7 +40,13 @@ type ReplyContext = {
   senderName: string;
   senderEmail: string;
   snippet: string;
-  unsubscribe: { mailto: string | null; url: string | null; raw: string | null };
+  unsubscribe: {
+    mailto: string | null;
+    url: string | null;
+    oneClickUrl?: string | null;
+    oneClick?: boolean;
+    raw: string | null;
+  };
 };
 
 export function GmailReplyDrawer({
@@ -135,7 +141,7 @@ export function GmailReplyDrawer({
   const senderEmail = ctx?.senderEmail ?? "";
   const snippet = ctx?.snippet ?? fallbackSnippet ?? "";
   const unsub = ctx?.unsubscribe;
-  const hasUnsub = !!(unsub?.mailto || unsub?.url);
+  const hasUnsub = !!(unsub?.mailto || unsub?.url || unsub?.oneClickUrl);
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -208,6 +214,11 @@ export function GmailReplyDrawer({
                     Åpne avmeldingslenke
                     <ExternalLink className="h-3 w-3" />
                   </a>
+                )}
+                {!unsub?.url && unsub?.oneClickUrl && (
+                  <p className="text-xs text-muted-foreground">
+                    One-click-avmelding finnes — bruk «Meld av» på køkortet (POST).
+                  </p>
                 )}
               </div>
             </div>

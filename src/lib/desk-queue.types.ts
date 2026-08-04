@@ -36,8 +36,10 @@ export type DeskQueueItem = {
   gmailMessageId?: string | null;
   /** List-Unsubscribe / keyword detect — show Meld av on card. */
   hasUnsubscribe?: boolean;
-  /** https unsubscribe URL (header or body keyword). */
+  /** Browser-safe https unsubscribe (body link preferred). */
   unsubscribeUrl?: string | null;
+  /** One-click List-Unsubscribe endpoint (POST, not open in browser). */
+  unsubscribeOneClickUrl?: string | null;
   /** mailto unsubscribe address. */
   unsubscribeMailto?: string | null;
   /** Short “what they want” — cleaned / AI / heuristic. */

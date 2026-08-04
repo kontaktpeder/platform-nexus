@@ -354,3 +354,15 @@ export const createDeskManualSignal = createServerFn({ method: "POST" })
     });
     return { ok: true as const, id: row.id };
   });
+
+/** RFC 8058 one-click unsubscribe (POST) — used when no browser-safe body link. */
+export const oneClickUnsubscribe = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ url: z.string().url().max(4000) }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { performOneClickUnsubscribe } = await import("@/lib/inbox/gmail.server");
+    await performOneClickUnsubscribe(data.url);
+    return { ok: true as const };
+  });

@@ -5,7 +5,7 @@
 
 import type { DeskQueueResponse } from "@/lib/desk-queue.types";
 
-const CACHE_KEY = "nexus:desk-queue:v4";
+const CACHE_KEY = "nexus:desk-queue:v5";
 export const DESK_QUEUE_STALE_MS = 5 * 60_000;
 
 export type DeskQueueCacheEntry = {

@@ -38,6 +38,7 @@ import {
 import {
   createDeskManualSignal,
   getDeskQueue,
+  oneClickUnsubscribe,
 } from "@/lib/desk-queue.functions";
 import type { DeskQueueItem, DeskQueueSource } from "@/lib/desk-queue.types";
 import { scheduleEntityFollowUp } from "@/lib/field.functions";
@@ -114,6 +115,7 @@ function QueueCard({
   onArchive,
   onTrash,
   onCreateContact,
+  onUnsubscribe,
   primaryLabel,
 }: {
   item: DeskQueueItem;
@@ -127,6 +129,7 @@ function QueueCard({
   onArchive?: () => void;
   onTrash?: () => void;
   onCreateContact?: () => void;
+  onUnsubscribe?: () => void;
   primaryLabel?: string;
 }) {
   const isDraft = item.kind === "draft";
@@ -218,22 +221,15 @@ function QueueCard({
         </Button>
       )}
 
-      {gmailMail && (item.unsubscribeUrl || item.unsubscribeMailto) && (
+      {gmailMail &&
+        (item.unsubscribeUrl || item.unsubscribeOneClickUrl || item.unsubscribeMailto) && (
         <Button
           type="button"
           size="sm"
           variant="outline"
           className="mt-1.5 h-9 w-full gap-1.5 rounded-xl text-xs"
           disabled={busy}
-          onClick={() => {
-            if (item.unsubscribeUrl) {
-              window.open(item.unsubscribeUrl, "_blank", "noopener,noreferrer");
-              return;
-            }
-            if (item.unsubscribeMailto) {
-              window.location.href = `mailto:${item.unsubscribeMailto}`;
-            }
-          }}
+          onClick={onUnsubscribe}
         >
           <Unlink className="h-3.5 w-3.5" />
           Meld av
@@ -389,6 +385,7 @@ export function DeskQueuePanel({
   const runUndo = useServerFn(undoMorningItem);
   const runCreateContact = useServerFn(createContactFromSuggestion);
   const runScheduleFollowUp = useServerFn(scheduleEntityFollowUp);
+  const runOneClickUnsub = useServerFn(oneClickUnsubscribe);
 
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -571,6 +568,29 @@ export function DeskQueuePanel({
     }
     setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
     setCreateItem(item);
+  }
+
+  async function handleUnsubscribe(item: DeskQueueItem) {
+    // Prefer browser-safe body link; one-click header needs POST (not GET).
+    if (item.unsubscribeUrl) {
+      window.open(item.unsubscribeUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (item.unsubscribeOneClickUrl) {
+      setBusyId(item.id);
+      try {
+        await runOneClickUnsub({ data: { url: item.unsubscribeOneClickUrl } });
+        toast.success("Avmelding sendt");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Kunne ikke melde av");
+      } finally {
+        setBusyId(null);
+      }
+      return;
+    }
+    if (item.unsubscribeMailto) {
+      window.location.href = `mailto:${item.unsubscribeMailto}`;
+    }
   }
 
   async function ensureEntity(item: DeskQueueItem): Promise<string | null> {
@@ -800,6 +820,7 @@ export function DeskQueuePanel({
                   setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
                   setCreateItem(item);
                 }}
+                onUnsubscribe={() => void handleUnsubscribe(item)}
               />
             ))}
           </ul>

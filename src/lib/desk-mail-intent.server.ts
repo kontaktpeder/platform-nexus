@@ -296,7 +296,12 @@ export async function enrichDeskGmailItems(
   const byId = new Map<string, DeskMailEnrichment>();
   const unsubById = new Map<
     string,
-    { url: string | null; mailto: string | null; has: boolean }
+    {
+      url: string | null;
+      oneClickUrl: string | null;
+      mailto: string | null;
+      has: boolean;
+    }
   >();
   const needAi: Array<{
     id: string;
@@ -315,9 +320,15 @@ export async function enrichDeskGmailItems(
     const snippet = cleanMailText(brief?.snippet ?? item.subtitle ?? "");
     const links = brief?.links ?? [];
     const unsub = brief?.unsubscribe;
-    const hasUnsub = !!(unsub?.url || unsub?.mailto || item.hasUnsubscribe);
+    const hasUnsub = !!(
+      unsub?.url ||
+      unsub?.oneClickUrl ||
+      unsub?.mailto ||
+      item.hasUnsubscribe
+    );
     unsubById.set(item.id, {
       url: unsub?.url ?? null,
+      oneClickUrl: unsub?.oneClickUrl ?? null,
       mailto: unsub?.mailto ?? null,
       has: hasUnsub,
     });
@@ -374,6 +385,7 @@ export async function enrichDeskGmailItems(
     const unsubFields = {
       hasUnsubscribe: unsub?.has ?? item.hasUnsubscribe,
       unsubscribeUrl: unsub?.url ?? null,
+      unsubscribeOneClickUrl: unsub?.oneClickUrl ?? null,
       unsubscribeMailto: unsub?.mailto ?? null,
     };
     if (!enrich) {
