@@ -8,6 +8,8 @@ import {
   FileSignature,
   Link2,
   Loader2,
+  Mic,
+  MicOff,
   Send,
   Square,
   UserRound,
@@ -29,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 import {
   applyFortellContactProposal,
   applyFortellControlAgreement,
@@ -124,6 +127,28 @@ export function FortellChat() {
     typeof window !== "undefined" ? readWorkSession() : null,
   );
 
+  const speech = useSpeechToText({
+    lang: "nb-NO",
+    onError: (message) => toast.error(message),
+  });
+
+  function appendTranscript(chunk: string) {
+    setInstruction((prev) => {
+      const base = prev.trimEnd();
+      if (!base) return chunk;
+      const needsSpace = !/\s$/.test(base);
+      return `${base}${needsSpace ? " " : ""}${chunk}`;
+    });
+  }
+
+  function toggleSpeech() {
+    if (speech.listening) {
+      speech.stop();
+      return;
+    }
+    speech.start(appendTranscript);
+  }
+
   const mut = useMutation({
     mutationFn: (text: string) => {
       const session = readWorkSession();
@@ -146,6 +171,7 @@ export function FortellChat() {
       }) as Promise<FortellResult>;
     },
     onSuccess: (res) => {
+      speech.stop();
       setHistory((prev) =>
         [...prev, { role: "assistant" as const, content: res.answer }].slice(-16),
       );
@@ -303,6 +329,7 @@ export function FortellChat() {
   function submit() {
     const text = instruction.trim();
     if (!text || mut.isPending) return;
+    speech.stop();
     setResult(null);
     setInstruction("");
     setHistory((prev) =>
@@ -526,40 +553,73 @@ export function FortellChat() {
           onChange={(e) => setInstruction(e.target.value)}
           placeholder={
             hasChat
-              ? "Skriv videre…"
-              : "Hva skal vi gjøre? Mail, notat, økt, kontakt, faktura…"
+              ? "Skriv eller snakk videre…"
+              : "Hva skal vi gjøre? Skriv eller snakk — mail, notat, økt…"
           }
           rows={hasChat ? 2 : 3}
           maxLength={2000}
-          className="min-h-[3.5rem] resize-none rounded-[1.75rem] border-0 bg-transparent px-5 py-4 pr-16 text-base leading-relaxed shadow-none focus-visible:ring-0"
+          className={`min-h-[3.5rem] resize-none rounded-[1.75rem] border-0 bg-transparent px-5 py-4 text-base leading-relaxed shadow-none focus-visible:ring-0 ${
+            speech.supported ? "pr-28" : "pr-16"
+          }`}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
           }}
         />
-        <Button
-          type="button"
-          size="icon"
-          className="absolute bottom-3 right-3 h-10 w-10 rounded-2xl"
-          disabled={!instruction.trim() || mut.isPending}
-          onClick={submit}
-          aria-label={mut.isPending ? "Jobber" : "Send"}
-        >
-          {mut.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
+        <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          {speech.supported ? (
+            <Button
+              type="button"
+              size="icon"
+              variant={speech.listening ? "destructive" : "outline"}
+              className="h-10 w-10 rounded-2xl"
+              disabled={mut.isPending}
+              onClick={toggleSpeech}
+              aria-label={speech.listening ? "Stopp opptak" : "Snakk i stedet for å skrive"}
+              aria-pressed={speech.listening}
+            >
+              {speech.listening ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="icon"
+            className="h-10 w-10 rounded-2xl"
+            disabled={!instruction.trim() || mut.isPending}
+            onClick={submit}
+            aria-label={mut.isPending ? "Jobber" : "Send"}
+          >
+            {mut.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs text-muted-foreground">
-          {mut.isPending ? "Tenker og bruker verktøy…" : "⌘+Enter for å sende"}
+        <p
+          className={`text-xs ${
+            speech.listening ? "font-medium text-primary" : "text-muted-foreground"
+          }`}
+        >
+          {mut.isPending
+            ? "Tenker og bruker verktøy…"
+            : speech.listening
+              ? `Lytter… ${speech.interim ? `"${speech.interim}"` : "snakk nå"}`
+              : speech.supported
+                ? "⌘+Enter for å sende · mikrofon for tale"
+                : "⌘+Enter for å sende"}
         </p>
         {hasChat && (
           <button
             type="button"
             className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => {
+              speech.stop();
               setHistory([]);
               setResult(null);
               setWorkStopNote(null);
