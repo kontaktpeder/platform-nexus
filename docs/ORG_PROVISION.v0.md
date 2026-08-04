@@ -2,7 +2,7 @@
 
 **Status:** Working product standard  
 **Goal:** Customer types a name, checks cores, gets a working stack — without pasting UUIDs and API keys.  
-**Related:** [ORG_CREATE.md](./ORG_CREATE.md), [PLATFORM_VERIFY.md](./PLATFORM_VERIFY.md), [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md), [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md)
+**Related:** [ORG_CREATE.md](./ORG_CREATE.md), [PLATFORM_VERIFY.md](./PLATFORM_VERIFY.md), [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md), [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md), [CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md)
 
 > Breaking UX/API for provision → `ORG_PROVISION.v1.md`. Clarifications stay in v0.
 
@@ -31,7 +31,8 @@ That does not scale for customers with 3 companies × 5 cores.
 
 | Rule | Meaning |
 |------|---------|
-| **One Nexus org = one company identity** | Gold of Sicily, Holding, ENK, Privat are separate Nexus orgs |
+| **One Nexus org = one company identity** | Gold of Sicily, Holding, ENK are separate Nexus **organizations** |
+| **Private life ≠ Nexus org** | Person + household identity (`subject_scope`) — see [CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md). Do not model Privat as a business tenant |
 | **Checkboxes = which cores that company gets** | Finance / Work / Control / … |
 | **Happy path never asks for UUID/key** | Platform provisions or links server-side |
 | **Advanced escape hatch** | “Link existing Finance org” for migration |

@@ -2,9 +2,10 @@
 
 **Status:** Working standard (Gmail + Finance Desk Kø are reference implementations)  
 **Scope:** How a module/source cooperates with Nexus Desk, Kø, and Fortell — not SSO/verify  
-**Related:** [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md) (kobling), [MISSION_ACTIONS.v1.md](./MISSION_ACTIONS.v1.md) (Mission triage), [CONTROL_HANDOFF.v0.md](./CONTROL_HANDOFF.v0.md) (Fortell → avtaler)
+**Related:** [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md) (kobling), [CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md) (eierskap, actions, livsløp), [MISSION_ACTIONS.v1.md](./MISSION_ACTIONS.v1.md) (Mission triage), [CONTROL_HANDOFF.v0.md](./CONTROL_HANDOFF.v0.md) (Fortell → avtaler)
 
-> Breaking changes → `DESK_SIGNAL_CONTRACT.v1.md`. Clarifications and new optional fields stay in v0.
+> Breaking changes → `DESK_SIGNAL_CONTRACT.v1.md`. Clarifications and new optional fields stay in v0.  
+> Lifecycle, provenance, and action protocol are **normative in CORE_SURFACE**; this file keeps the Desk shape and Gmail/Finance references.
 
 ---
 

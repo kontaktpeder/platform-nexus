@@ -43,13 +43,16 @@ VALUES (
 
 ## Desk / Kø (when the module surfaces in Nexus Desk)
 
-See [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md).
+See [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md) and
+[CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md) (§12 Definition of Done).
 
+- [ ] Named SoR + subject_scope; data_classification on widgets/signals
 - [ ] Signals map to stable namespaced `id`, `source`, `title`, `href` into the module
-- [ ] Soft `lane` (or equivalent) for AI/UI orientation — not hard business rules in Nexus
-- [ ] Open-in-module (`href`) separate from optional CTA (`ctaUrl`)
-- [ ] Uniform Nexus actions; AI only fills intent/nextStep copy
-- [ ] Writes: propose → user confirm → module API (no silent overwrite of module truth)
+- [ ] Soft `lane` + lifecycle (created→…→resolved); not a second task DB
+- [ ] Open-in-module (`href`) separate from optional CTA; action_owner + confirmation
+- [ ] Writes: propose → user confirm → module API with idempotency (no silent overwrite)
+- [ ] Provenance: `source_mode` live|derived|mock; no silent mock in production
+- [ ] Aggregation rules if included in portfolio / whole_life
 
 ## Security
 

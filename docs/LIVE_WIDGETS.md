@@ -2,6 +2,9 @@
 
 Platform Core henter live widget-data fra hver koblet modul via Module Contract v1.
 
+**Ownership / provenance / DoD for new cores:** see [CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md)
+(§7 provenance fields are target extensions to this flow).
+
 ## Flyt
 
 1. Dashboard laster workspace-kontekst (modules + connections).

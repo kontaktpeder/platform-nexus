@@ -40,4 +40,7 @@ module orgs happens through `module_connections` (see [PLATFORM_VERIFY.md](./PLA
 
 **Product target** (name + check cores → auto provision/link): see
 [ORG_PROVISION.v0.md](./ORG_PROVISION.v0.md). Until Track B lands, each Nexus
-org must be verified against its Finance/Work org separately.
+**company** org must be verified against its Finance/Work org separately.
+
+Private life (person / household) is **not** created via this flow — see
+[CORE_SURFACE.v0.md](./CORE_SURFACE.v0.md) subject scope.
