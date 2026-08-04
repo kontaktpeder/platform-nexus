@@ -45,10 +45,22 @@ function headerValue(headers: Header[] | undefined, name: string): string {
   return headers?.find((x) => x.name.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
+/** Appointment / booking reminders — keep even from no-reply senders. */
+export function isAppointmentMailText(blob: string): boolean {
+  return (
+    /\bpåminnelse\b.*\b(time|timeavtale|avtale)\b/i.test(blob) ||
+    /\b(timeavtale|appointment reminder|booking (confirmation|reminder))\b/i.test(blob) ||
+    /\beasypractice\b/i.test(blob) ||
+    /\b(vaksinasjon|vaksinering|vaksinepåminnelse)\b/i.test(blob) ||
+    /\b(tannlege|lege|klinikk|reisemedisin)\b.*\b(time|påminnelse|avtale)\b/i.test(blob)
+  );
+}
+
 function detectTags(input: {
   from: string;
   fromEmail: string | null;
   subject: string;
+  snippet?: string;
   headers: Header[] | undefined;
   labels: string[];
 }): string[] {
@@ -56,7 +68,8 @@ function detectTags(input: {
   const fromLower = input.from.toLowerCase();
   const emailLower = (input.fromEmail ?? "").toLowerCase();
   const subjectLower = input.subject.toLowerCase();
-  const blob = `${fromLower} ${emailLower} ${subjectLower}`;
+  const snippetLower = (input.snippet ?? "").toLowerCase();
+  const blob = `${fromLower} ${emailLower} ${subjectLower} ${snippetLower}`;
 
   if (
     fromLower.includes("mailer-daemon") ||
@@ -84,36 +97,44 @@ function detectTags(input: {
     tags.push("bulk_mail");
   }
 
+  const appointment = isAppointmentMailText(blob);
+  if (appointment) {
+    tags.push("appointment");
+  }
+
   // Product / security / noreply — not relationship follow-ups.
-  const systemPatterns = [
-    /\bno-?reply@/i,
-    /\bnoreply@/i,
-    /\bnotifications?@/i,
-    /\bsecurity@/i,
-    /\baccounts\.google\.com\b/i,
-    /\bgoogle\.com\b.*\b(sikkerhetsvarsel|security alert|verify|confirmation|bekreftet)\b/i,
-    /\bsikkerhetsvarsel\b/i,
-    /\bsecurity alert\b/i,
-    /\bnew sign-?in\b/i,
-    /\bsign-?in detected\b/i,
-    /\bverify your (email|account|identity)\b/i,
-    /\bpassword reset\b/i,
-    /\btwo-?factor\b/i,
-    /\b2fa\b/i,
-    /\blovable found an issue\b/i,
-    /\bvercel\.com\b/i,
-    /\bgithub\.com\b.*\b(notification|deploy)\b/i,
-    /\bstripe\.com\b/i,
-    /\bnotion\.so\b/i,
-    /\bslack\.com\b.*\b(notification|confirm)\b/i,
-    /\bhusk å akseptere\b/i,
-    /\bstudieplass\b/i,
-    /\bnyhetsbrev\b/i,
-    /\bnewsletter\b/i,
-    /\bunsubscribe\b/i,
-  ];
-  if (systemPatterns.some((re) => re.test(blob))) {
-    tags.push("system_noise");
+  // Appointment reminders often come from no-reply — do NOT mark those as noise.
+  if (!appointment) {
+    const systemPatterns = [
+      /\bno-?reply@/i,
+      /\bnoreply@/i,
+      /\bnotifications?@/i,
+      /\bsecurity@/i,
+      /\baccounts\.google\.com\b/i,
+      /\bgoogle\.com\b.*\b(sikkerhetsvarsel|security alert|verify|confirmation|bekreftet)\b/i,
+      /\bsikkerhetsvarsel\b/i,
+      /\bsecurity alert\b/i,
+      /\bnew sign-?in\b/i,
+      /\bsign-?in detected\b/i,
+      /\bverify your (email|account|identity)\b/i,
+      /\bpassword reset\b/i,
+      /\btwo-?factor\b/i,
+      /\b2fa\b/i,
+      /\blovable found an issue\b/i,
+      /\bvercel\.com\b/i,
+      /\bgithub\.com\b.*\b(notification|deploy)\b/i,
+      /\bstripe\.com\b/i,
+      /\bnotion\.so\b/i,
+      /\bslack\.com\b.*\b(notification|confirm)\b/i,
+      /\bhusk å akseptere\b/i,
+      /\bstudieplass\b/i,
+      /\bnyhetsbrev\b/i,
+      /\bnewsletter\b/i,
+      /\bunsubscribe\b/i,
+    ];
+    if (systemPatterns.some((re) => re.test(blob))) {
+      tags.push("system_noise");
+    }
   }
 
   if (input.labels.includes("SENT")) tags.push("sent");
@@ -151,7 +172,7 @@ function metaToSignal(meta: MessageMeta): GmailRecentSignal {
     href: isDraft
       ? `https://mail.google.com/mail/u/0/#drafts/${meta.id}`
       : `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
-    tags: detectTags({ from, fromEmail: parsed.email, subject, headers, labels }),
+    tags: detectTags({ from, fromEmail: parsed.email, subject, snippet: meta.snippet ?? "", headers, labels }),
   };
 }
 

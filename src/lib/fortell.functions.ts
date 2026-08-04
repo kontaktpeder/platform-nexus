@@ -747,7 +747,7 @@ export const runFortell = createServerFn({ method: "POST" })
 
       searchImportantMail: tool({
         description:
-          "Søk i Gmail etter viktige/ubesvarte mail. Bruk når brukeren spør om mail å svare på, uleste, viktige meldinger. Standard: ulest inbox uten promo/social. Kan også bruke Gmail-søkesyntaks (from:, subject:, newer_than:).",
+          "Søk i Gmail etter viktige/ubesvarte mail OG timepåminnelser. Bruk når brukeren spør om mail, uleste, viktige meldinger, ELLER når de spør om legge seg / kveld / i morgen / hva de må huske. Standard: ulest inbox uten promo/social. For avtaler: f.eks. subject:(påminnelse OR timeavtale OR avtale) newer_than:7d.",
         inputSchema: z.object({
           query: z.string().max(400).nullable().optional(),
           max: z.number().int().min(1).max(15).optional(),
@@ -1125,6 +1125,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Ved daglig leder / eier / «koble X til Y» / handelsnavn↔juridisk: readContact begge → proposeRelation (member_of, owns, related_to, customer_of).",
       "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
+      "- Ved spørsmål om legge seg, kveld, i morgen, prioritering i dag/i morgen, eller «hva bør jeg huske»: ALLTID kall searchImportantMail FØRST — søk etter påminnelse/time/avtale (f.eks. subject:(påminnelse OR timeavtale OR avtale) newer_than:14d) før du gir råd. Nevn avtaler og klokkeslett eksplisitt i svaret. Ikke gjett at det er «ingenting».",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
       "- Control-avtaler: Fortell er INNGANGEN — Control eier signering/versjon/arkiv.",
       "- Ved «eksisterende utkast», «se på utkast», «jobb videre», «oppdater avtalen» eller navngitt motpart/utkast i Control: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate. ALDRI opprett nytt i disse tilfellene.",

@@ -22,12 +22,13 @@ import { cn } from "@/lib/utils";
 
 const VISIBLE = 3;
 
-const SOURCE_TONE: Record<DeskQueueSource | "draft", string> = {
+const SOURCE_TONE: Record<DeskQueueSource | "draft" | "appointment", string> = {
   gmail: "bg-sky-500/15 text-sky-900 dark:text-sky-100",
   finance: "bg-emerald-500/15 text-emerald-900 dark:text-emerald-100",
   work: "bg-violet-500/15 text-violet-900 dark:text-violet-100",
   slack: "bg-amber-500/15 text-amber-950 dark:text-amber-100",
   draft: "bg-rose-500/15 text-rose-900 dark:text-rose-100",
+  appointment: "bg-teal-500/15 text-teal-950 dark:text-teal-100",
 };
 
 function QueueCard({
@@ -44,13 +45,22 @@ function QueueCard({
   onRemove: () => void;
 }) {
   const isDraft = item.kind === "draft";
-  const tone = isDraft ? SOURCE_TONE.draft : SOURCE_TONE[item.source];
+  const isAppointment = item.kind === "appointment";
+  const tone = isDraft
+    ? SOURCE_TONE.draft
+    : isAppointment
+      ? SOURCE_TONE.appointment
+      : SOURCE_TONE[item.source];
 
   return (
     <li
       className={cn(
         "rounded-2xl border bg-card/95 p-3.5 shadow-sm",
-        isDraft ? "border-rose-300/50" : "border-border/70",
+        isDraft
+          ? "border-rose-300/50"
+          : isAppointment
+            ? "border-teal-300/50"
+            : "border-border/70",
       )}
     >
       <div className="flex items-start justify-between gap-2">

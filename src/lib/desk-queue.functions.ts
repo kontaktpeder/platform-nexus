@@ -42,9 +42,27 @@ function isDraftSignal(signal: MissionSignal): boolean {
   return signal.tags.includes("draft") || signal.meta?.is_draft === true;
 }
 
+function isAppointmentSignal(signal: MissionSignal): boolean {
+  return signal.tags.includes("appointment");
+}
+
+function appointmentTitle(signal: MissionSignal): string {
+  const text = `${signal.subject} ${signal.snippet}`;
+  const m = text.match(/(?:klokken|kl\.?)\s*(\d{1,2})[:.](\d{2})/i);
+  if (m) {
+    const hh = m[1].padStart(2, "0");
+    const mm = m[2];
+    if (/\bi\s*morgen\b/i.test(text)) return `I morgen · ${hh}:${mm}`;
+    return `Time · ${hh}:${mm}`;
+  }
+  if (/\bi\s*morgen\b/i.test(text)) return "I morgen · avtale";
+  return "Timeavtale";
+}
+
 function rank(signal: MissionSignal): number {
   if (signal.tags.includes("unpaid_invoice")) return 100;
   if (signal.tags.includes("invoice_action")) return 95;
+  if (isAppointmentSignal(signal)) return 92;
   if (signal.source === "finance") return 90;
   if (isDraftSignal(signal)) return 72;
   if (signal.tags.includes("unread")) return 70;
@@ -56,6 +74,7 @@ function rank(signal: MissionSignal): number {
 function toItem(signal: MissionSignal): DeskQueueItem {
   const source = signal.source as DeskQueueSource;
   const draft = isDraftSignal(signal);
+  const appointment = isAppointmentSignal(signal);
   const subject = signal.subject.trim() || "(uten emne)";
   if (draft) {
     return {
@@ -65,6 +84,19 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       subtitle: [subject, signal.snippet].filter(Boolean).join(" · ").slice(0, 160) || null,
       source,
       sourceLabel: "Utkast",
+      href: signal.href,
+      sourceIds: [signal.id],
+      occurredAt: signal.occurred_at,
+    };
+  }
+  if (appointment) {
+    return {
+      id: signal.id,
+      kind: "appointment",
+      title: appointmentTitle(signal),
+      subtitle: [subject, signal.from].filter(Boolean).join(" · ").slice(0, 160) || null,
+      source,
+      sourceLabel: "Avtale",
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,

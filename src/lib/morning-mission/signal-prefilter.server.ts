@@ -47,6 +47,8 @@ function isDismissedSignal(id: string, states: MissionActionState[]): boolean {
 /** Product mail / security / newsletters — not relationship follow-ups. */
 export function isSystemNoiseSignal(signal: MissionSignal): boolean {
   if (signal.source !== "gmail") return false;
+  // Time/appointment reminders must surface even from no-reply / unsubscribe headers.
+  if (signal.tags.includes("appointment")) return false;
   if (signal.tags.includes("delivery_failure")) return false;
   if (signal.tags.includes("unpaid_invoice")) return false;
   if (signal.tags.includes("system_noise")) return true;
