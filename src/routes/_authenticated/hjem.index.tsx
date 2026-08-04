@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Camera, Clock, Sparkles, StickyNote } from "lucide-react";
+import { Camera, Clock, StickyNote } from "lucide-react";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { HomeActionButton } from "@/components/platform/home/HomeActionButton";
+import { InboxAssistantCard } from "@/components/platform/mission/InboxAssistantCard";
 import { formatElapsed, readWorkSession, type WorkSession } from "@/lib/work-session";
 
 export const Route = createFileRoute("/_authenticated/hjem/")({
@@ -29,13 +30,9 @@ function HjemIndexPage() {
 
   return (
     <PlatformShell>
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-3 px-4 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))]">
-        <HomeActionButton
-          title="Spør om hva som helst"
-          description="Mail, kontakter og nett"
-          icon={<Sparkles className="h-5 w-5" />}
-          onClick={() => void navigate({ to: "/hjem/spor" })}
-        />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-3 px-4 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))]">
+        <InboxAssistantCard variant="home" />
+
         <HomeActionButton
           title="Nytt notat"
           description="Møte, samtale eller idé → Nexus"

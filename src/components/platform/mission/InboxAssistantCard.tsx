@@ -5,8 +5,20 @@ import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import { Check, ExternalLink, GitMerge, Link2, Loader2, Send, Sparkles, UserPlus } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  GitMerge,
+  Link2,
+  Loader2,
+  Mic,
+  MicOff,
+  Send,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 import {
   MailComposeControls,
   type MailComposeSelection,
@@ -60,10 +72,11 @@ const KIND_LABEL: Record<SuggestedRelation["kind"], string> = {
 export function InboxAssistantCard({
   variant = "card",
 }: {
-  /** Full-screen ask flow on /hjem/spor — large field, app-like. */
-  variant?: "card" | "fullscreen";
+  /** Full-screen ask flow on /hjem/spor — large field, app-like. Home = compact on /hjem. */
+  variant?: "card" | "fullscreen" | "home";
 }) {
   const fullscreen = variant === "fullscreen";
+  const home = variant === "home";
   const qc = useQueryClient();
   const runAssistant = useServerFn(runInboxAssistant);
   const runCreate = useServerFn(createContactFromSuggestion);
@@ -93,10 +106,33 @@ export function InboxAssistantCard({
     signatureBody: null,
   });
 
+  const speech = useSpeechToText({
+    lang: "nb-NO",
+    onError: (message) => toast.error(message),
+  });
+
+  function appendTranscript(chunk: string) {
+    setInstruction((prev) => {
+      const base = prev.trimEnd();
+      if (!base) return chunk;
+      const needsSpace = !/\s$/.test(base);
+      return `${base}${needsSpace ? " " : ""}${chunk}`;
+    });
+  }
+
+  function toggleSpeech() {
+    if (speech.listening) {
+      speech.stop();
+      return;
+    }
+    speech.start(appendTranscript);
+  }
+
   const mut = useMutation({
     mutationFn: (text: string) =>
       runAssistant({ data: { instruction: text } }) as Promise<AssistantResult>,
     onSuccess: (res) => {
+      speech.stop();
       setResult(res);
       setCreatedIds({});
       setAppliedRelations({});
@@ -219,6 +255,7 @@ export function InboxAssistantCard({
   function submit() {
     const text = instruction.trim();
     if (!text || mut.isPending) return;
+    speech.stop();
     setResult(null);
     setCreatedIds({});
     setAppliedRelations({});
@@ -227,6 +264,11 @@ export function InboxAssistantCard({
     setGmailDraftUrl(null);
     mut.mutate(text);
   }
+
+  const displayValue =
+    speech.listening && speech.interim
+      ? `${instruction.trimEnd()}${instruction.trim() ? " " : ""}${speech.interim}`
+      : instruction;
 
   const canSend =
     !!draftTo.trim() &&
@@ -243,7 +285,9 @@ export function InboxAssistantCard({
       className={
         fullscreen
           ? "flex flex-1 flex-col gap-3"
-          : "mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm"
+          : home
+            ? "rounded-2xl border border-border bg-card p-4 shadow-sm"
+            : "mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm"
       }
     >
       {!fullscreen && (
@@ -252,9 +296,13 @@ export function InboxAssistantCard({
             <Sparkles className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold">Assistent</h2>
+            <h2 className="text-sm font-semibold">
+              {home ? "Spør om hva som helst" : "Assistent"}
+            </h2>
             <p className="text-xs text-muted-foreground">
-              Innboks, Brreg og nett. Utkast vises her — du sender selv.
+              {home
+                ? "Skriv eller snakk — innboks, Brreg og nett."
+                : "Innboks, Brreg og nett. Utkast vises her — du sender selv."}
             </p>
           </div>
         </div>
@@ -262,38 +310,76 @@ export function InboxAssistantCard({
 
       {fullscreen && (
         <p className="text-sm text-muted-foreground">
-          Innboks, Brreg og nett. Utkast vises her — du sender selv.
+          Innboks, Brreg og nett. Skriv eller snakk — utkast vises her, du sender selv.
         </p>
       )}
 
       <Textarea
-        value={instruction}
-        onChange={(e) => setInstruction(e.target.value)}
-        placeholder={fullscreen ? PLACEHOLDER_FULLSCREEN : PLACEHOLDER}
-        rows={fullscreen ? 10 : 3}
+        value={displayValue}
+        onChange={(e) => {
+          if (speech.listening) speech.stop();
+          setInstruction(e.target.value);
+        }}
+        placeholder={
+          fullscreen || home ? PLACEHOLDER_FULLSCREEN : PLACEHOLDER
+        }
+        rows={fullscreen ? 10 : home ? 4 : 3}
         maxLength={2000}
         className={
           fullscreen
             ? "min-h-[40dvh] flex-1 resize-none rounded-2xl border-border bg-card p-4 text-lg leading-relaxed shadow-sm placeholder:text-muted-foreground/70"
-            : "rounded-xl text-base"
+            : home
+              ? "min-h-[7rem] resize-none rounded-xl text-base"
+              : "rounded-xl text-base"
         }
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
         }}
       />
 
+      {speech.listening && (
+        <p className="mt-1.5 text-xs font-medium text-primary">
+          Lytter… {speech.interim ? `"${speech.interim}"` : "snakk nå"}
+        </p>
+      )}
+
       <div
-        className={`mt-2 flex items-center gap-2 ${fullscreen ? "justify-stretch" : "justify-between"}`}
+        className={`mt-2 flex items-center gap-2 ${
+          fullscreen || home ? "justify-stretch" : "justify-between"
+        }`}
       >
-        {!fullscreen && (
+        {!fullscreen && !home && (
           <p className="text-[11px] text-muted-foreground">
             {mut.isPending ? "Søker, leser tråder og skriver …" : "⌘+Enter for å kjøre"}
           </p>
         )}
+        {speech.supported ? (
+          <Button
+            type="button"
+            variant={speech.listening ? "destructive" : "outline"}
+            className={
+              fullscreen || home
+                ? "h-14 w-14 shrink-0 rounded-2xl"
+                : "h-10 w-10 shrink-0 rounded-xl px-0"
+            }
+            disabled={mut.isPending}
+            onClick={toggleSpeech}
+            aria-label={speech.listening ? "Stopp opptak" : "Snakk i stedet for å skrive"}
+            aria-pressed={speech.listening}
+          >
+            {speech.listening ? (
+              <MicOff className={fullscreen || home ? "h-5 w-5" : "h-4 w-4"} />
+            ) : (
+              <Mic className={fullscreen || home ? "h-5 w-5" : "h-4 w-4"} />
+            )}
+          </Button>
+        ) : null}
         <Button
           type="button"
           className={
-            fullscreen ? "h-14 w-full gap-2 rounded-2xl text-base" : "h-10 gap-2 rounded-xl px-4"
+            fullscreen || home
+              ? "h-14 min-w-0 flex-1 gap-2 rounded-2xl text-base"
+              : "h-10 gap-2 rounded-xl px-4"
           }
           disabled={!instruction.trim() || mut.isPending}
           onClick={submit}
