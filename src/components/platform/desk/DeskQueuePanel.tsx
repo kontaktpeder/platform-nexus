@@ -16,6 +16,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DESK_QUEUE_STALE_MS,
+  readDeskQueueCache,
+  writeDeskQueueCache,
+} from "@/lib/desk-queue-cache";
+import {
   createDeskManualSignal,
   getDeskQueue,
 } from "@/lib/desk-queue.functions";
@@ -209,11 +214,21 @@ export function DeskQueuePanel({ className }: { className?: string }) {
     };
   }, []);
 
+  const cached = useMemo(() => readDeskQueueCache(), []);
+
   const query = useQuery({
     queryKey: ["desk-queue"],
-    queryFn: () => fetchQueue(),
-    staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const data = await fetchQueue();
+      writeDeskQueueCache(data);
+      return data;
+    },
+    initialData: cached?.data,
+    initialDataUpdatedAt: cached?.updatedAt,
+    staleTime: DESK_QUEUE_STALE_MS,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const visible = useMemo(() => {

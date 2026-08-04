@@ -1319,7 +1319,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Skriv alltid et klart sluttsvar på norsk. Ingen markdown-overskrifter.",
     ].join("\n");
 
-    const history = (data.history ?? []).slice(-12);
+    const history = (data.history ?? []).slice(-8);
     const result = await generateText({
       model: getGeminiModel("flash"),
       system,
@@ -1331,7 +1331,7 @@ export const runFortell = createServerFn({ method: "POST" })
         { role: "user" as const, content: data.instruction },
       ],
       tools,
-      stopWhen: stepCountIs(18),
+      stopWhen: stepCountIs(10),
     });
 
     const answer = result.text.trim();

@@ -741,7 +741,7 @@ export const runInboxAssistant = createServerFn({ method: "POST" })
       system,
       prompt: data.instruction,
       tools,
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(10),
     });
 
     const answer = result.text.trim();

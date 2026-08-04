@@ -1,6 +1,7 @@
 import type { JsonObject, PersonalContextRecord } from "./types";
 
-const PROMPT_CAP = 4500;
+/** Keep agent prompts lean — full dossier stays in DB for editing. */
+const PROMPT_CAP = 2200;
 
 /** Build a capped system-prompt block from the personal dossier. */
 export function buildPersonalContextPromptBlock(

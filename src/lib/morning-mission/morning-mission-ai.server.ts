@@ -233,7 +233,7 @@ export async function generateMorningMissionAi(input: {
     );
   }
 
-  const model = getGeminiModel("flash");
+  const model = getGeminiModel("flash-lite");
 
   const hintLines =
     input.hints?.map(
