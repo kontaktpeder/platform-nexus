@@ -2,10 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { osloWeekKey } from "@/lib/oslo-week";
-import { getWeeklyPlan, saveWeeklyPlan } from "@/lib/weekly-plan.server";
+import {
+  getWeeklyPlan,
+  listWeeklyPlanOrgs,
+  saveWeeklyPlan,
+} from "@/lib/weekly-plan.server";
 import {
   normalizeWeeklyPlanPayload,
   type WeeklyPlan,
+  type WeeklyPlanOrgOption,
   type WeeklyPlanPayload,
 } from "@/lib/weekly-plan.types";
 
@@ -33,10 +38,26 @@ const payloadSchema = z.object({
   learning: z.array(learningItemSchema).max(20),
 });
 
+const scopeInputSchema = z.object({
+  scope: z.enum(["personal", "org"]).optional(),
+  organizationId: z.string().uuid().nullable().optional(),
+});
+
+export const listWeeklyPlanOrgOptions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<WeeklyPlanOrgOption[]> => {
+    return listWeeklyPlanOrgs(context.supabase, context.userId);
+  });
+
 export const getCurrentWeeklyPlan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<WeeklyPlan> => {
-    return getWeeklyPlan(context.supabase, context.userId, osloWeekKey());
+  .inputValidator((input: unknown) => scopeInputSchema.parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<WeeklyPlan> => {
+    return getWeeklyPlan(context.supabase, context.userId, {
+      weekKey: osloWeekKey(),
+      scope: data.scope,
+      organizationId: data.organizationId,
+    });
   });
 
 export const saveCurrentWeeklyPlan = createServerFn({ method: "POST" })
@@ -46,6 +67,8 @@ export const saveCurrentWeeklyPlan = createServerFn({ method: "POST" })
       .object({
         weekKey: z.string().min(4).max(16),
         payload: payloadSchema,
+        scope: z.enum(["personal", "org"]).optional(),
+        organizationId: z.string().uuid().nullable().optional(),
       })
       .parse(input),
   )
@@ -57,5 +80,7 @@ export const saveCurrentWeeklyPlan = createServerFn({ method: "POST" })
       userId: context.userId,
       weekKey: data.weekKey,
       payload,
+      scope: data.scope,
+      organizationId: data.organizationId,
     });
   });

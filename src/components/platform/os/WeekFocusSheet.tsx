@@ -35,7 +35,7 @@ export function WeekFocusSheet({
           </SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-1">
-          <WeeklyControlCard />
+          <WeeklyControlCard className="mt-0" defaultOpen />
         </div>
       </SheetContent>
     </Sheet>

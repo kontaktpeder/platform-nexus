@@ -67,6 +67,7 @@ import {
 import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
 import { osloWeekKey } from "@/lib/oslo-week";
 import { isWeeklyPlanQueueId, openWeekPlanSheet } from "@/lib/os/week-plan-ui";
+import { weeklyPlanQueueId } from "@/lib/weekly-plan.types";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -618,16 +619,33 @@ function workSessionItem(session: WorkSession, nowMs: number): DeskQueueItem {
   };
 }
 
-function weeklyPlanQueueItem(weekKey: string): DeskQueueItem {
+function weeklyPlanQueueItem(
+  weekKey: string,
+  selection: {
+    scope: "personal";
+    organizationId: null;
+  } | {
+    scope: "org";
+    organizationId: string;
+  },
+  orgName: string | null,
+): DeskQueueItem {
+  const id = weeklyPlanQueueId(weekKey, selection);
+  const scopeBit =
+    selection.scope === "org"
+      ? orgName
+        ? ` · ${orgName}`
+        : " · Org"
+      : " · Privat";
   return {
-    id: `weekly-plan:${weekKey}`,
+    id,
     kind: "manual",
     title: "Oppdater ukesmal",
-    subtitle: "Sett NÅ (maks 3) for denne uken",
+    subtitle: `Sett NÅ (maks 3) for denne uken${scopeBit}`,
     source: "manual",
     sourceLabel: "Uke",
     href: null,
-    sourceIds: [`weekly-plan:${weekKey}`],
+    sourceIds: [id],
     occurredAt: new Date().toISOString(),
     intent: "Ukesmal mangler",
     nextStep: "Åpne og fyll Denne uka",
@@ -646,7 +664,7 @@ export function DeskQueuePanel({
   variant?: "rail" | "dashboard";
 }) {
   const isDashboard = variant === "dashboard";
-  const { focusHint, needsFill, plan } = useWeeklyPlan();
+  const { focusHint, needsFill, plan, selection } = useWeeklyPlan();
   const weekKey = plan?.weekKey ?? osloWeekKey();
   const qc = useQueryClient();
   const fetchQueue = useServerFn(getDeskQueue);
@@ -717,9 +735,11 @@ export function DeskQueuePanel({
     if (session && !hiddenIds.has(`work:session:${session.startedAt}`)) {
       local.push(workSessionItem(session, nowMs));
     }
-    const weekItemId = `weekly-plan:${weekKey}`;
+    const weekItemId = weeklyPlanQueueId(weekKey, selection);
     if (needsFill && !hiddenIds.has(weekItemId)) {
-      local.push(weeklyPlanQueueItem(weekKey));
+      local.push(
+        weeklyPlanQueueItem(weekKey, selection, plan.organizationName),
+      );
     }
     return [...local, ...serverItems].slice(0, VISIBLE);
   }, [
@@ -730,6 +750,8 @@ export function DeskQueuePanel({
     entityOverrides,
     needsFill,
     weekKey,
+    selection,
+    plan.organizationName,
   ]);
 
   const remaining =

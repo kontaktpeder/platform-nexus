@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Loader2, Plus, Save } from "lucide-react";
+import { Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  getCurrentWeeklyPlan,
-  saveCurrentWeeklyPlan,
-} from "@/lib/weekly-plan.functions";
-import { osloWeekKey } from "@/lib/oslo-week";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
 import {
   emptyWeeklyPlanPayload,
   type WeeklyPlanPayload,
 } from "@/lib/weekly-plan.types";
+import { cn } from "@/lib/utils";
 
 function LineList({
   items,
@@ -56,58 +58,88 @@ function LineList({
   );
 }
 
-export function WeeklyControlCard() {
-  const qc = useQueryClient();
-  const fetchPlan = useServerFn(getCurrentWeeklyPlan);
-  const savePlan = useServerFn(saveCurrentWeeklyPlan);
-  const [open, setOpen] = useState(true);
+export function WeeklyControlCard({
+  className,
+  defaultOpen = true,
+}: {
+  className?: string;
+  defaultOpen?: boolean;
+}) {
+  const {
+    plan,
+    selection,
+    orgs,
+    orgsLoading,
+    selectPersonal,
+    selectOrg,
+    isLoading,
+    isError,
+    error,
+    isSaving,
+    save,
+  } = useWeeklyPlan();
+
+  const [open, setOpen] = useState(defaultOpen);
   const [draft, setDraft] = useState<WeeklyPlanPayload>(emptyWeeklyPlanPayload());
   const [dirty, setDirty] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
 
-  const query = useQuery({
-    queryKey: ["weekly-plan"],
-    queryFn: () => fetchPlan(),
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
-  });
+  const scopeKey = `${selection.scope}:${selection.organizationId ?? "personal"}:${plan.weekKey}`;
 
   useEffect(() => {
-    if (query.data && !dirty) {
-      setDraft(query.data.payload);
-    }
-  }, [query.data, dirty]);
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      savePlan({
-        data: {
-          weekKey: query.data?.weekKey || osloWeekKey(),
-          payload: draft,
-        },
-      }),
-    onSuccess: (saved) => {
-      setDraft(saved.payload);
-      setDirty(false);
-      void qc.setQueryData(["weekly-plan"], saved);
-      toast("Ukeplan lagret");
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Kunne ikke lagre ukeplan");
-    },
-  });
+    if (isLoading) return;
+    if (dirty && loadedKey === scopeKey) return;
+    setDraft(plan.payload);
+    setDirty(false);
+    setLoadedKey(scopeKey);
+  }, [plan.payload, isLoading, scopeKey, dirty, loadedKey]);
 
   function patch(next: WeeklyPlanPayload) {
     setDraft(next);
     setDirty(true);
   }
 
+  async function handleSave() {
+    try {
+      await save(draft);
+      setDirty(false);
+      toast("Ukeplan lagret");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Kunne ikke lagre ukeplan");
+    }
+  }
+
+  function onScopeChange(value: string) {
+    if (dirty) {
+      const ok = window.confirm(
+        "Du har ulagrede endringer. Bytt scope uten å lagre?",
+      );
+      if (!ok) return;
+    }
+    setDirty(false);
+    if (value === "personal") selectPersonal();
+    else selectOrg(value);
+  }
+
+  const selectValue =
+    selection.scope === "org" && selection.organizationId
+      ? selection.organizationId
+      : "personal";
+
   const filledNow = draft.now.filter((n) => n.text.trim()).length;
   const filledWaiting = draft.waiting.filter((w) => w.what.trim()).length;
+  const scopeLabel =
+    selection.scope === "org" && plan.organizationName
+      ? plan.organizationName
+      : "Privat";
 
   return (
     <section
       aria-labelledby="weekly-control"
-      className="mt-5 overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+      className={cn(
+        "mt-5 overflow-hidden rounded-2xl border border-border bg-card shadow-sm",
+        className,
+      )}
     >
       <button
         type="button"
@@ -116,22 +148,15 @@ export function WeeklyControlCard() {
       >
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
-            Kontrollag
+            Kontrollag · {scopeLabel}
           </p>
           <h2 id="weekly-control" className="text-lg font-semibold">
             Denne uka
-            {(() => {
-              const key = query.data?.weekKey;
-              const m = key ? /^(\d{4})-W(\d+)$/.exec(key) : null;
-              const label = m
-                ? `Uke ${m[2]} · ${m[1]}`
-                : query.data?.weekLabel;
-              return label ? (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  {label}
-                </span>
-              ) : null;
-            })()}
+            {plan.weekLabel ? (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {plan.weekLabel}
+              </span>
+            ) : null}
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Du fyller inn. Systemet husker — ingen AI.
@@ -140,39 +165,72 @@ export function WeeklyControlCard() {
               : " · Tom — skriv inn for å reflektere"}
           </p>
         </div>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
+        <span
+          className={cn(
+            "text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        >
+          ▾
+        </span>
       </button>
 
       {open && (
         <div className="space-y-5 border-t border-border px-4 py-4">
-          {query.isLoading && (
+          <div>
+            <label
+              htmlFor="weekly-plan-scope"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Scope
+            </label>
+            <Select
+              value={selectValue}
+              onValueChange={onScopeChange}
+              disabled={orgsLoading}
+            >
+              <SelectTrigger
+                id="weekly-plan-scope"
+                className="mt-1.5 h-11 rounded-xl"
+              >
+                <SelectValue placeholder="Velg scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="personal">Privat</SelectItem>
+                {orgs.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Privat = din uke. Org = ukeplan styrt for den organisasjonen.
+            </p>
+          </div>
+
+          {isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Laster ukeplan…
             </div>
           )}
 
-          {query.isError && (
+          {isError && (
             <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-              {query.error instanceof Error
-                ? query.error.message
-                : "Kunne ikke laste ukeplan"}
-              {(query.error instanceof Error &&
-                query.error.message.toLowerCase().includes("weekly_plans")) ||
-              (query.error instanceof Error &&
-                query.error.message.toLowerCase().includes("schema cache"))
+              {error instanceof Error ? error.message : "Kunne ikke laste ukeplan"}
+              {(error instanceof Error &&
+                error.message.toLowerCase().includes("weekly_plans")) ||
+              (error instanceof Error &&
+                error.message.toLowerCase().includes("schema cache"))
                 ? " — kjør SQL-migrasjonen for weekly_plans i Supabase."
                 : ""}
             </p>
           )}
 
-          {!query.isLoading && !query.isError && (
+          {!isLoading && !isError && (
             <>
-              {/* 1. NÅ */}
               <div>
                 <h3 className="text-sm font-semibold">1. NÅ — maks 3</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -220,7 +278,6 @@ export function WeeklyControlCard() {
                 </ul>
               </div>
 
-              {/* 2. VENTER */}
               <div>
                 <h3 className="text-sm font-semibold">2. Venter på</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -294,7 +351,6 @@ export function WeeklyControlCard() {
                 </div>
               </div>
 
-              {/* 3. REGNVÆR */}
               <div>
                 <h3 className="text-sm font-semibold">3. Regnværsliste</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -310,7 +366,6 @@ export function WeeklyControlCard() {
                 </div>
               </div>
 
-              {/* 4. IDÉBANK */}
               <div>
                 <h3 className="text-sm font-semibold">4. Idébank</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -328,7 +383,6 @@ export function WeeklyControlCard() {
                 </div>
               </div>
 
-              {/* 5. LÆRING */}
               <div>
                 <h3 className="text-sm font-semibold">5. Læringslogg</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -393,17 +447,17 @@ export function WeeklyControlCard() {
                 <p className="text-xs text-muted-foreground">
                   {dirty
                     ? "Ulagrede endringer"
-                    : query.data?.updatedAt
-                      ? `Sist lagret ${new Date(query.data.updatedAt).toLocaleString("nb-NO")}`
+                    : plan.updatedAt
+                      ? `Sist lagret ${new Date(plan.updatedAt).toLocaleString("nb-NO")}`
                       : "Ikke lagret ennå"}
                 </p>
                 <Button
                   type="button"
                   className="h-11 gap-2 rounded-xl px-4"
-                  disabled={!dirty || mutation.isPending}
-                  onClick={() => mutation.mutate()}
+                  disabled={!dirty || isSaving}
+                  onClick={() => void handleSave()}
                 >
-                  {mutation.isPending ? (
+                  {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Save className="h-4 w-4" />

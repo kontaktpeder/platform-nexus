@@ -1237,7 +1237,9 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          organization_id: string | null
           payload: Json
+          scope: string
           updated_at: string
           user_id: string
           week_key: string
@@ -1245,7 +1247,9 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          organization_id?: string | null
           payload?: Json
+          scope?: string
           updated_at?: string
           user_id: string
           week_key: string
@@ -1253,12 +1257,22 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          organization_id?: string | null
           payload?: Json
+          scope?: string
           updated_at?: string
           user_id?: string
           week_key?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_modules: {
         Row: {
