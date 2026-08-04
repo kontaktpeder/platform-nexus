@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 const SIZE = {
   sm: "h-8 w-8",
-  md: "h-11 w-11",
+  md: "h-12 w-12",
   lg: "h-16 w-16",
   hero: "h-28 w-28 sm:h-32 sm:w-32",
 } as const;
@@ -11,7 +11,7 @@ type NexusMarkSize = keyof typeof SIZE;
 
 /**
  * Chrome sphere mark — hero on Desk, compact in chrome.
- * Light UI + dark orb = intentional contrast (Pastelly warmth, Nexus edge).
+ * Liquid-metal orb = NEXUS brand anchor.
  */
 export function NexusMark({
   size = "md",
@@ -20,7 +20,7 @@ export function NexusMark({
   alt = "Nexus",
 }: {
   size?: NexusMarkSize;
-  /** Soft breathe while the agent works */
+  /** Soft breathe while the agent works / active home */
   pulse?: boolean;
   className?: string;
   alt?: string;
@@ -38,7 +38,7 @@ export function NexusMark({
     >
       {pulse && (
         <span
-          className="absolute inset-[-18%] rounded-full bg-[radial-gradient(circle,oklch(0.7_0.08_250/0.35)_0%,transparent_68%)] animate-pulse"
+          className="absolute inset-[-22%] rounded-full bg-[radial-gradient(circle,oklch(0.65_0.1_220/0.45)_0%,transparent_68%)] animate-pulse"
           aria-hidden
         />
       )}
@@ -50,8 +50,8 @@ export function NexusMark({
         draggable={false}
         className={cn(
           "relative h-full w-full rounded-full object-cover",
-          "shadow-[0_8px_28px_-6px_oklch(0.35_0.06_250/0.45),0_2px_8px_oklch(0_0_0/0.12)]",
-          "ring-1 ring-black/10",
+          "shadow-[0_10px_32px_-8px_oklch(0.3_0.08_230/0.55),0_2px_8px_oklch(0_0_0/0.2)]",
+          "ring-1 ring-white/15",
           pulse && "animate-[nexus-breathe_2.4s_ease-in-out_infinite]",
         )}
       />
