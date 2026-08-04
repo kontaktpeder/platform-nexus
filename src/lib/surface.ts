@@ -2,7 +2,8 @@
  * Platform surfaces — keep capture (mobile) and desk (Mac) isolated.
  *
  * - capture: /hjem — quick CTAs in the field
- * - desk: /desk — calm work zone on desktop
+ * - desk: /desk — NEXUS OS dashboards (Hele livet | Privat | Business | CORE)
+ * - desk/fortell: Fortell + signal queue (Innboks)
  *
  * Share data/functions across surfaces; do not share home/desk UI trees.
  */

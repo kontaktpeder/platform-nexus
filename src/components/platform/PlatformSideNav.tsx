@@ -24,9 +24,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-/** Desktop sidebar — Desk is primary. Mobile capture Hjem lives in bottom nav only. */
+/** Desktop sidebar for non-OS routes (kontakter, modules, profil). /desk uses NexusOsSideNav. */
 export const PLATFORM_NAV_ITEMS = [
-  { to: "/desk" as const, label: "Desk", icon: LayoutDashboard, exact: true },
+  { to: "/desk" as const, label: "I dag", icon: LayoutDashboard, exact: false },
   { to: "/kontakter" as const, label: "Kontakter", icon: Users, exact: false },
   { to: "/modules" as const, label: "Moduler", icon: Blocks, exact: false },
   { to: "/profil" as const, label: "Profil", icon: UserRound, exact: false },
@@ -42,7 +42,8 @@ export function PlatformSideNav() {
       <SidebarHeader className="border-b border-border/60 px-3 py-4">
         <Link
           to="/desk"
-          aria-label="Nexus Desk"
+          search={{ kontekst: "hele" }}
+          aria-label="Nexus"
           className={cn(
             "flex items-center gap-2 overflow-hidden rounded-lg px-1 py-1 font-heading text-sm font-semibold tracking-tight text-foreground",
             collapsed && "justify-center",
@@ -60,11 +61,19 @@ export function PlatformSideNav() {
             <SidebarMenu>
               {PLATFORM_NAV_ITEMS.map((item) => {
                 const { to, label, icon: Icon, exact } = item;
-                const active = exact ? pathname === to : pathname.startsWith(to);
+                const active = exact
+                  ? pathname === to
+                  : to === "/desk"
+                    ? pathname === "/desk" || pathname.startsWith("/desk/")
+                    : pathname.startsWith(to);
                 return (
                   <SidebarMenuItem key={to}>
                     <SidebarMenuButton asChild isActive={active} tooltip={label}>
-                      <Link to={to} aria-current={active ? "page" : undefined}>
+                      <Link
+                        to={to}
+                        search={to === "/desk" ? { kontekst: "hele" } : undefined}
+                        aria-current={active ? "page" : undefined}
+                      >
                         <Icon />
                         <span>{label}</span>
                       </Link>

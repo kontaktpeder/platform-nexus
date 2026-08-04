@@ -1,16 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DeskHome } from "@/components/platform/desk/DeskHome";
-import { PlatformShell } from "@/components/platform/PlatformShell";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { NexusOsShell } from "@/components/platform/os/NexusOsShell";
 
+/** Desktop OS layout — dashboards + Fortell/Innboks share the charcoal shell. */
 export const Route = createFileRoute("/_authenticated/desk")({
-  head: () => ({ meta: [{ title: "Desk — Nexus" }] }),
-  component: DeskPage,
+  component: DeskLayout,
 });
 
-function DeskPage() {
+function DeskLayout() {
   return (
-    <PlatformShell lockMainScroll>
-      <DeskHome />
-    </PlatformShell>
+    <NexusOsShell lockMainScroll>
+      <Outlet />
+    </NexusOsShell>
   );
 }
