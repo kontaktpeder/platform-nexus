@@ -36,6 +36,14 @@ export type DeskQueueItem = {
   gmailMessageId?: string | null;
   /** List-Unsubscribe present — reply drawer can surface avmelding. */
   hasUnsubscribe?: boolean;
+  /** Short “what they want” — cleaned / AI / heuristic. */
+  intent?: string | null;
+  /** What to do after opening CTA (e.g. check property in Search Console). */
+  nextStep?: string | null;
+  /** Primary action URL for open_link mails. */
+  ctaUrl?: string | null;
+  ctaLabel?: string | null;
+  ctaKind?: "open_link" | "reply" | "fyi" | "other" | null;
 };
 
 export type DeskQueueResponse = {

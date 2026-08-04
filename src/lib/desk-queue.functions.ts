@@ -320,8 +320,12 @@ export const getDeskQueue = createServerFn({ method: "GET" })
       }
     }
 
+    const baseItems = open.slice(0, POOL).map((s) => toItem(s, entityByEmail));
+    const { enrichDeskGmailItems } = await import("@/lib/desk-mail-intent.server");
+    const items = await enrichDeskGmailItems(baseItems, { maxFetch: 6 });
+
     return {
-      items: open.slice(0, POOL).map((s) => toItem(s, entityByEmail)),
+      items,
       totalOpen: open.length,
       generatedAt: new Date().toISOString(),
     };

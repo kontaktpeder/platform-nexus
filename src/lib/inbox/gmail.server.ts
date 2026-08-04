@@ -422,6 +422,85 @@ export type GmailThreadMessage = {
   attachments: string[];
 };
 
+export type GmailMessageBrief = {
+  messageId: string;
+  subject: string;
+  from: string;
+  snippet: string;
+  bodyText: string;
+  /** http(s) links found in HTML/text body, de-duped, tracking filtered. */
+  links: string[];
+};
+
+const SKIP_LINK_RE =
+  /unsubscribe|list-manage|mailto:|fonts\.google|google-analytics|doubleclick|facebook\.com\/tr|pixel|tracking|utm_medium=email.*favicon|schema\.org/i;
+
+function extractLinksFromHtml(html: string): string[] {
+  const out: string[] = [];
+  const re = /href\s*=\s*["'](https?:\/\/[^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const url = m[1].replace(/&amp;/g, "&").trim();
+    if (!url || SKIP_LINK_RE.test(url)) continue;
+    out.push(url);
+  }
+  return out;
+}
+
+function extractLinksFromText(text: string): string[] {
+  const out: string[] = [];
+  const re = /https?:\/\/[^\s<>)"']+/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const url = m[0].replace(/[.,;:!?)]+$/, "");
+    if (!url || SKIP_LINK_RE.test(url)) continue;
+    out.push(url);
+  }
+  return out;
+}
+
+/** Single-message body + actionable links for Desk intent/CTA. */
+export async function readGmailMessageBrief(
+  messageId: string,
+  opts?: { maxChars?: number },
+): Promise<GmailMessageBrief> {
+  const { apiKey, lovableKey } = gmailKeys();
+  const maxChars = opts?.maxChars ?? 2500;
+  const msg = await gmailFetch<FullMessage>(
+    `/users/me/messages/${encodeURIComponent(messageId)}?format=full`,
+    apiKey,
+    lovableKey,
+  );
+  const headers = msg.payload?.headers;
+  const collected = {
+    texts: [] as string[],
+    htmls: [] as string[],
+    attachments: [] as string[],
+  };
+  collectParts(msg.payload, collected);
+  let body = collected.texts.join("\n\n").trim();
+  if (!body && collected.htmls.length) {
+    body = htmlToText(collected.htmls.join("\n"));
+  }
+  if (!body) body = msg.snippet ?? "";
+
+  const linkSet = new Set<string>();
+  for (const html of collected.htmls) {
+    for (const u of extractLinksFromHtml(html)) linkSet.add(u);
+  }
+  for (const u of extractLinksFromText(body)) linkSet.add(u);
+  for (const u of extractLinksFromText(msg.snippet ?? "")) linkSet.add(u);
+
+  return {
+    messageId: msg.id,
+    subject: headerValue(headers, "Subject") || "(uten emne)",
+    from: headerValue(headers, "From"),
+    snippet: (msg.snippet ?? "").slice(0, 400),
+    bodyText: body.slice(0, maxChars),
+    links: [...linkSet].slice(0, 12),
+  };
+}
+
 /** Read every message in a thread with decoded plain-text bodies. */
 export async function readGmailThread(
   threadId: string,

@@ -89,8 +89,14 @@ function initials(name: string | null | undefined, email: string | null | undefi
   return base.slice(0, 2).toUpperCase();
 }
 
+function gmailMessageIdOf(item: DeskQueueItem): string | null {
+  if (item.gmailMessageId) return item.gmailMessageId;
+  if (item.id.startsWith("gmail:")) return item.id.slice("gmail:".length) || null;
+  return null;
+}
+
 function isGmailMail(item: DeskQueueItem): boolean {
-  return item.source === "gmail" && item.kind === "mail" && !!item.gmailMessageId;
+  return item.source === "gmail" && item.kind === "mail" && !!gmailMessageIdOf(item);
 }
 
 type GmailSideEffect = "mark_read" | "archive" | "trash";
@@ -184,13 +190,35 @@ function QueueCard({
         </button>
       )}
 
-      <p className="mt-2 text-sm font-semibold leading-snug tracking-tight">{item.title}</p>
-      {item.subtitle && (
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.subtitle}</p>
+      <p className="mt-2 text-sm font-semibold leading-snug tracking-tight">
+        {item.intent || item.title}
+      </p>
+      {(item.nextStep || (!item.intent && item.subtitle)) && (
+        <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
+          {item.nextStep || item.subtitle}
+        </p>
+      )}
+      {gmailMail && item.intent && item.title && item.intent !== item.title && (
+        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground/80">{item.title}</p>
+      )}
+
+      {gmailMail && item.ctaUrl && (
+        <Button
+          type="button"
+          size="sm"
+          className="mt-3 h-9 w-full gap-1.5 rounded-xl text-xs"
+          disabled={busy}
+          onClick={() => {
+            window.open(item.ctaUrl!, "_blank", "noopener,noreferrer");
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          {item.ctaLabel || "Åpne lenke"}
+        </Button>
       )}
 
       {gmailMail ? (
-        <div className="mt-3 grid grid-cols-2 gap-1.5">
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
           <Button
             type="button"
             size="sm"
@@ -763,13 +791,13 @@ export function DeskQueuePanel({
           : "—"}
       </footer>
 
-      {replyItem?.gmailMessageId && (
+      {replyItem && gmailMessageIdOf(replyItem) && (
         <GmailReplyDrawer
           open={!!replyItem}
           onOpenChange={(open) => {
             if (!open) setReplyItem(null);
           }}
-          messageId={replyItem.gmailMessageId}
+          messageId={gmailMessageIdOf(replyItem)!}
           fallbackSubject={replyItem.title}
           fallbackSender={replyItem.fromName ?? replyItem.fromEmail ?? undefined}
           fallbackSnippet={replyItem.subtitle ?? undefined}
