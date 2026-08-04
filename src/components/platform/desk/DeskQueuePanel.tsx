@@ -64,7 +64,9 @@ import {
   stopWorkSession,
   type WorkSession,
 } from "@/lib/work-session";
-import { useWeekFocus } from "@/hooks/useWeekFocus";
+import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
+import { osloWeekKey } from "@/lib/oslo-week";
+import { isWeeklyPlanQueueId, openWeekPlanSheet } from "@/lib/os/week-plan-ui";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -616,6 +618,22 @@ function workSessionItem(session: WorkSession, nowMs: number): DeskQueueItem {
   };
 }
 
+function weeklyPlanQueueItem(weekKey: string): DeskQueueItem {
+  return {
+    id: `weekly-plan:${weekKey}`,
+    kind: "manual",
+    title: "Oppdater ukesmal",
+    subtitle: "Sett NÅ (maks 3) for denne uken",
+    source: "manual",
+    sourceLabel: "Uke",
+    href: null,
+    sourceIds: [`weekly-plan:${weekKey}`],
+    occurredAt: new Date().toISOString(),
+    intent: "Ukesmal mangler",
+    nextStep: "Åpne og fyll Denne uka",
+  };
+}
+
 export function DeskQueuePanel({
   className,
   onOpenContact,
@@ -628,9 +646,8 @@ export function DeskQueuePanel({
   variant?: "rail" | "dashboard";
 }) {
   const isDashboard = variant === "dashboard";
-  const { focus: weekFocus } = useWeekFocus();
-  const focusHint =
-    weekFocus.unlock.trim() || weekFocus.bottleneck.trim() || null;
+  const { focusHint, needsFill, plan } = useWeeklyPlan();
+  const weekKey = plan?.weekKey ?? osloWeekKey();
   const qc = useQueryClient();
   const fetchQueue = useServerFn(getDeskQueue);
   const createManual = useServerFn(createDeskManualSignal);
@@ -700,8 +717,20 @@ export function DeskQueuePanel({
     if (session && !hiddenIds.has(`work:session:${session.startedAt}`)) {
       local.push(workSessionItem(session, nowMs));
     }
+    const weekItemId = `weekly-plan:${weekKey}`;
+    if (needsFill && !hiddenIds.has(weekItemId)) {
+      local.push(weeklyPlanQueueItem(weekKey));
+    }
     return [...local, ...serverItems].slice(0, VISIBLE);
-  }, [query.data?.items, hiddenIds, session, nowMs, entityOverrides]);
+  }, [
+    query.data?.items,
+    hiddenIds,
+    session,
+    nowMs,
+    entityOverrides,
+    needsFill,
+    weekKey,
+  ]);
 
   const remaining =
     Math.max(0, (query.data?.totalOpen ?? 0) + (session ? 1 : 0) - hiddenIds.size) -
@@ -712,6 +741,11 @@ export function DeskQueuePanel({
     action: "done" | "snoozed" | "ignored",
     gmailSideEffect?: GmailSideEffect,
   ) {
+    if (isWeeklyPlanQueueId(item.id)) {
+      setHiddenIds((prev) => new Set(prev).add(item.id));
+      if (action === "done") openWeekPlanSheet();
+      return;
+    }
     if (item.kind === "work_session") {
       if (action === "ignored") {
         setHiddenIds((prev) => new Set(prev).add(item.id));
@@ -793,6 +827,10 @@ export function DeskQueuePanel({
   }
 
   function onPrimary(item: DeskQueueItem) {
+    if (isWeeklyPlanQueueId(item.id)) {
+      openWeekPlanSheet();
+      return;
+    }
     if (item.kind === "draft") {
       if (item.href) {
         window.open(item.href, "_blank", "noopener,noreferrer");
@@ -1050,6 +1088,7 @@ export function DeskQueuePanel({
                 item={item}
                 busy={busyId === item.id}
                 compact={isDashboard}
+                primaryLabel={isWeeklyPlanQueueId(item.id) ? "Åpne" : undefined}
                 onPrimary={() => onPrimary(item)}
                 onSnooze={() => void act(item, "snoozed")}
                 onRemove={() =>

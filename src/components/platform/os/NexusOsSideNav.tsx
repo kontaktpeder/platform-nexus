@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Bell,
@@ -19,8 +19,9 @@ import { NexusMark } from "@/components/platform/NexusMark";
 import { WeekFocusSheet } from "@/components/platform/os/WeekFocusSheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useOsProfile } from "@/hooks/useOsProfile";
-import { useWeekFocus } from "@/hooks/useWeekFocus";
+import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
 import { OS_NAV_ITEMS, type OsNavId } from "@/lib/os/context";
+import { WEEK_PLAN_OPEN_EVENT } from "@/lib/os/week-plan-ui";
 import { cn } from "@/lib/utils";
 
 const NAV_ICONS: Record<OsNavId, typeof LayoutDashboard> = {
@@ -41,9 +42,14 @@ export function NexusOsSideNav() {
   const onFortell = pathname.startsWith("/desk/fortell");
   const onDeskHome = !onFortell && (pathname === "/desk" || pathname === "/desk/");
   const { displayName, avatarUrl, fallbackStyle, initials } = useOsProfile();
-  const { focus } = useWeekFocus();
+  const { focusHint, needsFill } = useWeeklyPlan();
   const [weekOpen, setWeekOpen] = useState(false);
-  const hasBottleneck = focus.bottleneck.trim().length > 0;
+
+  useEffect(() => {
+    const open = () => setWeekOpen(true);
+    window.addEventListener(WEEK_PLAN_OPEN_EVENT, open);
+    return () => window.removeEventListener(WEEK_PLAN_OPEN_EVENT, open);
+  }, []);
 
   return (
     <>
@@ -128,7 +134,6 @@ export function NexusOsSideNav() {
           })}
         </nav>
 
-        {/* Ukesmal / flaskehals */}
         <div className="relative z-10 mx-2 mb-2 w-[calc(100%-1rem)] xl:mx-3 xl:w-auto">
           <button
             type="button"
@@ -138,6 +143,7 @@ export function NexusOsSideNav() {
               "flex w-full items-center gap-2 rounded-2xl border border-white/10 px-2 py-2 text-left transition-colors",
               "bg-white/8 hover:bg-white/12",
               "xl:px-3",
+              needsFill && "ring-1 ring-warning/50",
             )}
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning/25 text-warning">
@@ -148,7 +154,7 @@ export function NexusOsSideNav() {
                 Ukesmal
               </span>
               <span className="block truncate text-xs font-medium text-white/90">
-                {hasBottleneck ? focus.bottleneck : "Sett flaskehals…"}
+                {focusHint ?? "Fyll Denne uka…"}
               </span>
             </span>
           </button>
