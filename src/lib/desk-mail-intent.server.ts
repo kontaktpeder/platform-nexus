@@ -1,6 +1,6 @@
 /**
  * Desk queue: short intent + primary CTA for Gmail cards.
- * Heuristics first; flash-lite batch only for visible mail that needs clarity.
+ * Heuristics pick CTA URL/label; flash-lite always writes intent/nextStep.
  */
 
 import { generateText } from "ai";
@@ -12,6 +12,12 @@ export type DeskMailCtaKind = "open_link" | "reply" | "fyi" | "other";
 export type DeskMailEnrichment = {
   intent: string;
   nextStep: string | null;
+  ctaUrl: string | null;
+  ctaLabel: string | null;
+  ctaKind: DeskMailCtaKind;
+};
+
+type HeuristicCta = {
   ctaUrl: string | null;
   ctaLabel: string | null;
   ctaKind: DeskMailCtaKind;
@@ -47,6 +53,9 @@ function scoreLink(url: string, fromEmail: string | null, subject: string): numb
   const subj = subject.toLowerCase();
   let score = 1;
   if (/search\.google\.com\/search-console|google\.com\/webmasters/i.test(u)) score += 40;
+  if (/myaccount\.google\.com|accounts\.google\.com/i.test(u) && /sikkerhet|security|alert|varsel/i.test(subj + from)) {
+    score += 35;
+  }
   if (/accounts\.google\.com/i.test(u) && /search console|søk/i.test(subj)) score += 20;
   if (/github\.com|linear\.app|notion\.so|stripe\.com|vercel\.com/i.test(u)) score += 15;
   if (/docs\.google\.com|drive\.google\.com|calendar\.google\.com/i.test(u)) score += 12;
@@ -71,16 +80,15 @@ function pickBestLink(
   return best;
 }
 
-type HeuristicInput = {
+/** CTA only — no boilerplate intent/nextStep. */
+function heuristicCta(input: {
   subject: string;
   fromEmail: string | null;
   snippet: string;
   bodyText: string;
   links: string[];
   hasUnsubscribe?: boolean;
-};
-
-function heuristicEnrichment(input: HeuristicInput): DeskMailEnrichment | null {
+}): HeuristicCta {
   const subject = cleanMailText(input.subject);
   const snippet = cleanMailText(input.snippet);
   const fromEmail = input.fromEmail?.toLowerCase() ?? null;
@@ -94,8 +102,6 @@ function heuristicEnrichment(input: HeuristicInput): DeskMailEnrichment | null {
     const url =
       input.links.find((l) => /search-console|webmasters/i.test(l)) ?? ctaUrl;
     return {
-      intent: subject || "Google Search Console",
-      nextStep: "Åpne Search Console og sjekk eiendom / trafikk for domenet.",
       ctaUrl: url,
       ctaLabel: url ? "Åpne Search Console" : null,
       ctaKind: url ? "open_link" : "fyi",
@@ -103,44 +109,32 @@ function heuristicEnrichment(input: HeuristicInput): DeskMailEnrichment | null {
   }
 
   if (
-    ctaUrl &&
-    /\b(overvåk|sjekk|bekreft|verify|confirm|view|se her|åpne|monitor)\b/i.test(blob)
+    fromEmail?.includes("accounts.google.com") ||
+    fromEmail?.includes("no-reply@accounts.google") ||
+    /sikkerhetsvarsel|security alert|new sign-?in|ny innlogging/i.test(blob)
   ) {
+    const url =
+      input.links.find((l) => /myaccount\.google|accounts\.google/i.test(l)) ?? ctaUrl;
     return {
-      intent: subject.slice(0, 120) || "Åpne lenke fra mailen",
-      nextStep: "Klikk lenken og gjør det mailen ber om der.",
-      ctaUrl,
-      ctaLabel: "Åpne lenke",
-      ctaKind: "open_link",
+      ctaUrl: url,
+      ctaLabel: url ? "Sjekk Google-konto" : null,
+      ctaKind: url ? "open_link" : "fyi",
     };
   }
 
-  if (
-    input.hasUnsubscribe ||
-    /nyhetsbrev|newsletter|we're proud|i dag lanserer|proud to launch/i.test(blob)
-  ) {
-    return {
-      intent: subject.slice(0, 120) || "Nyhetsbrev / produktnyhet",
-      nextStep: ctaUrl
-        ? "Skum produktet via lenken — eller arkiver/slett hvis irrelevant."
-        : "Ingen handling nødvendig med mindre du vil lese mer.",
-      ctaUrl,
-      ctaLabel: ctaUrl ? "Åpne" : null,
-      ctaKind: ctaUrl ? "open_link" : "fyi",
-    };
+  if (ctaUrl) {
+    let label = "Åpne lenke";
+    if (input.hasUnsubscribe || /nyhetsbrev|newsletter|proud to launch/i.test(blob)) {
+      label = "Åpne";
+    }
+    return { ctaUrl, ctaLabel: label, ctaKind: "open_link" };
   }
 
-  if (ctaUrl && input.links.length > 0 && input.links.length <= 4) {
-    return {
-      intent: subject.slice(0, 120),
-      nextStep: "Åpne lenken for å se hva de vil at du skal gjøre.",
-      ctaUrl,
-      ctaLabel: "Åpne lenke",
-      ctaKind: "open_link",
-    };
+  if (input.hasUnsubscribe) {
+    return { ctaUrl: null, ctaLabel: null, ctaKind: "fyi" };
   }
 
-  return null;
+  return { ctaUrl: null, ctaLabel: null, ctaKind: "other" };
 }
 
 type AiRow = {
@@ -160,6 +154,9 @@ async function aiEnrichBatch(
     snippet: string;
     body: string;
     links: string[];
+    hintCtaUrl: string | null;
+    hintCtaLabel: string | null;
+    hintCtaKind: DeskMailCtaKind;
   }>,
 ): Promise<Map<string, DeskMailEnrichment>> {
   const out = new Map<string, DeskMailEnrichment>();
@@ -172,20 +169,27 @@ async function aiEnrichBatch(
     snippet: cleanMailText(r.snippet).slice(0, 280),
     body: cleanMailText(r.body).slice(0, 900),
     links: r.links.slice(0, 6),
+    preferredCtaUrl: r.hintCtaUrl,
+    preferredCtaLabel: r.hintCtaLabel,
   }));
 
   try {
     const { text } = await generateText({
       model: getGeminiModel("flash-lite"),
       system: [
-        "You summarize inbox emails for a personal OS queue card.",
-        "For each mail return JSON array items: id, intent (max 90 chars, what they want FROM the user),",
-        "nextStep (max 110 chars: what to do after opening — or null),",
-        "ctaUrl (pick best http link from links[] for open_link, else null),",
-        "ctaLabel (short Norwegian button label or null),",
+        "You write short Norwegian queue-card copy for inbox emails.",
+        "Return ONLY a JSON array. Each item:",
+        "id, intent (max 85 chars — concrete: what this mail is about / asks of the user),",
+        "nextStep (max 100 chars — specific action, e.g. 'Bekreft om innloggingen var deg' or 'Les Native Ads-lansering hvis relevant, ellers arkiver'),",
+        "ctaUrl (use preferredCtaUrl if set and in links[], else best link from links[], else null),",
+        "ctaLabel (short Norwegian button, or preferredCtaLabel),",
         "ctaKind: open_link | reply | fyi | other.",
-        "If the mail is mainly 'go check this link', ctaKind=open_link and intent must say what to verify/do there.",
-        "Never invent URLs not in links[]. Norwegian preferred. Return ONLY JSON array.",
+        "Rules:",
+        "- NEVER use generic lines like 'Klikk lenken og gjør det mailen ber om' or 'Skum produktet via lenken'.",
+        "- Security alerts: say what to verify (new login, device, location) if present in body/snippet.",
+        "- Newsletters/product launches: name the product/topic; nextStep = read if relevant else archive.",
+        "- Search Console: name the domain/property if present.",
+        "- Never invent URLs not in links[] / preferredCtaUrl.",
       ].join(" "),
       prompt: JSON.stringify(payload),
     });
@@ -195,9 +199,13 @@ async function aiEnrichBatch(
     const parsed = JSON.parse(text.slice(start, end + 1)) as AiRow[];
     for (const row of parsed) {
       if (!row?.id || !row.intent) continue;
-      const allowed = new Set(payload.find((p) => p.id === row.id)?.links ?? []);
+      const src = rows.find((p) => p.id === row.id);
+      const allowed = new Set(src?.links ?? []);
       let resolved: string | null = null;
-      if (row.ctaUrl) {
+      const preferred = src?.hintCtaUrl ?? null;
+      if (preferred && (allowed.has(preferred) || allowed.size === 0)) {
+        resolved = preferred;
+      } else if (row.ctaUrl) {
         if (allowed.has(row.ctaUrl)) resolved = row.ctaUrl;
         else {
           resolved =
@@ -206,26 +214,51 @@ async function aiEnrichBatch(
             ) ?? null;
         }
       }
+      if (!resolved && preferred) resolved = preferred;
+
+      const intent = cleanMailText(row.intent).slice(0, 120);
+      const nextStep = row.nextStep ? cleanMailText(row.nextStep).slice(0, 140) : null;
+      // Reject leftover generic boilerplate if model ignores instructions.
+      const badNext =
+        nextStep &&
+        /klikk lenken og gjør det|skum produktet via lenken|åpne lenken for å se hva/i.test(
+          nextStep,
+        );
+
       out.set(row.id, {
-        intent: cleanMailText(row.intent).slice(0, 120),
-        nextStep: row.nextStep ? cleanMailText(row.nextStep).slice(0, 140) : null,
+        intent,
+        nextStep: badNext ? null : nextStep,
         ctaUrl: resolved,
-        ctaLabel: row.ctaLabel ? cleanMailText(row.ctaLabel).slice(0, 40) : null,
+        ctaLabel:
+          (row.ctaLabel ? cleanMailText(row.ctaLabel).slice(0, 40) : null) ||
+          src?.hintCtaLabel ||
+          (resolved ? "Åpne lenke" : null),
         ctaKind:
           row.ctaKind === "open_link" ||
           row.ctaKind === "reply" ||
           row.ctaKind === "fyi" ||
           row.ctaKind === "other"
             ? row.ctaKind
-            : resolved
-              ? "open_link"
-              : "other",
+            : src?.hintCtaKind ?? (resolved ? "open_link" : "other"),
       });
     }
   } catch (err) {
     console.warn("[desk-mail-intent] AI enrich failed", err);
   }
   return out;
+}
+
+function fallbackFromHeuristic(
+  subject: string,
+  cta: HeuristicCta,
+): DeskMailEnrichment {
+  return {
+    intent: subject.slice(0, 120) || "E-post",
+    nextStep: null,
+    ctaUrl: cta.ctaUrl,
+    ctaLabel: cta.ctaLabel,
+    ctaKind: cta.ctaKind,
+  };
 }
 
 /** Enrich top Gmail mail items with intent + CTA. */
@@ -268,13 +301,16 @@ export async function enrichDeskGmailItems(
     snippet: string;
     body: string;
     links: string[];
+    hintCtaUrl: string | null;
+    hintCtaLabel: string | null;
+    hintCtaKind: DeskMailCtaKind;
   }> = [];
 
   for (const { item, brief } of briefs) {
     const subject = cleanMailText(brief?.subject ?? item.title);
     const snippet = cleanMailText(brief?.snippet ?? item.subtitle ?? "");
     const links = brief?.links ?? [];
-    const heur = heuristicEnrichment({
+    const cta = heuristicCta({
       subject,
       fromEmail: item.fromEmail ?? null,
       snippet,
@@ -283,11 +319,8 @@ export async function enrichDeskGmailItems(
       hasUnsubscribe: item.hasUnsubscribe,
     });
 
-    // Strong open_link heuristics skip AI.
-    if (heur?.ctaKind === "open_link" && heur.ctaUrl) {
-      byId.set(item.id, heur);
-      continue;
-    }
+    // Always prefer AI for copy; heuristic CTA as hint + fallback.
+    byId.set(item.id, fallbackFromHeuristic(subject, cta));
 
     if (brief) {
       needAi.push({
@@ -297,23 +330,30 @@ export async function enrichDeskGmailItems(
         snippet,
         body: brief.bodyText,
         links,
-      });
-      if (heur) byId.set(item.id, heur);
-    } else if (heur) {
-      byId.set(item.id, heur);
-    } else {
-      byId.set(item.id, {
-        intent: subject.slice(0, 120),
-        nextStep: null,
-        ctaUrl: null,
-        ctaLabel: null,
-        ctaKind: "other",
+        hintCtaUrl: cta.ctaUrl,
+        hintCtaLabel: cta.ctaLabel,
+        hintCtaKind: cta.ctaKind,
       });
     }
   }
 
-  const aiMap = await aiEnrichBatch(needAi.slice(0, 4));
-  for (const [id, enrich] of aiMap) byId.set(id, enrich);
+  const aiMap = await aiEnrichBatch(needAi.slice(0, 6));
+  for (const [id, enrich] of aiMap) {
+    const prev = byId.get(id);
+    byId.set(id, {
+      intent: enrich.intent,
+      nextStep: enrich.nextStep,
+      // Prefer heuristic CTA URL/label when present (trusted for Search Console / security).
+      ctaUrl: prev?.ctaUrl || enrich.ctaUrl,
+      ctaLabel: prev?.ctaLabel || enrich.ctaLabel,
+      ctaKind:
+        prev?.ctaUrl || enrich.ctaUrl
+          ? "open_link"
+          : enrich.ctaKind !== "other"
+            ? enrich.ctaKind
+            : (prev?.ctaKind ?? "other"),
+    });
+  }
 
   return items.map((item) => {
     const enrich = byId.get(item.id);
@@ -328,7 +368,8 @@ export async function enrichDeskGmailItems(
     return {
       ...item,
       title,
-      subtitle: [enrich.intent, enrich.nextStep].filter(Boolean).join(" — ").slice(0, 220) ||
+      subtitle:
+        [enrich.intent, enrich.nextStep].filter(Boolean).join(" — ").slice(0, 220) ||
         item.subtitle,
       intent: enrich.intent,
       nextStep: enrich.nextStep,
