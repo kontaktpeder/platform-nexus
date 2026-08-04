@@ -1,11 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
+import { NexusOsBottomNav } from "@/components/platform/os/NexusOsBottomNav";
 import { NexusOsSideNav } from "@/components/platform/os/NexusOsSideNav";
+import { WeekFocusHost } from "@/components/platform/os/WeekFocusHost";
 import { useDayAtmosphere } from "@/hooks/useDayAtmosphere";
 import { cn } from "@/lib/utils";
 
 /**
- * Desktop OS shell — charcoal nav + living day-atmosphere canvas.
- * Background gradient and color blobs follow the clock.
+ * OS shell — charcoal nav + living day-atmosphere canvas.
+ * Desktop: side nav. Mobile: bottom dock. Background follows the clock.
  */
 export function NexusOsShell({
   children,
@@ -36,12 +38,7 @@ export function NexusOsShell({
       <div className="hidden md:flex">
         <NexusOsSideNav />
       </div>
-      <div
-        className={cn(
-          "relative flex min-h-0 min-w-0 flex-1 flex-col",
-          lockMainScroll ? "overflow-hidden" : "overflow-y-auto",
-        )}
-      >
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 transition-[background] duration-[2000ms] ease-in-out"
@@ -62,7 +59,18 @@ export function NexusOsShell({
           className="pointer-events-none absolute bottom-0 left-1/3 size-[24rem] animate-[os-drift_32s_ease-in-out_infinite] rounded-full blur-3xl transition-colors duration-[2000ms]"
           style={{ background: "var(--os-blob-c)" }}
         />
-        {children}
+        <div
+          className={cn(
+            "relative flex min-h-0 min-w-0 flex-1 flex-col",
+            lockMainScroll ? "overflow-hidden" : "overflow-y-auto",
+          )}
+        >
+          {children}
+        </div>
+        <div className="md:hidden">
+          <NexusOsBottomNav />
+        </div>
+        <WeekFocusHost />
       </div>
     </div>
   );

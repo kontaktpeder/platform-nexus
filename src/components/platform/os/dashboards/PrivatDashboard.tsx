@@ -13,7 +13,7 @@ export function PrivatDashboard() {
   const d = privat;
 
   return (
-    <div className="grid gap-4 p-6 lg:grid-cols-12 lg:gap-5">
+    <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-12 lg:gap-5">
       <OsCard title="Livsbalanse" className="lg:col-span-4" footer="Se detaljer" tone="hero">
         <div className="flex items-center gap-6">
           <RingProgress pct={d.balanceScore} size={120} stroke={8}>

@@ -15,7 +15,7 @@ export function CoreDashboard() {
   const d = core;
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
         {d.kpis.map((k, i) => (
           <OsCard key={k.label} className="lg:col-span-3" tone={i === 0 ? "hero" : "glass"}>

@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Bell,
@@ -16,12 +15,11 @@ import {
   Target,
 } from "lucide-react";
 import { NexusMark } from "@/components/platform/NexusMark";
-import { WeekFocusSheet } from "@/components/platform/os/WeekFocusSheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useOsProfile } from "@/hooks/useOsProfile";
 import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
 import { OS_NAV_ITEMS, type OsNavId } from "@/lib/os/context";
-import { WEEK_PLAN_OPEN_EVENT } from "@/lib/os/week-plan-ui";
+import { openWeekPlanSheet } from "@/lib/os/week-plan-ui";
 import { cn } from "@/lib/utils";
 
 const NAV_ICONS: Record<OsNavId, typeof LayoutDashboard> = {
@@ -43,13 +41,6 @@ export function NexusOsSideNav() {
   const onDeskHome = !onFortell && (pathname === "/desk" || pathname === "/desk/");
   const { displayName, avatarUrl, fallbackStyle, initials } = useOsProfile();
   const { focusHint, needsFill } = useWeeklyPlan();
-  const [weekOpen, setWeekOpen] = useState(false);
-
-  useEffect(() => {
-    const open = () => setWeekOpen(true);
-    window.addEventListener(WEEK_PLAN_OPEN_EVENT, open);
-    return () => window.removeEventListener(WEEK_PLAN_OPEN_EVENT, open);
-  }, []);
 
   return (
     <>
@@ -137,7 +128,7 @@ export function NexusOsSideNav() {
         <div className="relative z-10 mx-2 mb-2 w-[calc(100%-1rem)] xl:mx-3 xl:w-auto">
           <button
             type="button"
-            onClick={() => setWeekOpen(true)}
+            onClick={() => openWeekPlanSheet()}
             title="Ukesmal"
             className={cn(
               "flex w-full items-center gap-2 rounded-2xl border border-white/10 px-2 py-2 text-left transition-colors",
@@ -255,8 +246,6 @@ export function NexusOsSideNav() {
           </Link>
         </div>
       </aside>
-
-      <WeekFocusSheet open={weekOpen} onOpenChange={setWeekOpen} />
     </>
   );
 }

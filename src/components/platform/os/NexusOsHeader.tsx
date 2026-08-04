@@ -40,19 +40,19 @@ export function NexusOsHeader({
   return (
     <header
       className={cn(
-        "shrink-0 border-b px-6 py-4 backdrop-blur-md transition-colors duration-700",
+        "shrink-0 border-b px-4 py-3 backdrop-blur-md transition-colors duration-700 sm:px-6 sm:py-4",
         dark
           ? "border-white/10 bg-black/20 text-white"
           : "border-white/40 bg-white/35 text-foreground",
       )}
     >
-      <div className="flex flex-wrap items-start gap-4 lg:items-center">
+      <div className="flex flex-wrap items-start gap-3 lg:items-center lg:gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {showSun && <PhaseIcon phase={atmosphere.phase} />}
             <h1
               className={cn(
-                "font-heading text-xl font-semibold tracking-tight",
+                "font-heading text-lg font-semibold tracking-tight sm:text-xl",
                 dark ? "text-white" : "text-foreground",
               )}
             >
@@ -69,7 +69,7 @@ export function NexusOsHeader({
           </div>
           <p
             className={cn(
-              "mt-0.5 text-sm",
+              "mt-0.5 text-xs sm:text-sm",
               dark ? "text-white/70" : "text-muted-foreground",
             )}
           >
@@ -80,7 +80,7 @@ export function NexusOsHeader({
 
         <div
           className={cn(
-            "order-last flex w-full max-w-md flex-1 items-center gap-2 rounded-xl px-3 py-2 text-sm shadow-soft backdrop-blur-sm lg:order-none lg:mx-auto",
+            "order-last hidden w-full max-w-md flex-1 items-center gap-2 rounded-xl px-3 py-2 text-sm shadow-soft backdrop-blur-sm sm:flex lg:order-none lg:mx-auto",
             dark
               ? "border border-white/15 bg-white/10 text-white/70"
               : "border border-white/60 bg-white/70 text-muted-foreground",
@@ -98,10 +98,10 @@ export function NexusOsHeader({
           </kbd>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
           <div
             className={cn(
-              "flex rounded-xl p-1 backdrop-blur-sm",
+              "flex min-w-0 flex-1 overflow-x-auto rounded-xl p-1 backdrop-blur-sm scrollbar-none sm:flex-none",
               dark ? "bg-white/10" : "bg-white/60",
             )}
             role="tablist"
@@ -117,7 +117,7 @@ export function NexusOsHeader({
                   role="tab"
                   aria-selected={active}
                   className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                    "shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors sm:px-3 sm:text-sm",
                     active
                       ? "bg-primary text-primary-foreground shadow-soft"
                       : dark
@@ -133,7 +133,7 @@ export function NexusOsHeader({
 
           <button
             type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-medium text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
           >
             <Plus className="size-4" />
             <span className="hidden sm:inline">Legg til</span>

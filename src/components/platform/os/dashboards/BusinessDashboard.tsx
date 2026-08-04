@@ -13,7 +13,7 @@ export function BusinessDashboard() {
   const d = business;
 
   return (
-    <div className="grid gap-4 p-6 lg:grid-cols-12 lg:gap-5">
+    <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-12 lg:gap-5">
       {d.kpis.map((k, i) => (
         <OsCard key={k.label} className="lg:col-span-3" tone={i === 0 ? "hero" : "glass"}>
           <div className="flex items-start justify-between gap-3">

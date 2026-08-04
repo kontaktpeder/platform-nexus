@@ -17,7 +17,7 @@ export function HeleLivetDashboard() {
 
   return (
     <>
-      <div className="grid gap-4 p-6 lg:grid-cols-12 lg:gap-5">
+      <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-12 lg:gap-5">
         <OsCard title="Dagens flyt" className="lg:col-span-3" footer="Se kalender">
           <ol className="relative space-y-4 border-l border-border/80 pl-4">
             {d.timeline.map((item) => (

@@ -1,7 +1,7 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { NexusOsShell } from "@/components/platform/os/NexusOsShell";
 
-/** Desktop OS layout — dashboards + Fortell/Innboks share the charcoal shell. */
+/** OS layout — dashboards + Fortell share shell (side nav desktop, dock mobile). */
 export const Route = createFileRoute("/_authenticated/desk")({
   component: DeskLayout,
 });

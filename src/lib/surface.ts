@@ -1,9 +1,8 @@
 /**
- * Platform surfaces — keep capture (mobile) and desk (Mac) isolated.
+ * Platform surfaces.
  *
- * - capture: /hjem — quick CTAs in the field
- * - desk: /desk — NEXUS OS dashboards; signal queue (Topp 3) on Hele livet
- * - desk/fortell: Fortell chat only
+ * - desk: /desk — NEXUS OS (primary on all viewports)
+ * - capture: /hjem — quick field CTAs (Fang), reachable from OS dock
  *
  * Share data/functions across surfaces; do not share home/desk UI trees.
  */
@@ -17,7 +16,7 @@ export function isDesktopViewport(): boolean {
   return window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT_PX}px)`).matches;
 }
 
-/** Post-login landing: desktop → desk, mobile → capture Hjem. */
-export function getLoginSurfaceTarget(): "/desk" | "/hjem" {
-  return isDesktopViewport() ? "/desk" : "/hjem";
+/** Post-login landing — OS desk on phone and desktop. */
+export function getLoginSurfaceTarget(): "/desk" {
+  return "/desk";
 }
