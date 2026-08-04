@@ -294,6 +294,10 @@ export async function enrichDeskGmailItems(
   );
 
   const byId = new Map<string, DeskMailEnrichment>();
+  const unsubById = new Map<
+    string,
+    { url: string | null; mailto: string | null; has: boolean }
+  >();
   const needAi: Array<{
     id: string;
     subject: string;
@@ -310,13 +314,21 @@ export async function enrichDeskGmailItems(
     const subject = cleanMailText(brief?.subject ?? item.title);
     const snippet = cleanMailText(brief?.snippet ?? item.subtitle ?? "");
     const links = brief?.links ?? [];
+    const unsub = brief?.unsubscribe;
+    const hasUnsub = !!(unsub?.url || unsub?.mailto || item.hasUnsubscribe);
+    unsubById.set(item.id, {
+      url: unsub?.url ?? null,
+      mailto: unsub?.mailto ?? null,
+      has: hasUnsub,
+    });
+
     const cta = heuristicCta({
       subject,
       fromEmail: item.fromEmail ?? null,
       snippet,
       bodyText: brief?.bodyText ?? "",
       links,
-      hasUnsubscribe: item.hasUnsubscribe,
+      hasUnsubscribe: hasUnsub,
     });
 
     // Always prefer AI for copy; heuristic CTA as hint + fallback.
@@ -357,12 +369,19 @@ export async function enrichDeskGmailItems(
 
   return items.map((item) => {
     const enrich = byId.get(item.id);
+    const unsub = unsubById.get(item.id);
     const title = cleanMailText(item.title) || item.title;
+    const unsubFields = {
+      hasUnsubscribe: unsub?.has ?? item.hasUnsubscribe,
+      unsubscribeUrl: unsub?.url ?? null,
+      unsubscribeMailto: unsub?.mailto ?? null,
+    };
     if (!enrich) {
       return {
         ...item,
         title,
         subtitle: item.subtitle ? cleanMailText(item.subtitle) || item.subtitle : item.subtitle,
+        ...unsubFields,
       };
     }
     return {
@@ -376,6 +395,7 @@ export async function enrichDeskGmailItems(
       ctaUrl: enrich.ctaUrl,
       ctaLabel: enrich.ctaLabel,
       ctaKind: enrich.ctaKind,
+      ...unsubFields,
     };
   });
 }

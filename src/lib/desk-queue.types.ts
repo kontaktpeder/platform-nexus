@@ -34,8 +34,12 @@ export type DeskQueueItem = {
   entityId?: string | null;
   /** Gmail message id without `gmail:` prefix (inbox / drafts). */
   gmailMessageId?: string | null;
-  /** List-Unsubscribe present — reply drawer can surface avmelding. */
+  /** List-Unsubscribe / keyword detect — show Meld av on card. */
   hasUnsubscribe?: boolean;
+  /** https unsubscribe URL (header or body keyword). */
+  unsubscribeUrl?: string | null;
+  /** mailto unsubscribe address. */
+  unsubscribeMailto?: string | null;
   /** Short “what they want” — cleaned / AI / heuristic. */
   intent?: string | null;
   /** What to do after opening CTA (e.g. check property in Search Console). */

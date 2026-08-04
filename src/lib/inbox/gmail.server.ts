@@ -430,10 +430,17 @@ export type GmailMessageBrief = {
   bodyText: string;
   /** http(s) links found in HTML/text body, de-duped, tracking filtered. */
   links: string[];
+  /** Keyword / List-Unsubscribe detection — not AI. */
+  unsubscribe: GmailUnsubscribeInfo;
 };
 
-const SKIP_LINK_RE =
+/** CTA links skip these; unsubscribe extraction uses them on purpose. */
+const SKIP_CTA_LINK_RE =
   /unsubscribe|list-manage|mailto:|fonts\.google|google-analytics|doubleclick|facebook\.com\/tr|pixel|tracking|utm_medium=email.*favicon|schema\.org/i;
+
+/** Anchor text / URL keywords that mark an unsubscribe action. */
+const UNSUBSCRIBE_KEYWORD_RE =
+  /unsubscribe|opt[\s-_]?out|avmeld|meld\s*deg\s*av|email[\s-_]?preferences|manage[\s-_]?preferences|stop\s+receiving|list-unsubscribe|preferanser\s+for\s+e-?post|si\s+opp\s+abonnement/i;
 
 function extractLinksFromHtml(html: string): string[] {
   const out: string[] = [];
@@ -441,7 +448,7 @@ function extractLinksFromHtml(html: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     const url = m[1].replace(/&amp;/g, "&").trim();
-    if (!url || SKIP_LINK_RE.test(url)) continue;
+    if (!url || SKIP_CTA_LINK_RE.test(url)) continue;
     out.push(url);
   }
   return out;
@@ -453,13 +460,79 @@ function extractLinksFromText(text: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const url = m[0].replace(/[.,;:!?)]+$/, "");
-    if (!url || SKIP_LINK_RE.test(url)) continue;
+    if (!url || SKIP_CTA_LINK_RE.test(url)) continue;
     out.push(url);
   }
   return out;
 }
 
-/** Single-message body + actionable links for Desk intent/CTA. */
+function decodeHref(raw: string): string {
+  return raw.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
+}
+
+/** Find unsubscribe mailto/URL from HTML anchors via fixed keywords (no AI). */
+export function detectUnsubscribeFromHtml(html: string): GmailUnsubscribeInfo {
+  let mailto: string | null = null;
+  let url: string | null = null;
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const href = decodeHref(m[1] ?? "");
+    const label = htmlToText(m[2] ?? "").slice(0, 200);
+    const hay = `${href} ${label}`;
+    if (!UNSUBSCRIBE_KEYWORD_RE.test(hay)) continue;
+    if (/^mailto:/i.test(href)) {
+      if (!mailto) {
+        mailto = href.replace(/^mailto:/i, "").split("?")[0]?.trim() || null;
+      }
+    } else if (/^https?:\/\//i.test(href)) {
+      if (!url) url = href;
+    }
+    if (mailto && url) break;
+  }
+  return { mailto, url, raw: mailto || url ? "body-keyword" : null };
+}
+
+/** Bare URLs in plain text that look like unsubscribe. */
+export function detectUnsubscribeFromText(text: string): GmailUnsubscribeInfo {
+  let mailto: string | null = null;
+  let url: string | null = null;
+  const mailtoRe = /mailto:([^\s<>"']+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = mailtoRe.exec(text))) {
+    const addr = m[1].split("?")[0]?.trim() || "";
+    const ctx = text.slice(Math.max(0, m.index - 40), m.index + m[0].length + 40);
+    if (UNSUBSCRIBE_KEYWORD_RE.test(ctx) || /unsubscribe|avmeld/i.test(addr)) {
+      mailto = addr;
+      break;
+    }
+  }
+  const urlRe = /https?:\/\/[^\s<>)"']+/gi;
+  while ((m = urlRe.exec(text))) {
+    const candidate = m[0].replace(/[.,;:!?)]+$/, "");
+    if (UNSUBSCRIBE_KEYWORD_RE.test(candidate)) {
+      url = candidate;
+      break;
+    }
+  }
+  return { mailto, url, raw: mailto || url ? "text-keyword" : null };
+}
+
+function mergeUnsubscribe(
+  ...parts: GmailUnsubscribeInfo[]
+): GmailUnsubscribeInfo {
+  let mailto: string | null = null;
+  let url: string | null = null;
+  let raw: string | null = null;
+  for (const p of parts) {
+    if (!mailto && p.mailto) mailto = p.mailto;
+    if (!url && p.url) url = p.url;
+    if (!raw && p.raw) raw = p.raw;
+  }
+  return { mailto, url, raw };
+}
+
+/** Single-message body + actionable links + unsubscribe for Desk. */
 export async function readGmailMessageBrief(
   messageId: string,
   opts?: { maxChars?: number },
@@ -491,6 +564,11 @@ export async function readGmailMessageBrief(
   for (const u of extractLinksFromText(body)) linkSet.add(u);
   for (const u of extractLinksFromText(msg.snippet ?? "")) linkSet.add(u);
 
+  const fromHeader = parseListUnsubscribe(headerValue(headers, "List-Unsubscribe"));
+  const fromHtml = collected.htmls.map(detectUnsubscribeFromHtml);
+  const fromText = detectUnsubscribeFromText(`${body}\n${msg.snippet ?? ""}`);
+  const unsubscribe = mergeUnsubscribe(fromHeader, ...fromHtml, fromText);
+
   return {
     messageId: msg.id,
     subject: headerValue(headers, "Subject") || "(uten emne)",
@@ -498,6 +576,7 @@ export async function readGmailMessageBrief(
     snippet: (msg.snippet ?? "").slice(0, 400),
     bodyText: body.slice(0, maxChars),
     links: [...linkSet].slice(0, 12),
+    unsubscribe,
   };
 }
 

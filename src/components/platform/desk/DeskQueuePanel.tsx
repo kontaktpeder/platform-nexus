@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Square,
   Trash2,
+  Unlink,
   UserPlus,
   CalendarPlus,
 } from "lucide-react";
@@ -214,6 +215,28 @@ function QueueCard({
         >
           <ExternalLink className="h-3.5 w-3.5" />
           {item.ctaLabel || "Åpne lenke"}
+        </Button>
+      )}
+
+      {gmailMail && (item.unsubscribeUrl || item.unsubscribeMailto) && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-1.5 h-9 w-full gap-1.5 rounded-xl text-xs"
+          disabled={busy}
+          onClick={() => {
+            if (item.unsubscribeUrl) {
+              window.open(item.unsubscribeUrl, "_blank", "noopener,noreferrer");
+              return;
+            }
+            if (item.unsubscribeMailto) {
+              window.location.href = `mailto:${item.unsubscribeMailto}`;
+            }
+          }}
+        >
+          <Unlink className="h-3.5 w-3.5" />
+          Meld av
         </Button>
       )}
 
