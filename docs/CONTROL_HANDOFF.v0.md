@@ -4,6 +4,9 @@
 Control Core **owns** process (signing, version UI, archive). Fortell must not become the
 contract system — it is the entry that feeds Control.
 
+**Desk / kø:** Same glance→act pattern as Gmail — signals with lane + `href` into Control,
+uniform actions, AI only for intent copy. See [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md).
+
 ## Flows
 
 ### Create new draft

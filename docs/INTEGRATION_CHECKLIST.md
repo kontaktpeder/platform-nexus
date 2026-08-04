@@ -41,6 +41,16 @@ VALUES (
 - [ ] Dashboard shows widgets from `module_info_snapshot` (or generic fallback)
 - [ ] No new `if (slug === "...")` in `platform-nexus/src/`
 
+## Desk / Kø (when the module surfaces in Nexus Desk)
+
+See [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md).
+
+- [ ] Signals map to stable namespaced `id`, `source`, `title`, `href` into the module
+- [ ] Soft `lane` (or equivalent) for AI/UI orientation — not hard business rules in Nexus
+- [ ] Open-in-module (`href`) separate from optional CTA (`ctaUrl`)
+- [ ] Uniform Nexus actions; AI only fills intent/nextStep copy
+- [ ] Writes: propose → user confirm → module API (no silent overwrite of module truth)
+
 ## Security
 
 - [ ] Verify key stored **only** in `module_connection_secrets` (encrypted)

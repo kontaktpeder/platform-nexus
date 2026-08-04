@@ -3,6 +3,7 @@
 > **Status:** Frozen as of 2026-07-02  
 > **Audience:** Platform, Finance, Work, Booking, future modules  
 > **Normative API spec:** [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md)  
+> **Desk collaboration:** [DESK_SIGNAL_CONTRACT.v0.md](./DESK_SIGNAL_CONTRACT.v0.md)  
 > **Operational guides:** [PLATFORM_VERIFY.md](./PLATFORM_VERIFY.md), [LIVE_WIDGETS.md](./LIVE_WIDGETS.md), [INTEGRATION_CHECKLIST.md](./INTEGRATION_CHECKLIST.md)
 
 ---
@@ -213,6 +214,7 @@ When moving data between orgs **inside a module** (e.g. pre-company → GoS):
 | Document | Role | Change policy |
 |----------|------|---------------|
 | `MODULE_CONTRACT.v1.md` | API norm | **Frozen** — typos/clarifications only; new optional fields OK |
+| `DESK_SIGNAL_CONTRACT.v0.md` | Desk/Kø collaboration (glance→act) | Working standard; breaking → v1 |
 | `ARCHITECTURE.md` | Architecture principles | Update only for new principles, not API details |
 | `LIVE_WIDGETS.md` | Widget fetch behavior | Operational |
 | `PLATFORM_VERIFY.md` | Verify flow | Operational |
