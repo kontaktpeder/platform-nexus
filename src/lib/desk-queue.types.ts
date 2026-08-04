@@ -41,6 +41,15 @@ export type DeskQueueItem = {
   gmailLane?: "inbox" | "sent" | "draft" | "spam" | "trash" | "other" | null;
   /** Recipients (useful when lane is sent). */
   toEmail?: string | null;
+  /**
+   * Soft Finance orientation (not a hard rule).
+   * overdue / due_soon / open unpaid; needs_key = widget fallback without invoices:read.
+   */
+  financeLane?: "overdue" | "due_soon" | "open" | "needs_key" | null;
+  /** Finance invoice UUID (without finance:… prefix). */
+  financeInvoiceId?: string | null;
+  /** Platform org slug for invoice compose / Finance API. */
+  financeOrgSlug?: string | null;
   /** List-Unsubscribe / keyword detect — show Meld av on card. */
   hasUnsubscribe?: boolean;
   /** Browser-safe https unsubscribe (body link preferred). */
@@ -56,7 +65,7 @@ export type DeskQueueItem = {
   /** Primary action URL for open_link mails. */
   ctaUrl?: string | null;
   ctaLabel?: string | null;
-  ctaKind?: "open_link" | "reply" | "fyi" | "other" | null;
+  ctaKind?: "open_link" | "reply" | "fyi" | "purring" | "other" | null;
 };
 
 export type DeskQueueResponse = {

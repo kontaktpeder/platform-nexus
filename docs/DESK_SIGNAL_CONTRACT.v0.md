@@ -1,6 +1,6 @@
 # Desk Signal Contract v0 — Nexus × modul
 
-**Status:** Working standard (Gmail Desk Kø is the reference implementation)  
+**Status:** Working standard (Gmail + Finance Desk Kø are reference implementations)  
 **Scope:** How a module/source cooperates with Nexus Desk, Kø, and Fortell — not SSO/verify  
 **Related:** [MODULE_CONTRACT.v1.md](./MODULE_CONTRACT.v1.md) (kobling), [MISSION_ACTIONS.v1.md](./MISSION_ACTIONS.v1.md) (Mission triage), [CONTROL_HANDOFF.v0.md](./CONTROL_HANDOFF.v0.md) (Fortell → avtaler)
 
@@ -125,6 +125,19 @@ Fortell **foreslår**; bruker **bekrefter**; modul **lagrer**. Se Control-handof
 | Mutasjoner | `morning-mission.functions.ts` (`mark_read` \| `archive` \| `trash`) |
 | Compose / vedlegg | Fortell + Inbox + contact Mail → `MailAttachmentsField`, `gmail.server.ts` |
 | Cache-bump | `desk-queue-cache.ts` ved shape-endring |
+
+## 6b. Referanse: Finance (ubetalte fakturaer)
+
+| Steg | Implementasjon (peker) |
+|------|------------------------|
+| Hent signaler | `signal-gather.server.ts` → `listUnpaidFinanceInvoices` |
+| Lane / intent / CTA | `financeLane` + heuristikk i `desk-queue.functions.ts` (`financeToItem`) |
+| Kort-UI | `DeskQueuePanel.tsx` — I Finance \| Send purring \| Oppfølging / Ferdig / Utsett / Kontakt |
+| Neste steg | `ctaKind: "purring"` → `InvoiceComposeSheet` (ikke stille send) |
+| Kontakt | `customer_email` → known_identities / contact sheet |
+| Deep link | `href` → Finance `/invoices/{id}` |
+
+Lane: `overdue` \| `due_soon` \| `open` \| `needs_key` (widget uten `invoices:read`).
 
 ---
 

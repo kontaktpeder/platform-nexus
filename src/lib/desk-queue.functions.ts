@@ -95,6 +95,144 @@ function gmailLaneOf(
   return "inbox";
 }
 
+function startOfUtcDay(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function financeLaneOf(
+  signal: MissionSignal,
+): NonNullable<DeskQueueItem["financeLane"]> {
+  if (signal.tags.includes("finance_widget") || signal.meta?.needs_invoices_read === true) {
+    return "needs_key";
+  }
+  const dueRaw = signal.meta?.due_date;
+  if (typeof dueRaw !== "string" || !dueRaw) return "open";
+  const due = new Date(dueRaw.includes("T") ? dueRaw : `${dueRaw}T12:00:00.000Z`);
+  if (Number.isNaN(due.getTime())) return "open";
+  const today = startOfUtcDay(new Date());
+  const dueDay = startOfUtcDay(due);
+  const dayMs = 86_400_000;
+  if (dueDay < today) return "overdue";
+  if (dueDay <= today + 7 * dayMs) return "due_soon";
+  return "open";
+}
+
+function financeLaneLabel(lane: NonNullable<DeskQueueItem["financeLane"]>): string {
+  switch (lane) {
+    case "overdue":
+      return "Forfalt";
+    case "due_soon":
+      return "Forfaller snart";
+    case "needs_key":
+      return "Finance";
+    case "open":
+      return "Ubetalt";
+  }
+}
+
+function formatFinanceDue(dueRaw: string | null | undefined): string | null {
+  if (!dueRaw || typeof dueRaw !== "string") return null;
+  const due = new Date(dueRaw.includes("T") ? dueRaw : `${dueRaw}T12:00:00.000Z`);
+  if (Number.isNaN(due.getTime())) return null;
+  return due.toLocaleDateString("nb-NO");
+}
+
+function financeToItem(
+  signal: MissionSignal,
+  entityByEmail: Map<string, string>,
+): DeskQueueItem {
+  const lane = financeLaneOf(signal);
+  const customerName =
+    typeof signal.meta?.customer_name === "string" ? signal.meta.customer_name.trim() : "";
+  const customerEmail =
+    typeof signal.meta?.customer_email === "string" &&
+    signal.meta.customer_email.includes("@")
+      ? signal.meta.customer_email.toLowerCase()
+      : null;
+  const invoiceId =
+    typeof signal.meta?.invoice_id === "string" ? signal.meta.invoice_id : null;
+  const orgSlug =
+    typeof signal.meta?.org_slug === "string" ? signal.meta.org_slug : null;
+  const invNr =
+    typeof signal.meta?.invoice_number === "string" && signal.meta.invoice_number
+      ? `#${signal.meta.invoice_number}`
+      : null;
+  const total =
+    typeof signal.meta?.total === "number"
+      ? new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(
+          Math.round(signal.meta.total),
+        )
+      : null;
+  const dueLabel = formatFinanceDue(
+    typeof signal.meta?.due_date === "string" ? signal.meta.due_date : null,
+  );
+  const canPurr = lane !== "needs_key" && !!invoiceId && !!orgSlug;
+
+  let intent: string;
+  let nextStep: string;
+  if (lane === "needs_key") {
+    intent = signal.subject.trim() || "Ubetalte fakturaer";
+    nextStep =
+      "Koble invoices:read under Moduler → Finance for å se hver faktura og sende purring.";
+  } else if (lane === "overdue") {
+    intent = customerName
+      ? `Ubetalt faktura${invNr ? ` ${invNr}` : ""} · ${customerName}`
+      : signal.subject.trim();
+    nextStep = [
+      total ? `${total} kr utestående` : null,
+      dueLabel ? `forfalt ${dueLabel}` : "forfalt",
+      "Send purring eller åpne i Finance.",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  } else if (lane === "due_soon") {
+    intent = customerName
+      ? `Faktura${invNr ? ` ${invNr}` : ""} forfaller snart · ${customerName}`
+      : signal.subject.trim();
+    nextStep = [
+      total ? `${total} kr` : null,
+      dueLabel ? `forfall ${dueLabel}` : null,
+      "Følg opp før forfall, eller send purring.",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  } else {
+    intent = customerName
+      ? `Ubetalt faktura${invNr ? ` ${invNr}` : ""} · ${customerName}`
+      : signal.subject.trim();
+    nextStep = [
+      total ? `${total} kr utestående` : null,
+      dueLabel ? `forfall ${dueLabel}` : null,
+      "Åpne i Finance eller send purring.",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  return {
+    id: signal.id,
+    kind: "signal",
+    title: signal.subject.trim() || intent,
+    subtitle: signal.snippet || null,
+    source: "finance",
+    sourceLabel: financeLaneLabel(lane),
+    href: signal.href,
+    sourceIds: [signal.id],
+    occurredAt: signal.occurred_at,
+    fromName: customerName || null,
+    fromEmail: customerEmail,
+    entityId: customerEmail ? (entityByEmail.get(customerEmail) ?? null) : null,
+    financeLane: lane,
+    financeInvoiceId: invoiceId,
+    financeOrgSlug: orgSlug,
+    intent,
+    nextStep,
+    ctaLabel: canPurr ? "Send purring" : null,
+    ctaKind: canPurr ? "purring" : null,
+    ctaUrl: null,
+  };
+}
+
 function gmailFields(signal: MissionSignal): Pick<
   DeskQueueItem,
   "fromName" | "fromEmail" | "gmailMessageId" | "hasUnsubscribe" | "gmailLane" | "toEmail"
@@ -215,6 +353,9 @@ function toItem(signal: MissionSignal, entityByEmail: Map<string, string>): Desk
       occurredAt: signal.occurred_at,
     };
   }
+  if (signal.source === "finance" && signal.tags.includes("unpaid_invoice")) {
+    return financeToItem(signal, entityByEmail);
+  }
   const laneLabel =
     source === "gmail" && gmail.gmailLane === "sent"
       ? "Sendt"
@@ -328,10 +469,14 @@ export const getDeskQueue = createServerFn({ method: "GET" })
     const emails = [
       ...new Set(
         open
-          .map((s) =>
-            typeof s.meta?.from_email === "string" ? s.meta.from_email.toLowerCase() : null,
-          )
-          .filter((e): e is string => !!e && e.includes("@")),
+          .flatMap((s) => {
+            const keys: string[] = [];
+            if (typeof s.meta?.from_email === "string") keys.push(s.meta.from_email);
+            if (typeof s.meta?.customer_email === "string") keys.push(s.meta.customer_email);
+            return keys;
+          })
+          .map((e) => e.toLowerCase())
+          .filter((e) => e.includes("@")),
       ),
     ].slice(0, 80);
 

@@ -19,6 +19,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { GmailReplyDrawer } from "@/components/platform/mission/GmailReplyDrawer";
+import { InvoiceComposeSheet } from "@/components/platform/mission/InvoiceComposeSheet";
 import { PlanFollowUpPanel } from "@/components/platform/relation/PlanFollowUpPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,10 @@ import type { DeskQueueItem, DeskQueueSource } from "@/lib/desk-queue.types";
 import { scheduleEntityFollowUp } from "@/lib/field.functions";
 import type { FollowUpPreset } from "@/lib/field/field.types";
 import { createContactFromSuggestion } from "@/lib/inbox-assistant.functions";
+import {
+  isFinanceInvoiceDeskItem,
+  parseInvoiceFromDeskItem,
+} from "@/lib/mission-invoice-action";
 import {
   actOnMorningItem,
   undoMorningItem,
@@ -114,7 +119,7 @@ function QueueCard({
   onArchive,
   onTrash,
   onCreateContact,
-  onOpenGmail,
+  onOpenModule,
   onOpenCta,
   onUnsubscribe,
   primaryLabel,
@@ -130,7 +135,7 @@ function QueueCard({
   onArchive?: () => void;
   onTrash?: () => void;
   onCreateContact?: () => void;
-  onOpenGmail?: () => void;
+  onOpenModule?: () => void;
   onOpenCta?: () => void;
   onUnsubscribe?: () => void;
   primaryLabel?: string;
@@ -138,6 +143,8 @@ function QueueCard({
   const isDraft = item.kind === "draft";
   const isWork = item.kind === "work_session";
   const gmailMail = isGmailMail(item);
+  const financeInv = isFinanceInvoiceDeskItem(item);
+  const richCard = gmailMail || financeInv;
   const tone = toneFor(item);
   const label = primaryLabel ?? (isDraft ? "Fortsett" : isWork ? "Stopp" : "Ferdig");
   const displayName = item.fromName || item.fromEmail || null;
@@ -146,13 +153,18 @@ function QueueCard({
     item.unsubscribeOneClickUrl ||
     item.unsubscribeMailto
   );
+  const ctaPurring = item.ctaKind === "purring";
   // Don't show CTA if it's the same URL as unsubscribe.
   const ctaDistinct =
-    !!item.ctaUrl &&
-    item.ctaUrl !== item.unsubscribeUrl &&
-    item.ctaUrl !== item.unsubscribeOneClickUrl;
+    ctaPurring ||
+    (!!item.ctaUrl &&
+      item.ctaUrl !== item.unsubscribeUrl &&
+      item.ctaUrl !== item.unsubscribeOneClickUrl);
   const openSlots =
-    (item.href ? 1 : 0) + (ctaDistinct ? 1 : 0) + (hasUnsub ? 1 : 0);
+    (item.href ? 1 : 0) + (ctaDistinct ? 1 : 0) + (gmailMail && hasUnsub ? 1 : 0);
+  const avatarTone = financeInv
+    ? "bg-emerald-500/15 text-emerald-950 dark:text-emerald-100"
+    : "bg-sky-500/15 text-sky-950 dark:text-sky-100";
 
   return (
     <li
@@ -164,7 +176,9 @@ function QueueCard({
             ? "border-teal-300/50"
             : isWork
               ? "border-violet-300/50"
-              : "border-border/70",
+              : financeInv
+                ? "border-emerald-300/40"
+                : "border-border/70",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -176,7 +190,7 @@ function QueueCard({
         >
           {item.sourceLabel}
         </span>
-        {item.href && !isDraft && !isWork && !gmailMail && (
+        {item.href && !isDraft && !isWork && !richCard && (
           <a
             href={item.href}
             target={item.href.startsWith("http") ? "_blank" : undefined}
@@ -189,13 +203,18 @@ function QueueCard({
         )}
       </div>
 
-      {gmailMail && displayName && (
+      {richCard && displayName && (
         <button
           type="button"
           className="mt-2 flex w-full items-center gap-2 rounded-xl text-left hover:bg-muted/40"
           onClick={onOpenContact}
         >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-500/15 text-[11px] font-semibold text-sky-950 dark:text-sky-100">
+          <span
+            className={cn(
+              "grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
+              avatarTone,
+            )}
+          >
             {initials(item.fromName, item.fromEmail)}
           </span>
           <span className="min-w-0 flex-1">
@@ -217,11 +236,11 @@ function QueueCard({
           {item.nextStep || item.subtitle}
         </p>
       )}
-      {gmailMail && item.intent && item.title && item.intent !== item.title && (
+      {richCard && item.intent && item.title && item.intent !== item.title && (
         <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground/80">{item.title}</p>
       )}
 
-      {gmailMail && openSlots > 0 && (
+      {richCard && openSlots > 0 && (
         <div
           className={cn(
             "mt-3 grid gap-1.5",
@@ -237,10 +256,14 @@ function QueueCard({
               variant="outline"
               className="h-9 gap-1 rounded-xl px-1.5 text-[11px]"
               disabled={busy}
-              onClick={onOpenGmail}
+              onClick={onOpenModule}
             >
-              <Mail className="h-3.5 w-3.5 shrink-0" />
-              I Gmail
+              {gmailMail ? (
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              )}
+              {gmailMail ? "I Gmail" : "I Finance"}
             </Button>
           )}
           {ctaDistinct && (
@@ -251,11 +274,15 @@ function QueueCard({
               disabled={busy}
               onClick={onOpenCta}
             >
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              {ctaPurring ? (
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span className="truncate">{item.ctaLabel || "Neste steg"}</span>
             </Button>
           )}
-          {hasUnsub && (
+          {gmailMail && hasUnsub && (
             <Button
               type="button"
               size="sm"
@@ -337,6 +364,56 @@ function QueueCard({
             variant="ghost"
             className="h-9 gap-1 rounded-xl text-xs"
             disabled={busy || !!item.entityId}
+            onClick={onCreateContact}
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            {item.entityId ? "Kontakt OK" : "Kontakt"}
+          </Button>
+        </div>
+      ) : financeInv ? (
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy || (!item.fromEmail && !item.entityId)}
+            onClick={onFollowUp}
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Oppfølging
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onPrimary}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            Ferdig
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onSnooze}
+          >
+            <Clock3 className="h-3.5 w-3.5" />
+            Utsett
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy || !!item.entityId || !item.fromEmail}
             onClick={onCreateContact}
           >
             <UserPlus className="h-3.5 w-3.5" />
@@ -430,6 +507,7 @@ export function DeskQueuePanel({
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [replyItem, setReplyItem] = useState<DeskQueueItem | null>(null);
+  const [purringItem, setPurringItem] = useState<DeskQueueItem | null>(null);
   const [followItem, setFollowItem] = useState<DeskQueueItem | null>(null);
   const [createItem, setCreateItem] = useState<DeskQueueItem | null>(null);
   const [createName, setCreateName] = useState("");
@@ -738,7 +816,7 @@ export function DeskQueuePanel({
           </p>
           <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">Kø</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Like valg for all mail — ikke AI-anbefalinger
+            Like valg per kilde — ikke AI-anbefalinger
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -843,12 +921,16 @@ export function DeskQueuePanel({
                   setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
                   setCreateItem(item);
                 }}
-                onOpenGmail={() => {
+                onOpenModule={() => {
                   if (item.href) {
                     window.open(item.href, "_blank", "noopener,noreferrer");
                   }
                 }}
                 onOpenCta={() => {
+                  if (item.ctaKind === "purring" && parseInvoiceFromDeskItem(item)) {
+                    setPurringItem(item);
+                    return;
+                  }
                   if (item.ctaUrl) {
                     window.open(item.ctaUrl, "_blank", "noopener,noreferrer");
                   }
@@ -883,6 +965,22 @@ export function DeskQueuePanel({
               void act(replyItem, "done", "mark_read");
             }
             setReplyItem(null);
+          }}
+        />
+      )}
+
+      {purringItem && parseInvoiceFromDeskItem(purringItem) && (
+        <InvoiceComposeSheet
+          open={!!purringItem}
+          onOpenChange={(open) => {
+            if (!open) setPurringItem(null);
+          }}
+          invoiceId={parseInvoiceFromDeskItem(purringItem)!.invoiceId}
+          orgSlug={parseInvoiceFromDeskItem(purringItem)!.orgSlug}
+          briefItemId={purringItem.id}
+          onSent={() => {
+            if (purringItem) void act(purringItem, "done");
+            setPurringItem(null);
           }}
         />
       )}

@@ -32,11 +32,31 @@ async function unpaidInvoiceSignals(input: {
   try {
     const invoices = await listUnpaidFinanceInvoices(input.fin);
     if (invoices.length > 0) {
+      const today = Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      );
       return invoices.map((inv) => {
         const nr = inv.invoice_number ? `#${inv.invoice_number}` : "uten nummer";
         const due = inv.due_date
           ? ` Forfall ${new Date(inv.due_date).toLocaleDateString("nb-NO")}.`
           : "";
+        const tags = ["unpaid_invoice", "finance_invoice", "invoice_action"];
+        if (inv.due_date) {
+          const dueDate = new Date(
+            inv.due_date.includes("T") ? inv.due_date : `${inv.due_date}T12:00:00.000Z`,
+          );
+          if (!Number.isNaN(dueDate.getTime())) {
+            const dueDay = Date.UTC(
+              dueDate.getUTCFullYear(),
+              dueDate.getUTCMonth(),
+              dueDate.getUTCDate(),
+            );
+            if (dueDay < today) tags.push("overdue");
+            else if (dueDay <= today + 7 * 86_400_000) tags.push("due_soon");
+          }
+        }
         return {
           id: `finance:${input.ws.orgSlug}:invoice:${inv.id}`,
           source: "finance",
@@ -45,7 +65,7 @@ async function unpaidInvoiceSignals(input: {
           snippet: `${formatNok(inv.total)} kr utestående.${due}`,
           occurred_at: inv.issue_date,
           href: home ? `${home.replace(/\/$/, "")}/invoices/${inv.id}` : null,
-          tags: ["unpaid_invoice", "finance_invoice", "invoice_action"],
+          tags,
           meta: {
             invoice_id: inv.id,
             org_slug: input.ws.orgSlug,
