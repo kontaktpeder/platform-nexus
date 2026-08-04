@@ -23,23 +23,31 @@ export type InvoiceStoryline = {
 const PAYMENT_KEYWORDS =
   /purring|betal|faktura|invoice|payment|inkasso|betalings|forfall|kr\s*\d/i;
 
-function detectEscalation(events: StorylineEvent[]): Pick<
-  InvoiceStoryline,
-  "escalationLevel" | "escalationLabel" | "suggestedTone"
-> {
+function detectEscalation(
+  events: StorylineEvent[],
+  overdueDays?: number | null,
+): Pick<InvoiceStoryline, "escalationLevel" | "escalationLabel" | "suggestedTone"> {
+  const blob = events
+    .slice(0, 10)
+    .map((e) => `${e.label} ${e.snippet ?? ""}`)
+    .join(" ");
+  const conflict =
+    /\b(inkasso|advokat|tvist|stans|klage|juridisk|collection)\b/i.test(blob);
   const paymentEvents = events.filter(
     (e) => PAYMENT_KEYWORDS.test(`${e.label} ${e.snippet ?? ""}`),
   );
   const n = paymentEvents.length;
-  if (n >= 2) {
+  const overdue = overdueDays ?? 0;
+
+  if (conflict || n >= 2 || overdue >= 21) {
     return {
       escalationLevel: 3,
       escalationLabel: "Siste purring før videre tiltak",
       suggestedTone:
-        "Skriv en tydelig, profesjonell siste purring. Nevn at saken kan oversendes inkasso/skatteetaten dersom betaling ikke mottas snart. Ikke tru — vær faktisk og rolig.",
+        "Skriv en tydelig, profesjonell siste purring. Nevn at saken kan oversendes videre (inkasso) dersom betaling ikke mottas snart. Ikke tru — vær faktisk og rolig.",
     };
   }
-  if (n === 1) {
+  if (n === 1 || overdue >= 7) {
     return {
       escalationLevel: 2,
       escalationLabel: "Oppfølging etter tidligere henvendelse",
@@ -60,11 +68,48 @@ export async function buildInvoiceStoryline(input: {
   customerName: string;
   customerEmail: string | null;
   ownerContextSlug?: string | null;
+  /** Prefer explicit customer entity when known (Desk / contacts). */
+  entityId?: string | null;
+  overdueDays?: number | null;
 }): Promise<InvoiceStoryline> {
-  let entityId: string | null = null;
+  let entityId: string | null = input.entityId ?? null;
   let entityName: string | null = null;
 
-  if (input.ownerContextSlug) {
+  if (entityId) {
+    const { data: entity } = await input.supabase
+      .from("entities")
+      .select("id, name")
+      .eq("user_id", input.userId)
+      .eq("id", entityId)
+      .maybeSingle();
+    if (entity) entityName = entity.name as string;
+    else entityId = null;
+  }
+
+  // Resolve customer by email (Desk / Mission) — not owner org slug.
+  if (!entityId && input.customerEmail) {
+    const email = input.customerEmail.toLowerCase();
+    const { data: identity } = await input.supabase
+      .from("known_identities")
+      .select("entity_id")
+      .eq("user_id", input.userId)
+      .eq("identity_type", "email_address")
+      .eq("external_key", email)
+      .not("entity_id", "is", null)
+      .maybeSingle();
+    if (identity?.entity_id) {
+      entityId = identity.entity_id as string;
+      const { data: entity } = await input.supabase
+        .from("entities")
+        .select("id, name")
+        .eq("user_id", input.userId)
+        .eq("id", entityId)
+        .maybeSingle();
+      if (entity) entityName = entity.name as string;
+    }
+  }
+
+  if (!entityId && input.ownerContextSlug) {
     const { data: entity } = await input.supabase
       .from("entities")
       .select("id, name")
@@ -116,7 +161,7 @@ export async function buildInvoiceStoryline(input: {
     return tb - ta;
   });
 
-  const escalation = detectEscalation(events);
+  const escalation = detectEscalation(events, input.overdueDays);
   return {
     entityId,
     entityName: entityName ?? input.customerName,

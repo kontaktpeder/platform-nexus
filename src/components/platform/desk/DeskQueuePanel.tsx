@@ -154,9 +154,11 @@ function QueueCard({
     item.unsubscribeMailto
   );
   const ctaPurring = item.ctaKind === "purring";
+  const ctaOpenLink = item.ctaKind === "open_link";
   // Don't show CTA if it's the same URL as unsubscribe.
   const ctaDistinct =
     ctaPurring ||
+    ctaOpenLink ||
     (!!item.ctaUrl &&
       item.ctaUrl !== item.unsubscribeUrl &&
       item.ctaUrl !== item.unsubscribeOneClickUrl);
@@ -232,8 +234,13 @@ function QueueCard({
         {item.intent || item.title}
       </p>
       {(item.nextStep || (!item.intent && item.subtitle)) && (
-        <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
+        <p className="mt-1 line-clamp-4 text-xs text-muted-foreground">
           {item.nextStep || item.subtitle}
+        </p>
+      )}
+      {financeInv && item.financeAdvice === "escalate" && (
+        <p className="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+          Anbefaling: høyere sak — ikke bare vennlig purring
         </p>
       )}
       {richCard && item.intent && item.title && item.intent !== item.title && (
@@ -931,6 +938,14 @@ export function DeskQueuePanel({
                     setPurringItem(item);
                     return;
                   }
+                  if (item.ctaKind === "open_link" && item.ctaUrl) {
+                    if (item.ctaUrl.startsWith("/")) {
+                      window.location.href = item.ctaUrl;
+                    } else {
+                      window.open(item.ctaUrl, "_blank", "noopener,noreferrer");
+                    }
+                    return;
+                  }
                   if (item.ctaUrl) {
                     window.open(item.ctaUrl, "_blank", "noopener,noreferrer");
                   }
@@ -978,6 +993,7 @@ export function DeskQueuePanel({
           invoiceId={parseInvoiceFromDeskItem(purringItem)!.invoiceId}
           orgSlug={parseInvoiceFromDeskItem(purringItem)!.orgSlug}
           briefItemId={purringItem.id}
+          initialInstruction={purringItem.purringInstruction}
           onSent={() => {
             if (purringItem) void act(purringItem, "done");
             setPurringItem(null);

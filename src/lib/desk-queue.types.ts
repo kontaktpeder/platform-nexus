@@ -50,6 +50,16 @@ export type DeskQueueItem = {
   financeInvoiceId?: string | null;
   /** Platform org slug for invoice compose / Finance API. */
   financeOrgSlug?: string | null;
+  /** Days past due (negative = before due). */
+  financeDueDays?: number | null;
+  /**
+   * Recommended next move from mail/entity storyline.
+   * soft_purr = first friendly reminder; follow_up = already contacted; escalate = higher case.
+   */
+  financeAdvice?: "soft_purr" | "follow_up" | "escalate" | null;
+  financeEscalationLevel?: 1 | 2 | 3 | null;
+  /** Prefill for InvoiceComposeSheet AI draft. */
+  purringInstruction?: string | null;
   /** List-Unsubscribe / keyword detect — show Meld av on card. */
   hasUnsubscribe?: boolean;
   /** Browser-safe https unsubscribe (body link preferred). */

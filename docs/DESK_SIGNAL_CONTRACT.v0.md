@@ -132,12 +132,14 @@ Fortell **foreslår**; bruker **bekrefter**; modul **lagrer**. Se Control-handof
 |------|------------------------|
 | Hent signaler | `signal-gather.server.ts` → `listUnpaidFinanceInvoices` |
 | Lane / intent / CTA | `financeLane` + heuristikk i `desk-queue.functions.ts` (`financeToItem`) |
-| Kort-UI | `DeskQueuePanel.tsx` — I Finance \| Send purring \| Oppfølging / Ferdig / Utsett / Kontakt |
-| Neste steg | `ctaKind: "purring"` → `InvoiceComposeSheet` (ikke stille send) |
+| Sakskontekst | `desk-finance-context.server.ts` + `invoice-storyline.server.ts` (Gmail + entity_signals) |
+| Kort-UI | `DeskQueuePanel.tsx` — I Finance \| Send/Purre/Siste purring \| Oppfølging / Ferdig / Utsett / Kontakt |
+| Neste steg | `ctaKind: "purring"` → `InvoiceComposeSheet` med `purringInstruction` (ikke stille send) |
 | Kontakt | `customer_email` → known_identities / contact sheet |
 | Deep link | `href` → Finance `/invoices/{id}` |
 
-Lane: `overdue` \| `due_soon` \| `open` \| `needs_key` (widget uten `invoices:read`).
+Lane: `overdue` \| `due_soon` \| `open` \| `needs_key` (widget uten `invoices:read`).  
+Advice: `soft_purr` \| `follow_up` \| `escalate` — styrer nextStep + CTA-label.
 
 ---
 

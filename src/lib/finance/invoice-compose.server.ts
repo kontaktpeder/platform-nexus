@@ -68,12 +68,31 @@ export async function loadInvoiceComposeContext(input: {
       ? "gold-of-sicily"
       : null;
 
+  let overdueDays: number | null = null;
+  if (invoice.due_date) {
+    const due = new Date(
+      invoice.due_date.includes("T")
+        ? invoice.due_date
+        : `${invoice.due_date}T12:00:00.000Z`,
+    );
+    if (!Number.isNaN(due.getTime())) {
+      const today = Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      );
+      const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+      overdueDays = Math.floor((today - dueDay) / 86_400_000);
+    }
+  }
+
   const storyline = await buildInvoiceStoryline({
     supabase: input.supabase,
     userId: input.userId,
     customerName: invoice.customer_name,
     customerEmail: invoice.customer_email,
     ownerContextSlug: ownerSlug,
+    overdueDays,
   });
 
   const { filename } = await fetchFinanceInvoicePdf(fin, input.invoiceId);

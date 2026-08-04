@@ -137,6 +137,15 @@ function formatFinanceDue(dueRaw: string | null | undefined): string | null {
   return due.toLocaleDateString("nb-NO");
 }
 
+function financeDueDaysOf(dueRaw: string | null | undefined): number | null {
+  if (!dueRaw || typeof dueRaw !== "string") return null;
+  const due = new Date(dueRaw.includes("T") ? dueRaw : `${dueRaw}T12:00:00.000Z`);
+  if (Number.isNaN(due.getTime())) return null;
+  const today = startOfUtcDay(new Date());
+  const dueDay = startOfUtcDay(due);
+  return Math.floor((today - dueDay) / 86_400_000);
+}
+
 function financeToItem(
   signal: MissionSignal,
   entityByEmail: Map<string, string>,
@@ -163,9 +172,10 @@ function financeToItem(
           Math.round(signal.meta.total),
         )
       : null;
-  const dueLabel = formatFinanceDue(
-    typeof signal.meta?.due_date === "string" ? signal.meta.due_date : null,
-  );
+  const dueRaw =
+    typeof signal.meta?.due_date === "string" ? signal.meta.due_date : null;
+  const dueLabel = formatFinanceDue(dueRaw);
+  const dueDays = financeDueDaysOf(dueRaw);
   const canPurr = lane !== "needs_key" && !!invoiceId && !!orgSlug;
 
   let intent: string;
@@ -173,15 +183,19 @@ function financeToItem(
   if (lane === "needs_key") {
     intent = signal.subject.trim() || "Ubetalte fakturaer";
     nextStep =
-      "Koble invoices:read under Moduler → Finance for å se hver faktura og sende purring.";
+      "Dette er et oppsett-gap, ikke en sak. Koble invoices:read under Moduler → Finance for å se hver faktura, sende purring og få anbefaling ut fra tidligere mail.";
   } else if (lane === "overdue") {
     intent = customerName
       ? `Ubetalt faktura${invNr ? ` ${invNr}` : ""} · ${customerName}`
       : signal.subject.trim();
     nextStep = [
       total ? `${total} kr utestående` : null,
-      dueLabel ? `forfalt ${dueLabel}` : "forfalt",
-      "Send purring eller åpne i Finance.",
+      dueDays != null && dueDays > 0
+        ? `${dueDays} dager forfalt`
+        : dueLabel
+          ? `forfalt ${dueLabel}`
+          : "forfalt",
+      "Sjekker mailhistorikk for anbefaling…",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -192,7 +206,7 @@ function financeToItem(
     nextStep = [
       total ? `${total} kr` : null,
       dueLabel ? `forfall ${dueLabel}` : null,
-      "Følg opp før forfall, eller send purring.",
+      "Sjekker mailhistorikk for anbefaling…",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -203,7 +217,7 @@ function financeToItem(
     nextStep = [
       total ? `${total} kr utestående` : null,
       dueLabel ? `forfall ${dueLabel}` : null,
-      "Åpne i Finance eller send purring.",
+      "Sjekker mailhistorikk for anbefaling…",
     ]
       .filter(Boolean)
       .join(" · ");
@@ -225,11 +239,16 @@ function financeToItem(
     financeLane: lane,
     financeInvoiceId: invoiceId,
     financeOrgSlug: orgSlug,
+    financeDueDays: dueDays,
     intent,
     nextStep,
-    ctaLabel: canPurr ? "Send purring" : null,
-    ctaKind: canPurr ? "purring" : null,
-    ctaUrl: null,
+    ctaLabel: canPurr
+      ? "Send purring"
+      : lane === "needs_key"
+        ? "Koble Finance"
+        : null,
+    ctaKind: canPurr ? "purring" : lane === "needs_key" ? "open_link" : null,
+    ctaUrl: lane === "needs_key" ? "/modules" : null,
   };
 }
 
@@ -498,7 +517,13 @@ export const getDeskQueue = createServerFn({ method: "GET" })
 
     const baseItems = open.slice(0, POOL).map((s) => toItem(s, entityByEmail));
     const { enrichDeskGmailItems } = await import("@/lib/desk-mail-intent.server");
-    const items = await enrichDeskGmailItems(baseItems, { maxFetch: 6 });
+    const { enrichDeskFinanceItems } = await import("@/lib/desk-finance-context.server");
+    const withMail = await enrichDeskGmailItems(baseItems, { maxFetch: 6 });
+    const items = await enrichDeskFinanceItems(withMail, {
+      supabase,
+      userId,
+      maxFetch: 4,
+    });
 
     return {
       items,

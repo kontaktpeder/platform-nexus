@@ -30,6 +30,8 @@ export type InvoiceComposeSheetProps = {
   invoiceId: string;
   orgSlug: string;
   briefItemId?: string;
+  /** Prefill draft instruction from Desk storyline advice. */
+  initialInstruction?: string | null;
   onSent?: () => void;
 };
 
@@ -39,6 +41,7 @@ export function InvoiceComposeSheet({
   invoiceId,
   orgSlug,
   briefItemId,
+  initialInstruction,
   onSent,
 }: InvoiceComposeSheetProps) {
   const fetchCtx = useServerFn(getInvoiceComposeContext);
@@ -72,6 +75,11 @@ export function InvoiceComposeSheet({
         setCc(result.defaultCc);
         setSubject(result.defaultSubject);
         setReplyInThread(result.useReplyInThread);
+        if (initialInstruction?.trim()) {
+          setInstruction(initialInstruction.trim().slice(0, 800));
+        } else {
+          setInstruction(result.storyline.suggestedTone.slice(0, 800));
+        }
       })
       .catch((e) => {
         toast.error(e instanceof Error ? e.message : "Kunne ikke laste faktura");
@@ -83,7 +91,7 @@ export function InvoiceComposeSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, invoiceId, orgSlug, fetchCtx, onOpenChange]);
+  }, [open, invoiceId, orgSlug, initialInstruction, fetchCtx, onOpenChange]);
 
   const generate = useMutation({
     mutationFn: () =>
