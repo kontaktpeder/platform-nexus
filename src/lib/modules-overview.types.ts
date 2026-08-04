@@ -9,6 +9,8 @@ export type ModulesOverviewOrgLink = {
   workspaceSlug: string | null;
   externalOrgName: string | null;
   configureHref: string;
+  /** Per-org link state for this module (core modules only). */
+  linkStatus: "connected" | "missing" | "error" | "partial" | "pending";
 };
 
 export type ModulesOverviewRow = {
@@ -28,6 +30,11 @@ export type ModulesOverviewRow = {
   canToggle: boolean;
   connectedOrgs: ModulesOverviewOrgLink[];
   configureHref: string | null;
+  /**
+   * Membership orgs with a real module link vs total membership orgs.
+   * Null for integrations / planned rows.
+   */
+  orgCoverage: { connected: number; total: number } | null;
 };
 
 export type ModulesOverviewResponse = {

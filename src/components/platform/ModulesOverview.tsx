@@ -68,13 +68,26 @@ function ModuleRow({
   toggling?: boolean;
 }) {
   const Icon = iconFor(row.id);
-  const orgLabels = row.connectedOrgs
-    .map((o) => {
-      const ext = o.externalOrgName ? ` → ${o.externalOrgName}` : "";
-      const ws = o.workspaceName ? ` · ${o.workspaceName}` : "";
-      return `${o.platformOrgName}${ws}${ext}`;
-    })
-    .slice(0, 4);
+  const orgLinks = row.connectedOrgs.slice(0, 8);
+  const linkLabel = (o: ModulesOverviewRow["connectedOrgs"][number]) => {
+    const ext = o.externalOrgName ? ` → ${o.externalOrgName}` : "";
+    const ws = o.workspaceName ? ` · ${o.workspaceName}` : "";
+    return `${o.platformOrgName}${ws}${ext}`;
+  };
+  const statusHint = (s: ModulesOverviewRow["connectedOrgs"][number]["linkStatus"]) => {
+    switch (s) {
+      case "connected":
+        return "Koblet";
+      case "partial":
+        return "Delvis";
+      case "error":
+        return "Feil";
+      case "pending":
+        return "Pågår";
+      case "missing":
+        return "Mangler";
+    }
+  };
 
   return (
     <li className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm">
@@ -88,17 +101,40 @@ function ModuleRow({
             <ConnectionStatusBadge status={row.status} label={row.statusLabel} />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">{row.description}</p>
+          {row.detail && (
+            <p className="mt-1 text-xs font-medium text-foreground/80">{row.detail}</p>
+          )}
 
-          {orgLabels.length > 0 && (
-            <ul className="mt-2 space-y-0.5">
-              {orgLabels.map((label) => (
-                <li key={label} className="truncate text-xs text-foreground/80">
-                  {label}
+          {orgLinks.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {orgLinks.map((o) => (
+                <li key={`${o.platformOrgSlug}:${o.workspaceSlug ?? ""}:${o.linkStatus}`}>
+                  <a
+                    href={o.configureHref}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-xs transition-colors hover:bg-muted/60",
+                      o.linkStatus === "connected"
+                        ? "text-foreground/80"
+                        : "text-amber-950 dark:text-amber-100",
+                    )}
+                  >
+                    <span className="min-w-0 truncate">{linkLabel(o)}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 text-[10px] font-semibold uppercase tracking-wide",
+                        o.linkStatus === "connected"
+                          ? "text-emerald-700 dark:text-emerald-300"
+                          : "text-amber-800 dark:text-amber-200",
+                      )}
+                    >
+                      {statusHint(o.linkStatus)}
+                    </span>
+                  </a>
                 </li>
               ))}
-              {row.connectedOrgs.length > 4 && (
-                <li className="text-xs text-muted-foreground">
-                  +{row.connectedOrgs.length - 4} til
+              {row.connectedOrgs.length > 8 && (
+                <li className="px-2 text-xs text-muted-foreground">
+                  +{row.connectedOrgs.length - 8} til
                 </li>
               )}
             </ul>
@@ -106,7 +142,7 @@ function ModuleRow({
 
           {row.gaps.length > 0 && (
             <ul className="mt-2 space-y-1">
-              {row.gaps.map((g) => (
+              {row.gaps.slice(0, 4).map((g) => (
                 <li
                   key={g}
                   className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-950 dark:text-amber-100"
@@ -130,7 +166,9 @@ function ModuleRow({
           {row.configureHref && row.kind !== "planned" && (
             <Button asChild size="sm" variant="ghost" className="h-9 gap-1 px-2 text-xs">
               <a href={row.configureHref}>
-                Åpne
+                {row.orgCoverage && row.orgCoverage.connected < row.orgCoverage.total
+                  ? "Koble mangler"
+                  : "Åpne"}
                 <ArrowRight className="h-3 w-3" />
               </a>
             </Button>
@@ -242,7 +280,8 @@ export function ModulesOverview() {
           <span className="font-medium text-foreground">
             {data.activeWorkspace.orgName} · {data.activeWorkspace.wsName}
           </span>
-          . Koble API-nøkler under «Åpne».
+          . Hver organisasjon må kobles til sin egen org i Finance/Work — «Koblet»
+          på en core betyr alle dine Nexus-orger er linked.
         </p>
       ) : (
         <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm">

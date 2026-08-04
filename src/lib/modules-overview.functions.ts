@@ -183,6 +183,10 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
       ? `/o/${activeWorkspace.orgSlug}/w/${activeWorkspace.wsSlug}/modules`
       : "/app";
 
+    const membershipOrgs = [...orgById.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "nb"),
+    );
+
     for (const mod of modules ?? []) {
       const slug = mod.slug as string;
       const moduleId = mod.id as string;
@@ -194,84 +198,118 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
       let anyConnected = false;
       let anyError = false;
       let anyPartial = false;
+      let orgsConnected = 0;
       const gaps: string[] = [];
 
-      for (const c of connRows.filter((x) => x.module_id === moduleId || x.module_slug === slug)) {
-        const org = orgById.get(c.org_id);
-        const ws = wsById.get(c.workspace_id);
-        if (!org) continue;
-        const enabled = enabledSet.has(`${c.workspace_id}:${moduleId}`);
-        if (enabled) anyEnabled = true;
+      for (const org of membershipOrgs) {
+        const orgWorkspaces = (workspaces ?? []).filter((w) => w.org_id === org.id);
+        const primaryWs = orgWorkspaces[0] ?? null;
+        const orgConns = connRows.filter(
+          (c) =>
+            c.org_id === org.id &&
+            (c.module_id === moduleId || c.module_slug === slug),
+        );
 
-        if (c.status === "connected") {
+        for (const ws of orgWorkspaces) {
+          if (enabledSet.has(`${ws.id}:${moduleId}`)) anyEnabled = true;
+        }
+
+        const connectedConn = orgConns.find((c) => c.status === "connected");
+        const errorConn = orgConns.find((c) => c.status === "error");
+        const pendingConn = orgConns.find((c) => c.status === "pending");
+
+        let linkStatus: ModulesOverviewOrgLink["linkStatus"] = "missing";
+        let externalOrgName: string | null = null;
+        let workspaceName: string | null = primaryWs?.name ?? null;
+        let workspaceSlug: string | null = primaryWs?.slug ?? null;
+        let configureHref = primaryWs
+          ? `/o/${org.slug}/w/${primaryWs.slug}/modules`
+          : `/o/${org.slug}/connections`;
+
+        if (connectedConn) {
+          const ws = wsById.get(connectedConn.workspace_id) ?? primaryWs;
+          workspaceName = ws?.name ?? null;
+          workspaceSlug = ws?.slug ?? null;
+          configureHref = ws
+            ? `/o/${org.slug}/w/${ws.slug}/modules`
+            : configureHref;
+          externalOrgName = connectedConn.external_org_name;
           anyConnected = true;
-          if (slug === "finance" && invoicesCapable.get(c.id) === false) {
+          orgsConnected += 1;
+
+          if (slug === "finance" && invoicesCapable.get(connectedConn.id) === false) {
+            linkStatus = "partial";
             anyPartial = true;
             gaps.push(`${org.name}: mangler invoices:read`);
+          } else {
+            linkStatus = "connected";
           }
-        } else if (c.status === "error") {
+        } else if (errorConn) {
+          linkStatus = "error";
           anyError = true;
+          const ws = wsById.get(errorConn.workspace_id) ?? primaryWs;
+          workspaceName = ws?.name ?? null;
+          workspaceSlug = ws?.slug ?? null;
+          configureHref = ws
+            ? `/o/${org.slug}/w/${ws.slug}/modules`
+            : configureHref;
+          externalOrgName = errorConn.external_org_name;
           gaps.push(
-            `${org.name}: ${c.error_message?.trim() || "verifisering feilet"}`,
+            `${org.name}: ${errorConn.error_message?.trim() || "verifisering feilet"}`,
           );
+        } else if (pendingConn) {
+          linkStatus = "pending";
+          const ws = wsById.get(pendingConn.workspace_id) ?? primaryWs;
+          workspaceName = ws?.name ?? null;
+          workspaceSlug = ws?.slug ?? null;
+          configureHref = ws
+            ? `/o/${org.slug}/w/${ws.slug}/modules`
+            : configureHref;
+          gaps.push(`${org.name}: kobling ikke fullført`);
+        } else if (connectable && !comingSoon) {
+          linkStatus = "missing";
+          gaps.push(`${org.name}: ikke koblet`);
+        } else {
+          continue;
         }
 
-        if (c.status === "connected" || c.status === "error" || c.status === "pending") {
-          links.push({
-            platformOrgName: org.name,
-            platformOrgSlug: org.slug,
-            workspaceName: ws?.name ?? null,
-            workspaceSlug: ws?.slug ?? null,
-            externalOrgName: c.external_org_name,
-            configureHref: ws
-              ? `/o/${org.slug}/w/${ws.slug}/modules`
-              : `/o/${org.slug}/connections`,
-          });
-        }
+        links.push({
+          platformOrgName: org.name,
+          platformOrgSlug: org.slug,
+          workspaceName,
+          workspaceSlug,
+          externalOrgName,
+          configureHref,
+          linkStatus,
+        });
       }
 
-      // Also surface orgs where module is enabled but not connected
-      for (const ws of workspaces ?? []) {
-        if (!enabledSet.has(`${ws.id}:${moduleId}`)) continue;
-        anyEnabled = true;
-        const hasConn = connRows.some(
-          (c) => c.workspace_id === ws.id && c.module_id === moduleId,
-        );
-        if (!hasConn && connectable) {
-          const org = orgById.get(ws.org_id);
-          if (!org) continue;
-          const already = links.some(
-            (l) => l.platformOrgSlug === org.slug && l.workspaceSlug === ws.slug,
-          );
-          if (!already) {
-            links.push({
-              platformOrgName: org.name,
-              platformOrgSlug: org.slug,
-              workspaceName: ws.name,
-              workspaceSlug: ws.slug,
-              externalOrgName: null,
-              configureHref: `/o/${org.slug}/w/${ws.slug}/modules`,
-            });
-            gaps.push(`${org.name} · ${ws.name}: mangler kobling`);
-          }
-        }
-      }
+      const orgTotal = membershipOrgs.length;
+      const coverageIncomplete =
+        connectable &&
+        !comingSoon &&
+        orgTotal > 0 &&
+        orgsConnected > 0 &&
+        orgsConnected < orgTotal;
 
       let status: HubStatus;
       if (comingSoon) status = "unavailable";
       else if (anyError && !anyConnected) status = "error";
-      else if (anyPartial) status = "partial";
-      else if (anyConnected) status = "connected";
+      else if (anyPartial || coverageIncomplete) status = "partial";
+      else if (anyConnected && orgsConnected === orgTotal) status = "connected";
+      else if (anyConnected) status = "partial";
       else if (anyEnabled) status = "not_configured";
       else if (connectable) status = "disabled";
       else status = "unavailable";
 
       if (comingSoon) {
         gaps.push("Kommer senere — ikke klar for kobling.");
-      } else if (!anyEnabled && connectable) {
-        gaps.push("Slå på for en arbeidsflate for å koble.");
-      } else if (anyEnabled && !anyConnected && connectable) {
-        gaps.push("Trenger organisasjons-ID, URL og API-nøkkel.");
+      } else if (!anyEnabled && connectable && orgsConnected === 0) {
+        gaps.push("Slå på for en arbeidsflate, deretter koble hver organisasjon.");
+      } else if (coverageIncomplete) {
+        gaps.unshift(
+          `${orgsConnected} av ${orgTotal} organisasjoner koblet — Desk ser bare koblede orger.`,
+        );
       }
 
       const enabledOnActive =
@@ -280,6 +318,10 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
           : null;
 
       const { status: st, statusLabel } = statusOf(status);
+      const connectedNames = links
+        .filter((l) => l.linkStatus === "connected" || l.linkStatus === "partial")
+        .map((l) => l.externalOrgName || l.platformOrgName);
+
       rows.push({
         id: slug,
         name: mod.name as string,
@@ -290,12 +332,10 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
         status: st,
         statusLabel,
         detail:
-          links
-            .filter((l) => l.externalOrgName)
-            .map((l) => l.externalOrgName)
-            .slice(0, 3)
-            .join(" · ") || null,
-        gaps: [...new Set(gaps)].slice(0, 4),
+          connectable && !comingSoon && orgTotal > 0
+            ? `${orgsConnected} av ${orgTotal} organisasjoner koblet`
+            : connectedNames.slice(0, 3).join(" · ") || null,
+        gaps: [...new Set(gaps)].slice(0, 8),
         enabledOnActiveWorkspace: enabledOnActive,
         canToggle: !!(
           activeWorkspace?.canEdit &&
@@ -304,7 +344,12 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
           enabledOnActive !== null
         ),
         connectedOrgs: links,
-        configureHref: links[0]?.configureHref ?? configureFallback,
+        configureHref:
+          links.find((l) => l.linkStatus === "missing" || l.linkStatus === "error")
+            ?.configureHref ??
+          links[0]?.configureHref ??
+          configureFallback,
+        orgCoverage: connectable && !comingSoon ? { connected: orgsConnected, total: orgTotal } : null,
       });
     }
 
@@ -331,6 +376,7 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
         configureHref: activeWorkspace
           ? `/o/${activeWorkspace.orgSlug}/connections`
           : "/app",
+        orgCoverage: null,
       });
     }
 
@@ -363,6 +409,7 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
         configureHref: activeWorkspace
           ? `/o/${activeWorkspace.orgSlug}/connections`
           : "/app",
+        orgCoverage: null,
       });
     }
 
@@ -400,6 +447,7 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
         configureHref: activeWorkspace
           ? `/o/${activeWorkspace.orgSlug}/slack-channels`
           : "/app",
+        orgCoverage: null,
       });
     }
 
@@ -419,6 +467,7 @@ export const getUserModulesOverview = createServerFn({ method: "POST" })
         canToggle: false,
         connectedOrgs: [],
         configureHref: null,
+        orgCoverage: null,
       });
     }
 

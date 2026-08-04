@@ -36,4 +36,8 @@ the `["orgs"]` query, and navigates to
 
 Platform Core only creates the Platform-side org. It never creates or mutates
 organizations inside Finance, Work, or any other module. Linking to external
-module orgs happens through `module_connections` (see `PLATFORM_VERIFY.md`).
+module orgs happens through `module_connections` (see [PLATFORM_VERIFY.md](./PLATFORM_VERIFY.md)).
+
+**Product target** (name + check cores → auto provision/link): see
+[ORG_PROVISION.v0.md](./ORG_PROVISION.v0.md). Until Track B lands, each Nexus
+org must be verified against its Finance/Work org separately.
