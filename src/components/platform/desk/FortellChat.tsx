@@ -17,6 +17,7 @@ import {
   MailComposeControls,
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
+import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
 import { NexusMark } from "@/components/platform/NexusMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ import {
   sendAssistantDraft,
 } from "@/lib/inbox-assistant.functions";
 import { stripTrailingSignOff } from "@/lib/mail-compose";
+import type { MailAttachmentPayload } from "@/lib/mail-attachments";
 import { getLastWorkspace } from "@/lib/last-workspace";
 import { listConnectedModuleOrgs } from "@/lib/module-orgs.functions";
 import { fetchWorkTimerCatalog, syncTimeEntryToWork } from "@/lib/work-timer.functions";
@@ -93,6 +95,7 @@ export function FortellChat() {
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
+  const [draftAttachments, setDraftAttachments] = useState<MailAttachmentPayload[]>([]);
   const [draftDone, setDraftDone] = useState(false);
   const [gmailUrl, setGmailUrl] = useState<string | null>(null);
   const [workStarted, setWorkStarted] = useState(false);
@@ -149,6 +152,7 @@ export function FortellChat() {
       setResult(res);
       setDraftDone(false);
       setGmailUrl(null);
+      setDraftAttachments([]);
       setWorkStarted(false);
       setWorkStopNote(null);
       setContactApplied(false);
@@ -203,6 +207,7 @@ export function FortellChat() {
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          attachments: draftAttachments.length ? draftAttachments : undefined,
         },
       });
     },
@@ -1210,15 +1215,23 @@ export function FortellChat() {
                 className="rounded-xl bg-background text-base"
               />
               {!draftDone && (
-                <MailComposeControls
-                  disabled={sendMut.isPending}
-                  suggestedTone={result.draft?.suggestedTone ?? null}
-                  suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
-                  suggestionKey={draftSuggestionKey}
-                  onChange={(sel) => {
-                    mailSelRef.current = sel;
-                  }}
-                />
+                <>
+                  <MailComposeControls
+                    disabled={sendMut.isPending}
+                    suggestedTone={result.draft?.suggestedTone ?? null}
+                    suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
+                    suggestionKey={draftSuggestionKey}
+                    onChange={(sel) => {
+                      mailSelRef.current = sel;
+                    }}
+                  />
+                  <MailAttachmentsField
+                    value={draftAttachments}
+                    onChange={setDraftAttachments}
+                    disabled={sendMut.isPending}
+                    onError={(m) => toast.error(m)}
+                  />
+                </>
               )}
               {!draftDone ? (
                 <div className="flex flex-col gap-2 sm:flex-row">

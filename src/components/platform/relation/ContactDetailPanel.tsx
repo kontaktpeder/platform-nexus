@@ -392,13 +392,7 @@ export function ContactDetailPanel({
                   type="button"
                   variant="outline"
                   className="h-11 flex-1 gap-1.5 rounded-xl"
-                  onClick={() => {
-                    if (metaEmail) {
-                      window.location.href = `mailto:${metaEmail}`;
-                      return;
-                    }
-                    tryOpenSheet(() => setEmailOpen(true));
-                  }}
+                  onClick={() => tryOpenSheet(() => setEmailOpen(true))}
                 >
                   <Mail className="h-4 w-4" />
                   Mail
@@ -927,6 +921,18 @@ owner_context: ${d.ownerContext}${metaDomain ? `\nemail_domain: ${metaDomain}` :
           nest
         >
           <div className="flex min-h-0 flex-1 flex-col px-4 pb-6" data-sheet-scroll>
+            <div className="mb-3 pt-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Utkast
+              </p>
+              <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">
+                Skriv e-post
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Til {d.name}
+                {(d.email ?? metaEmail) ? ` · ${d.email ?? metaEmail}` : ""}
+              </p>
+            </div>
             <ContactEmailSection
               entityId={entityId}
               contactName={d.name}

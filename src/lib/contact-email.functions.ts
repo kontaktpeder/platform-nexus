@@ -79,6 +79,16 @@ const SendInput = z.object({
   fromEmail: z.string().email().nullable().optional(),
   fromDisplayName: z.string().max(80).nullable().optional(),
   signatureBody: z.string().max(4000).nullable().optional(),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string().min(1).max(180),
+        mimeType: z.string().min(1).max(120),
+        dataBase64: z.string().min(1).max(20_000_000),
+      }),
+    )
+    .max(5)
+    .optional(),
 });
 
 export const sendContactEmail = createServerFn({ method: "POST" })
@@ -98,10 +108,20 @@ export const sendContactEmail = createServerFn({ method: "POST" })
 
     const gmail = await import("@/lib/inbox/gmail.server");
     const { appendMailSignature } = await import("@/lib/mail-compose");
+    const { validateMailAttachments } = await import("@/lib/mail-attachments");
     const body = appendMailSignature(data.body, data.signatureBody);
     const from = data.fromEmail
       ? { email: data.fromEmail, displayName: data.fromDisplayName ?? null }
       : null;
+    const attachmentErr = data.attachments?.length
+      ? validateMailAttachments(data.attachments)
+      : null;
+    if (attachmentErr) throw new Error(attachmentErr);
+    const attachments = data.attachments?.map((f) => ({
+      filename: f.filename.trim().slice(0, 180),
+      mimeType: f.mimeType.trim().slice(0, 120) || "application/octet-stream",
+      data: new Uint8Array(Buffer.from(f.dataBase64, "base64")),
+    }));
 
     if (data.mode === "draft") {
       const draft = await gmail.createGmailComposeDraft({
@@ -109,6 +129,7 @@ export const sendContactEmail = createServerFn({ method: "POST" })
         subject: data.subject,
         body,
         from,
+        attachments,
       });
       return {
         ok: true,
@@ -123,6 +144,7 @@ export const sendContactEmail = createServerFn({ method: "POST" })
       subject: data.subject,
       body,
       from,
+      attachments,
     });
 
     const now = new Date().toISOString();

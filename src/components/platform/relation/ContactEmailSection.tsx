@@ -11,12 +11,14 @@ import {
   MailComposeControls,
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
+import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { generateContactEmailDraft, sendContactEmail } from "@/lib/contact-email.functions";
 import { setContactEmail } from "@/lib/customers.functions";
 import { stripTrailingSignOff } from "@/lib/mail-compose";
+import type { MailAttachmentPayload } from "@/lib/mail-attachments";
 
 export function ContactEmailSection({
   entityId,
@@ -37,6 +39,7 @@ export function ContactEmailSection({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [aiInstruction, setAiInstruction] = useState("");
+  const [attachments, setAttachments] = useState<MailAttachmentPayload[]>([]);
   const mailSelRef = useRef<MailComposeSelection>({
     fromEmail: null,
     fromDisplayName: null,
@@ -85,6 +88,7 @@ export function ContactEmailSection({
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          attachments: attachments.length ? attachments : undefined,
         },
       });
     },
@@ -94,6 +98,7 @@ export function ContactEmailSection({
         setSubject("");
         setBody("");
         setAiInstruction("");
+        setAttachments([]);
         await qc.invalidateQueries({ queryKey: ["customer", entityId] });
       } else {
         toast.success("Utkast lagret i Gmail");
@@ -230,6 +235,12 @@ export function ContactEmailSection({
               onChange={(sel) => {
                 mailSelRef.current = sel;
               }}
+            />
+            <MailAttachmentsField
+              value={attachments}
+              onChange={setAttachments}
+              disabled={sendMut.isPending}
+              onError={(m) => toast.error(m)}
             />
 
             <div className="flex gap-2">
