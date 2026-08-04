@@ -23,6 +23,7 @@ import {
   MailComposeControls,
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
+import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,6 +39,7 @@ import {
   type SuggestedRelation,
 } from "@/lib/inbox-assistant.functions";
 import { stripTrailingSignOff } from "@/lib/mail-compose";
+import type { MailAttachmentPayload } from "@/lib/mail-attachments";
 
 const PLACEHOLDER =
   "F.eks: Søk Brygg i Storgata Oslo på nett, finn daglig leder og opprett kontakt. " +
@@ -96,6 +98,7 @@ export function InboxAssistantCard({
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
+  const [draftAttachments, setDraftAttachments] = useState<MailAttachmentPayload[]>([]);
   const [draftSent, setDraftSent] = useState(false);
   const [gmailDraftUrl, setGmailDraftUrl] = useState<string | null>(null);
   const [draftSuggestionKey, setDraftSuggestionKey] = useState(0);
@@ -139,6 +142,7 @@ export function InboxAssistantCard({
       setAppliedMerges({});
       setDraftSent(false);
       setGmailDraftUrl(null);
+      setDraftAttachments([]);
       if (res.draft) {
         setDraftTo(res.draft.to);
         setDraftSubject(res.draft.subject);
@@ -236,6 +240,7 @@ export function InboxAssistantCard({
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          attachments: draftAttachments.length ? draftAttachments : undefined,
         },
       });
     },
@@ -262,6 +267,7 @@ export function InboxAssistantCard({
     setAppliedMerges({});
     setDraftSent(false);
     setGmailDraftUrl(null);
+    setDraftAttachments([]);
     mut.mutate(text);
   }
 
@@ -426,15 +432,23 @@ export function InboxAssistantCard({
                 className="rounded-xl bg-background text-base"
               />
               {!draftSent && (
-                <MailComposeControls
-                  disabled={sendMut.isPending}
-                  suggestedTone={result.draft?.suggestedTone ?? null}
-                  suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
-                  suggestionKey={draftSuggestionKey}
-                  onChange={(sel) => {
-                    mailSelRef.current = sel;
-                  }}
-                />
+                <>
+                  <MailComposeControls
+                    disabled={sendMut.isPending}
+                    suggestedTone={result.draft?.suggestedTone ?? null}
+                    suggestedFromEmail={result.draft?.suggestedFromEmail ?? null}
+                    suggestionKey={draftSuggestionKey}
+                    onChange={(sel) => {
+                      mailSelRef.current = sel;
+                    }}
+                  />
+                  <MailAttachmentsField
+                    value={draftAttachments}
+                    onChange={setDraftAttachments}
+                    disabled={sendMut.isPending}
+                    onError={(m) => toast.error(m)}
+                  />
+                </>
               )}
               {!draftSent ? (
                 <div className="flex flex-col gap-2 sm:flex-row">

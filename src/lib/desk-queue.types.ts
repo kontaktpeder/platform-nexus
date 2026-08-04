@@ -27,6 +27,15 @@ export type DeskQueueItem = {
   href: string | null;
   sourceIds: string[];
   occurredAt: string | null;
+  /** Parsed Gmail sender — for contact / reply actions. */
+  fromName?: string | null;
+  fromEmail?: string | null;
+  /** Linked Nexus entity when known via email identity. */
+  entityId?: string | null;
+  /** Gmail message id without `gmail:` prefix (inbox / drafts). */
+  gmailMessageId?: string | null;
+  /** List-Unsubscribe present — reply drawer can surface avmelding. */
+  hasUnsubscribe?: boolean;
 };
 
 export type DeskQueueResponse = {

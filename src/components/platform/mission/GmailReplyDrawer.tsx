@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Sparkles, Save, ExternalLink, Loader2 } from "lucide-react";
+import { Sparkles, Save, ExternalLink, Loader2, Unlink } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -15,11 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
 import {
   getGmailReplyContext,
   generateGmailReplyDraft,
   saveGmailDraft,
 } from "@/lib/gmail-reply.functions";
+import type { MailAttachmentPayload } from "@/lib/mail-attachments";
 
 export type GmailReplyDrawerProps = {
   open: boolean;
@@ -38,6 +40,7 @@ type ReplyContext = {
   senderName: string;
   senderEmail: string;
   snippet: string;
+  unsubscribe: { mailto: string | null; url: string | null; raw: string | null };
 };
 
 export function GmailReplyDrawer({
@@ -58,16 +61,19 @@ export function GmailReplyDrawer({
   const [reply, setReply] = useState("");
   const [instruction, setInstruction] = useState("");
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<MailAttachmentPayload[]>([]);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
-  // Load context lazily when the drawer opens.
   const loadContext = async () => {
-    if (ctx || ctxLoading) return;
+    if (ctxLoading) return;
+    if (loadedFor === messageId && ctx) return;
     setCtxLoading(true);
     try {
-      const result = await fetchCtx({ data: { messageId } });
+      const result = (await fetchCtx({ data: { messageId } })) as ReplyContext;
       setCtx(result);
+      setLoadedFor(messageId);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Could not load message";
+      const msg = err instanceof Error ? err.message : "Kunne ikke hente meldingen";
       toast.error(msg);
     } finally {
       setCtxLoading(false);
@@ -77,6 +83,10 @@ export function GmailReplyDrawer({
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setSavedUrl(null);
+      setReply("");
+      setInstruction("");
+      setAttachments([]);
+      if (loadedFor !== messageId) setCtx(null);
       void loadContext();
     }
     onOpenChange(next);
@@ -100,23 +110,32 @@ export function GmailReplyDrawer({
     },
     onSuccess: (r) => setReply(r.reply),
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not generate reply"),
+      toast.error(e instanceof Error ? e.message : "Kunne ikke lage utkast"),
   });
 
   const save = useMutation({
-    mutationFn: async () => doSave({ data: { messageId, body: reply } }),
+    mutationFn: async () =>
+      doSave({
+        data: {
+          messageId,
+          body: reply,
+          attachments: attachments.length ? attachments : undefined,
+        },
+      }),
     onSuccess: (r) => {
       setSavedUrl(r.openUrl);
-      toast.success("Draft saved to Gmail");
+      toast.success("Utkast lagret i Gmail");
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not save draft"),
+      toast.error(e instanceof Error ? e.message : "Kunne ikke lagre utkast"),
   });
 
   const subject = ctx?.subject ?? fallbackSubject ?? "";
   const senderName = ctx?.senderName ?? fallbackSender ?? "";
   const senderEmail = ctx?.senderEmail ?? "";
   const snippet = ctx?.snippet ?? fallbackSnippet ?? "";
+  const unsub = ctx?.unsubscribe;
+  const hasUnsub = !!(unsub?.mailto || unsub?.url);
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -125,22 +144,22 @@ export function GmailReplyDrawer({
         className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-xl"
       >
         <SheetHeader>
-          <SheetTitle className="font-heading text-lg">Draft reply</SheetTitle>
+          <SheetTitle className="font-heading text-lg">Svar</SheetTitle>
           <SheetDescription>
-            AI helps you draft. Nothing is sent — we save it as a Gmail draft you
-            can review and send from Gmail.
+            Beskriv hvordan du vil svare — AI lager utkast. Ingenting sendes før du
+            godkjenner i Gmail.
           </SheetDescription>
         </SheetHeader>
 
         <section className="rounded-lg border bg-muted/30 p-3 text-sm">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
-            Subject
+            Emne
           </div>
           <div className="mt-0.5 font-medium">
-            {ctxLoading && !ctx ? "Loading…" : subject || "(no subject)"}
+            {ctxLoading && !ctx ? "Laster…" : subject || "(uten emne)"}
           </div>
           <div className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">
-            From
+            Fra
           </div>
           <div className="mt-0.5">
             {senderName}
@@ -151,7 +170,7 @@ export function GmailReplyDrawer({
           {snippet && (
             <>
               <div className="mt-2 text-xs uppercase tracking-wider text-muted-foreground">
-                Context
+                Utdrag
               </div>
               <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">
                 {snippet}
@@ -160,11 +179,46 @@ export function GmailReplyDrawer({
           )}
         </section>
 
+        {hasUnsub && (
+          <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+            <div className="flex items-start gap-2">
+              <Unlink className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200" />
+              <div className="min-w-0 space-y-1.5">
+                <p className="font-medium text-amber-950 dark:text-amber-100">
+                  Avmelding funnet
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Du kan melde deg av nyhetsbrevet uten å svare på mailen.
+                </p>
+                {unsub?.mailto && (
+                  <a
+                    href={`mailto:${unsub.mailto}`}
+                    className="block truncate text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    {unsub.mailto}
+                  </a>
+                )}
+                {unsub?.url && (
+                  <a
+                    href={unsub.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Åpne avmeldingslenke
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="reply-instruction">Instruction (optional)</Label>
+          <Label htmlFor="reply-instruction">Hvordan vil du svare?</Label>
           <Input
             id="reply-instruction"
-            placeholder="e.g. Politely decline, propose Tuesday 14:00"
+            placeholder="F.eks. Takk, foreslå tirsdag 14:00 — eller avvis politisk"
             value={instruction}
             maxLength={500}
             onChange={(e) => setInstruction(e.target.value)}
@@ -181,22 +235,28 @@ export function GmailReplyDrawer({
             ) : (
               <Sparkles className="mr-1 h-4 w-4" />
             )}
-            Generate suggested reply
+            Lag utkast
           </Button>
         </div>
 
         <div className="flex-1 space-y-2">
-          <Label htmlFor="reply-body">Reply</Label>
+          <Label htmlFor="reply-body">Svarutkast</Label>
           <Textarea
             id="reply-body"
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            placeholder="Write your reply, or generate a suggestion above."
-            className="min-h-[260px] resize-y font-sans text-sm"
+            placeholder="Skriv selv, eller lag utkast over."
+            className="min-h-[220px] resize-y font-sans text-sm"
             maxLength={20000}
           />
+          <MailAttachmentsField
+            value={attachments}
+            onChange={setAttachments}
+            disabled={save.isPending || !!savedUrl}
+            onError={(m) => toast.error(m)}
+          />
           <p className="text-xs text-muted-foreground">
-            Nothing is sent. Saving creates a Gmail draft you can review in Gmail.
+            Ingenting sendes herfra. «Lagre» lager et Gmail-utkast du kan sende derfra.
           </p>
         </div>
 
@@ -211,11 +271,11 @@ export function GmailReplyDrawer({
                   onOpenChange(false);
                 }}
               >
-                Mark handled & close
+                Ferdig & lukk
               </Button>
               <Button asChild>
                 <a href={savedUrl} target="_blank" rel="noreferrer">
-                  Open draft in Gmail <ExternalLink className="ml-1 h-4 w-4" />
+                  Åpne i Gmail <ExternalLink className="ml-1 h-4 w-4" />
                 </a>
               </Button>
             </>
@@ -230,7 +290,7 @@ export function GmailReplyDrawer({
               ) : (
                 <Save className="mr-1 h-4 w-4" />
               )}
-              Save Gmail draft
+              Lagre Gmail-utkast
             </Button>
           )}
         </SheetFooter>

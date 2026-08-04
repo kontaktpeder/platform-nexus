@@ -9,8 +9,31 @@ import { z } from "zod";
 import { generateText } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getGeminiApiKey, getGeminiModel } from "@/lib/ai-gateway.server";
+import {
+  type MailAttachmentPayload,
+  validateMailAttachments,
+} from "@/lib/mail-attachments";
 
 const ContextInput = z.object({ messageId: z.string().min(1).max(200) });
+
+const AttachmentSchema = z.object({
+  filename: z.string().min(1).max(180),
+  mimeType: z.string().min(1).max(120),
+  dataBase64: z.string().min(1).max(20_000_000),
+});
+
+function decodeAttachments(files: MailAttachmentPayload[]) {
+  const err = validateMailAttachments(files);
+  if (err) throw new Error(err);
+  return files.map((f) => {
+    const data = Buffer.from(f.dataBase64, "base64");
+    return {
+      filename: f.filename.trim().slice(0, 180),
+      mimeType: f.mimeType.trim().slice(0, 120) || "application/octet-stream",
+      data: new Uint8Array(data),
+    };
+  });
+}
 
 export const getGmailReplyContext = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -27,6 +50,7 @@ export const getGmailReplyContext = createServerFn({ method: "POST" })
       senderName: ctx.senderName,
       senderEmail: ctx.senderEmail,
       snippet: ctx.snippet,
+      unsubscribe: ctx.unsubscribe,
     };
   });
 
@@ -75,6 +99,7 @@ export const generateGmailReplyDraft = createServerFn({ method: "POST" })
 const SaveInput = z.object({
   messageId: z.string().min(1).max(200),
   body: z.string().min(1).max(20000),
+  attachments: z.array(AttachmentSchema).max(5).optional(),
 });
 
 export const saveGmailDraft = createServerFn({ method: "POST" })
@@ -84,7 +109,14 @@ export const saveGmailDraft = createServerFn({ method: "POST" })
     const { getGmailReplyContext: fetchCtx, createGmailReplyDraft } =
       await import("@/lib/inbox/gmail.server");
     const context = await fetchCtx(data.messageId);
-    const saved = await createGmailReplyDraft({ context, body: data.body });
+    const attachments = data.attachments?.length
+      ? decodeAttachments(data.attachments)
+      : undefined;
+    const saved = await createGmailReplyDraft({
+      context,
+      body: data.body,
+      attachments,
+    });
     return {
       draftId: saved.draftId,
       openUrl: saved.openUrl,

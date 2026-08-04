@@ -268,8 +268,8 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
         action: z.enum(["done", "snoozed", "waiting", "ignored"]),
         snoozePreset: z.enum(["later_today", "tomorrow", "next_week"]).optional(),
         sourceIds: z.array(z.string()).optional(),
-        /** Desk Gmail effects — mark_read on inbox Ferdig; trash on draft Slett. */
-        gmailSideEffect: z.enum(["mark_read", "trash"]).optional(),
+        /** Desk Gmail effects — mark_read / archive / trash. */
+        gmailSideEffect: z.enum(["mark_read", "archive", "trash"]).optional(),
         hint: z
           .object({
             match_kind: z.enum([
@@ -344,6 +344,7 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
         const {
           gmailMessageIdFromSignalId,
           markGmailMessageRead,
+          archiveGmailMessage,
           trashGmailMessage,
         } = await import("@/lib/inbox/gmail.server");
         for (const signalId of gmailIds) {
@@ -352,6 +353,10 @@ export const actOnMorningItem = createServerFn({ method: "POST" })
           if (effect === "mark_read") {
             await markGmailMessageRead(messageId).catch((err) => {
               console.warn("[mission] mark Gmail read failed", messageId, err);
+            });
+          } else if (effect === "archive") {
+            await archiveGmailMessage(messageId).catch((err) => {
+              console.warn("[mission] archive Gmail failed", messageId, err);
             });
           } else if (effect === "trash") {
             await trashGmailMessage(messageId).catch((err) => {

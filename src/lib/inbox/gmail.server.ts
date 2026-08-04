@@ -220,6 +220,14 @@ export function gmailMessageIdFromSignalId(signalId: string): string | null {
 
 // ─── Reply-draft support ────────────────────────────────────────────────────
 
+export type GmailUnsubscribeInfo = {
+  /** First mailto: target from List-Unsubscribe, if any. */
+  mailto: string | null;
+  /** First https? URL from List-Unsubscribe, if any. */
+  url: string | null;
+  raw: string | null;
+};
+
 export type GmailReplyContext = {
   messageId: string;
   threadId: string;
@@ -229,7 +237,39 @@ export type GmailReplyContext = {
   snippet: string;
   rfcMessageId: string; // header Message-Id, e.g. <abc@mail>
   references: string;
+  unsubscribe: GmailUnsubscribeInfo;
 };
+
+export type GmailAttachmentBytes = {
+  filename: string;
+  mimeType: string;
+  data: Uint8Array;
+};
+
+/** Parse RFC 2369 List-Unsubscribe header into mailto + http(s) targets. */
+export function parseListUnsubscribe(raw: string | null | undefined): GmailUnsubscribeInfo {
+  const header = (raw ?? "").trim();
+  if (!header) return { mailto: null, url: null, raw: null };
+  let mailto: string | null = null;
+  let url: string | null = null;
+  const re = /<([^>]+)>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(header))) {
+    const target = m[1].trim();
+    if (!mailto && /^mailto:/i.test(target)) {
+      mailto = target.replace(/^mailto:/i, "").split("?")[0]?.trim() || null;
+    } else if (!url && /^https?:\/\//i.test(target)) {
+      url = target;
+    }
+  }
+  if (!mailto && !url) {
+    const bareMailto = header.match(/mailto:([^\s>,]+)/i);
+    if (bareMailto) mailto = bareMailto[1].split("?")[0]?.trim() || null;
+    const bareUrl = header.match(/https?:\/\/[^\s>,]+/i);
+    if (bareUrl) url = bareUrl[0].replace(/[>]+$/, "");
+  }
+  return { mailto, url, raw: header.slice(0, 500) };
+}
 
 function parseEmail(from: string): { name: string; email: string } {
   const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
@@ -240,7 +280,7 @@ function parseEmail(from: string): { name: string; email: string } {
 export async function getGmailReplyContext(messageId: string): Promise<GmailReplyContext> {
   const { apiKey, lovableKey } = gmailKeys();
   const meta = await gmailFetch<MessageMeta>(
-    `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To`,
+    `/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Message-Id&metadataHeaders=References&metadataHeaders=In-Reply-To&metadataHeaders=List-Unsubscribe`,
     apiKey,
     lovableKey,
   );
@@ -261,6 +301,7 @@ export async function getGmailReplyContext(messageId: string): Promise<GmailRepl
     snippet: (meta.snippet ?? "").slice(0, 500),
     rfcMessageId,
     references,
+    unsubscribe: parseListUnsubscribe(headerValue(headers, "List-Unsubscribe")),
   };
 }
 
@@ -456,43 +497,63 @@ export type SavedGmailDraft = {
   openUrl: string;
 };
 
+function safeAttachmentFilename(name: string): string {
+  return name.replace(/[\r\n"]/g, "").trim().slice(0, 180) || "vedlegg";
+}
+
+function encodeAttachmentBytes(data: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(data).toString("base64");
+  }
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < data.length; i += chunk) {
+    binary += String.fromCharCode(...data.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 function buildMultipartRaw(opts: {
   to: string;
   cc?: string;
   subject: string;
   body: string;
-  attachment: { filename: string; mimeType: string; data: Uint8Array };
+  attachments: GmailAttachmentBytes[];
+  from?: { email: string; displayName?: string | null } | null;
   inReplyTo?: string;
   references?: string;
 }): string {
-  const boundary = `mission_${Date.now().toString(36)}`;
+  const boundary = `nexus_${Date.now().toString(36)}`;
   const textPart = [
     `Content-Type: text/plain; charset="UTF-8"`,
-    "Content-Transfer-Encoding: 7bit",
+    "Content-Transfer-Encoding: 8bit",
     "",
     opts.body,
   ].join("\r\n");
-  const attachmentB64 =
-    typeof Buffer !== "undefined"
-      ? Buffer.from(opts.attachment.data).toString("base64")
-      : btoa(String.fromCharCode(...opts.attachment.data));
-  const filePart = [
-    `Content-Type: ${opts.attachment.mimeType}; name="${opts.attachment.filename}"`,
-    "Content-Transfer-Encoding: base64",
-    `Content-Disposition: attachment; filename="${opts.attachment.filename}"`,
-    "",
-    attachmentB64,
-  ].join("\r\n");
+
+  const fileParts = opts.attachments.map((att) => {
+    const filename = safeAttachmentFilename(att.filename);
+    const mimeType = (att.mimeType || "application/octet-stream").replace(/[\r\n]/g, "");
+    return [
+      `Content-Type: ${mimeType}; name="${filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${filename}"`,
+      "",
+      encodeAttachmentBytes(att.data),
+    ].join("\r\n");
+  });
 
   const subject =
     opts.inReplyTo && !opts.subject.toLowerCase().startsWith("re:")
       ? `Re: ${opts.subject}`
       : opts.subject;
+  const fromHeader = formatFromHeader(opts.from ?? null);
 
   const mime = [
+    ...(fromHeader ? [`From: ${fromHeader}`] : []),
     `To: ${opts.to}`,
     ...(opts.cc?.trim() ? [`Cc: ${opts.cc}`] : []),
-    `Subject: ${subject}`,
+    `Subject: ${encodeHeaderValue(subject)}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
     "MIME-Version: 1.0",
@@ -500,8 +561,7 @@ function buildMultipartRaw(opts: {
     "",
     `--${boundary}`,
     textPart,
-    `--${boundary}`,
-    filePart,
+    ...fileParts.flatMap((part) => [`--${boundary}`, part]),
     `--${boundary}--`,
     "",
   ].join("\r\n");
@@ -513,6 +573,7 @@ export type SentGmailMessage = {
   threadId: string;
 };
 
+/** @deprecated Prefer sendGmailMessage with attachments[] — kept for invoice PDF path. */
 export async function sendGmailWithAttachment(opts: {
   to: string;
   cc?: string;
@@ -523,15 +584,16 @@ export async function sendGmailWithAttachment(opts: {
   inReplyTo?: string;
   references?: string;
 }): Promise<SentGmailMessage> {
-  const { apiKey, lovableKey } = gmailKeys();
-  const raw = buildMultipartRaw(opts);
-  const sent = await gmailPost<{ id: string; threadId: string }>(
-    `/users/me/messages/send`,
-    apiKey,
-    lovableKey,
-    { raw, ...(opts.threadId ? { threadId: opts.threadId } : {}) },
-  );
-  return { messageId: sent.id, threadId: sent.threadId };
+  return sendGmailMessage({
+    to: opts.to,
+    cc: opts.cc,
+    subject: opts.subject,
+    body: opts.body,
+    attachments: [opts.attachment],
+    threadId: opts.threadId,
+    inReplyTo: opts.inReplyTo,
+    references: opts.references,
+  });
 }
 
 /** RFC 2047 encode a header value when it contains non-ASCII (æøå etc.). */
@@ -601,12 +663,36 @@ function buildComposeRaw(opts: {
   subject: string;
   body: string;
   from?: { email: string; displayName?: string | null } | null;
+  cc?: string;
+  inReplyTo?: string;
+  references?: string;
+  attachments?: GmailAttachmentBytes[];
 }): string {
+  const attachments = opts.attachments?.filter((a) => a.data.length > 0) ?? [];
+  if (attachments.length > 0) {
+    return buildMultipartRaw({
+      to: opts.to,
+      cc: opts.cc,
+      subject: opts.subject,
+      body: opts.body,
+      from: opts.from,
+      inReplyTo: opts.inReplyTo,
+      references: opts.references,
+      attachments,
+    });
+  }
   const fromHeader = formatFromHeader(opts.from ?? null);
+  const subject =
+    opts.inReplyTo && !opts.subject.toLowerCase().startsWith("re:")
+      ? `Re: ${opts.subject}`
+      : opts.subject;
   const lines = [
     ...(fromHeader ? [`From: ${fromHeader}`] : []),
     `To: ${opts.to}`,
-    `Subject: ${encodeHeaderValue(opts.subject)}`,
+    ...(opts.cc?.trim() ? [`Cc: ${opts.cc}`] : []),
+    `Subject: ${encodeHeaderValue(subject)}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
     'Content-Type: text/plain; charset="UTF-8"',
     "MIME-Version: 1.0",
     "",
@@ -615,12 +701,17 @@ function buildComposeRaw(opts: {
   return base64UrlEncode(lines.join("\r\n"));
 }
 
-/** Send a brand-new plain-text email (not a reply). */
+/** Send email (plain or with file/image attachments). */
 export async function sendGmailMessage(opts: {
   to: string;
   subject: string;
   body: string;
   from?: { email: string; displayName?: string | null } | null;
+  cc?: string;
+  attachments?: GmailAttachmentBytes[];
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string;
 }): Promise<SentGmailMessage> {
   const { apiKey, lovableKey } = gmailKeys();
   const raw = buildComposeRaw(opts);
@@ -628,17 +719,19 @@ export async function sendGmailMessage(opts: {
     `/users/me/messages/send`,
     apiKey,
     lovableKey,
-    { raw },
+    { raw, ...(opts.threadId ? { threadId: opts.threadId } : {}) },
   );
   return { messageId: sent.id, threadId: sent.threadId };
 }
 
-/** Save a brand-new plain-text email as a Gmail draft. */
+/** Save email as a Gmail draft (optional attachments). */
 export async function createGmailComposeDraft(opts: {
   to: string;
   subject: string;
   body: string;
   from?: { email: string; displayName?: string | null } | null;
+  cc?: string;
+  attachments?: GmailAttachmentBytes[];
 }): Promise<SavedGmailDraft> {
   const { apiKey, lovableKey } = gmailKeys();
   const raw = buildComposeRaw(opts);
@@ -657,14 +750,16 @@ export async function createGmailComposeDraft(opts: {
 export async function createGmailReplyDraft(opts: {
   context: GmailReplyContext;
   body: string;
+  attachments?: GmailAttachmentBytes[];
 }): Promise<SavedGmailDraft> {
   const { apiKey, lovableKey } = gmailKeys();
-  const raw = buildReplyRaw({
+  const raw = buildComposeRaw({
     to: opts.context.senderEmail,
     subject: opts.context.subject,
     body: opts.body,
     inReplyTo: opts.context.rfcMessageId,
     references: opts.context.references,
+    attachments: opts.attachments,
   });
   const draft = await gmailPost<{
     id: string;

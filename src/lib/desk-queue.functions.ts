@@ -85,11 +85,38 @@ function rank(signal: MissionSignal): number {
   return 40;
 }
 
-function toItem(signal: MissionSignal): DeskQueueItem {
+function gmailFields(signal: MissionSignal): Pick<
+  DeskQueueItem,
+  "fromName" | "fromEmail" | "gmailMessageId" | "hasUnsubscribe"
+> {
+  if (signal.source !== "gmail") {
+    return {
+      fromName: null,
+      fromEmail: null,
+      gmailMessageId: null,
+      hasUnsubscribe: false,
+    };
+  }
+  const fromEmail =
+    typeof signal.meta?.from_email === "string" && signal.meta.from_email.includes("@")
+      ? signal.meta.from_email.toLowerCase()
+      : null;
+  const messageId = signal.id.startsWith("gmail:") ? signal.id.slice("gmail:".length) : null;
+  return {
+    fromName: signal.from?.trim() || null,
+    fromEmail,
+    gmailMessageId: messageId,
+    hasUnsubscribe: signal.tags.includes("has_unsubscribe"),
+  };
+}
+
+function toItem(signal: MissionSignal, entityByEmail: Map<string, string>): DeskQueueItem {
   const source = signal.source as DeskQueueSource;
   const draft = isDraftSignal(signal);
   const appointment = isAppointmentSignal(signal);
   const subject = signal.subject.trim() || "(uten emne)";
+  const gmail = gmailFields(signal);
+  const entityId = gmail.fromEmail ? (entityByEmail.get(gmail.fromEmail) ?? null) : null;
 
   if (draft) {
     return {
@@ -102,6 +129,8 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
+      ...gmail,
+      entityId,
     };
   }
   if (appointment) {
@@ -118,6 +147,8 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
+      ...gmail,
+      entityId,
     };
   }
   if (signal.tags.includes("follow_up")) {
@@ -131,6 +162,9 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
+      entityId: signal.href?.startsWith("/kontakter/")
+        ? signal.href.slice("/kontakter/".length).split("?")[0] || null
+        : null,
     };
   }
   if (signal.tags.includes("no_plan")) {
@@ -144,6 +178,9 @@ function toItem(signal: MissionSignal): DeskQueueItem {
       href: signal.href,
       sourceIds: [signal.id],
       occurredAt: signal.occurred_at,
+      entityId: signal.href?.startsWith("/kontakter/")
+        ? signal.href.slice("/kontakter/".length).split("?")[0] || null
+        : null,
     };
   }
   if (signal.source === "manual") {
@@ -169,6 +206,8 @@ function toItem(signal: MissionSignal): DeskQueueItem {
     href: signal.href,
     sourceIds: [signal.id],
     occurredAt: signal.occurred_at,
+    ...gmail,
+    entityId,
   };
 }
 
@@ -179,7 +218,6 @@ export const getDeskQueue = createServerFn({ method: "GET" })
     const claimsRec = claims as Record<string, unknown>;
     const userEmail = (claimsRec.email as string | undefined) ?? null;
     const { gatherMorningSignals } = await import("@/lib/morning-mission/signal-gather.server");
-    const { prefilterSignals } = await import("@/lib/morning-mission/signal-prefilter.server");
     const { listMissionActionStates } = await import("@/lib/mission-action-state.server");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -234,15 +272,20 @@ export const getDeskQueue = createServerFn({ method: "GET" })
       listMissionActionStates(supabase, userId),
     ]);
 
-    const { forAi, noiseSignals } = prefilterSignals({
-      signals: allSignals,
-      userEmail,
-      actionStates,
-    });
-
-    const open = [...forAi]
-      .filter((s) => !isHidden(s.id, actionStates))
-      .filter((s) => !noiseSignals.some((n) => n.id === s.id))
+    // Desk: do not hide newsletter/system "noise" — same actions for all mail.
+    // Still drop dismissed items and own-account noise.
+    const { isOwnNoiseMail } = await import(
+      "@/lib/morning-mission/morning-mission-trust.server"
+    );
+    const seen = new Set<string>();
+    const open = allSignals
+      .filter((s) => {
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        if (isHidden(s.id, actionStates)) return false;
+        if (isOwnNoiseMail(s, userEmail)) return false;
+        return true;
+      })
       .sort((a, b) => {
         const rd = rank(b) - rank(a);
         if (rd !== 0) return rd;
@@ -251,8 +294,34 @@ export const getDeskQueue = createServerFn({ method: "GET" })
         return bt - at;
       });
 
+    const emails = [
+      ...new Set(
+        open
+          .map((s) =>
+            typeof s.meta?.from_email === "string" ? s.meta.from_email.toLowerCase() : null,
+          )
+          .filter((e): e is string => !!e && e.includes("@")),
+      ),
+    ].slice(0, 80);
+
+    const entityByEmail = new Map<string, string>();
+    if (emails.length > 0) {
+      const { data: identities } = await supabase
+        .from("known_identities")
+        .select("entity_id, external_key")
+        .eq("user_id", userId)
+        .eq("identity_type", "email_address")
+        .in("external_key", emails)
+        .not("entity_id", "is", null);
+      for (const row of identities ?? []) {
+        const key = String(row.external_key ?? "").toLowerCase();
+        const eid = row.entity_id as string | null;
+        if (key && eid) entityByEmail.set(key, eid);
+      }
+    }
+
     return {
-      items: open.slice(0, POOL).map(toItem),
+      items: open.slice(0, POOL).map((s) => toItem(s, entityByEmail)),
       totalOpen: open.length,
       generatedAt: new Date().toISOString(),
     };

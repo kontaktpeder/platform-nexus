@@ -1,19 +1,33 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  Archive,
   Check,
   Clock3,
   ExternalLink,
   Loader2,
+  Mail,
   Play,
   Plus,
   RefreshCw,
   Square,
   Trash2,
+  UserPlus,
+  CalendarPlus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { GmailReplyDrawer } from "@/components/platform/mission/GmailReplyDrawer";
+import { PlanFollowUpPanel } from "@/components/platform/relation/PlanFollowUpPanel";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DESK_QUEUE_STALE_MS,
@@ -25,6 +39,9 @@ import {
   getDeskQueue,
 } from "@/lib/desk-queue.functions";
 import type { DeskQueueItem, DeskQueueSource } from "@/lib/desk-queue.types";
+import { scheduleEntityFollowUp } from "@/lib/field.functions";
+import type { FollowUpPreset } from "@/lib/field/field.types";
+import { createContactFromSuggestion } from "@/lib/inbox-assistant.functions";
 import {
   actOnMorningItem,
   undoMorningItem,
@@ -65,12 +82,31 @@ function toneFor(item: DeskQueueItem): string {
   return SOURCE_TONE[item.source];
 }
 
+function initials(name: string | null | undefined, email: string | null | undefined): string {
+  const base = (name || email || "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+
+function isGmailMail(item: DeskQueueItem): boolean {
+  return item.source === "gmail" && item.kind === "mail" && !!item.gmailMessageId;
+}
+
+type GmailSideEffect = "mark_read" | "archive" | "trash";
+
 function QueueCard({
   item,
   busy,
   onPrimary,
   onSnooze,
   onRemove,
+  onOpenContact,
+  onFollowUp,
+  onReply,
+  onArchive,
+  onTrash,
+  onCreateContact,
   primaryLabel,
 }: {
   item: DeskQueueItem;
@@ -78,12 +114,20 @@ function QueueCard({
   onPrimary: () => void;
   onSnooze: () => void;
   onRemove: () => void;
+  onOpenContact?: () => void;
+  onFollowUp?: () => void;
+  onReply?: () => void;
+  onArchive?: () => void;
+  onTrash?: () => void;
+  onCreateContact?: () => void;
   primaryLabel?: string;
 }) {
   const isDraft = item.kind === "draft";
   const isWork = item.kind === "work_session";
+  const gmailMail = isGmailMail(item);
   const tone = toneFor(item);
   const label = primaryLabel ?? (isDraft ? "Fortsett" : isWork ? "Stopp" : "Ferdig");
+  const displayName = item.fromName || item.fromEmail || null;
 
   return (
     <li
@@ -107,7 +151,7 @@ function QueueCard({
         >
           {item.sourceLabel}
         </span>
-        {item.href && !isDraft && !isWork && (
+        {item.href && !isDraft && !isWork && !gmailMail && (
           <a
             href={item.href}
             target={item.href.startsWith("http") ? "_blank" : undefined}
@@ -119,52 +163,148 @@ function QueueCard({
           </a>
         )}
       </div>
+
+      {gmailMail && displayName && (
+        <button
+          type="button"
+          className="mt-2 flex w-full items-center gap-2 rounded-xl text-left hover:bg-muted/40"
+          onClick={onOpenContact}
+        >
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-500/15 text-[11px] font-semibold text-sky-950 dark:text-sky-100">
+            {initials(item.fromName, item.fromEmail)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{displayName}</span>
+            {item.fromEmail && item.fromName && (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {item.fromEmail}
+              </span>
+            )}
+          </span>
+        </button>
+      )}
+
       <p className="mt-2 text-sm font-semibold leading-snug tracking-tight">{item.title}</p>
       {item.subtitle && (
         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.subtitle}</p>
       )}
-      <div className="mt-3 grid grid-cols-3 gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          className="h-9 gap-1 rounded-xl text-xs"
-          disabled={busy}
-          onClick={onPrimary}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : isDraft ? (
-            <Play className="h-3.5 w-3.5" />
-          ) : isWork ? (
-            <Square className="h-3.5 w-3.5" />
-          ) : (
-            <Check className="h-3.5 w-3.5" />
-          )}
-          {label}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-9 gap-1 rounded-xl text-xs"
-          disabled={busy || isWork}
-          onClick={onSnooze}
-        >
-          <Clock3 className="h-3.5 w-3.5" />
-          Utsett
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-9 gap-1 rounded-xl text-xs text-muted-foreground"
-          disabled={busy}
-          onClick={onRemove}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          {isDraft ? "Slett" : "Fjern"}
-        </Button>
-      </div>
+
+      {gmailMail ? (
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onFollowUp}
+          >
+            <CalendarPlus className="h-3.5 w-3.5" />
+            Oppfølging
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onReply}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Svar
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onPrimary}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            Ferdig
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onArchive}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Arkiver
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1 rounded-xl text-xs text-muted-foreground"
+            disabled={busy}
+            onClick={onTrash}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Slett
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy || !!item.entityId}
+            onClick={onCreateContact}
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            {item.entityId ? "Kontakt OK" : "Kontakt"}
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-3 gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy}
+            onClick={onPrimary}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isDraft ? (
+              <Play className="h-3.5 w-3.5" />
+            ) : isWork ? (
+              <Square className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            {label}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1 rounded-xl text-xs"
+            disabled={busy || isWork}
+            onClick={onSnooze}
+          >
+            <Clock3 className="h-3.5 w-3.5" />
+            Utsett
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-9 gap-1 rounded-xl text-xs text-muted-foreground"
+            disabled={busy}
+            onClick={onRemove}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {isDraft ? "Slett" : "Fjern"}
+          </Button>
+        </div>
+      )}
     </li>
   );
 }
@@ -183,12 +323,22 @@ function workSessionItem(session: WorkSession, nowMs: number): DeskQueueItem {
   };
 }
 
-export function DeskQueuePanel({ className }: { className?: string }) {
+export function DeskQueuePanel({
+  className,
+  onOpenContact,
+}: {
+  className?: string;
+  /** Open contact on same Desk page (panel/sheet). */
+  onOpenContact?: (entityId: string) => void;
+}) {
   const qc = useQueryClient();
   const fetchQueue = useServerFn(getDeskQueue);
   const createManual = useServerFn(createDeskManualSignal);
   const runAct = useServerFn(actOnMorningItem);
   const runUndo = useServerFn(undoMorningItem);
+  const runCreateContact = useServerFn(createContactFromSuggestion);
+  const runScheduleFollowUp = useServerFn(scheduleEntityFollowUp);
+
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [manualText, setManualText] = useState("");
@@ -196,6 +346,14 @@ export function DeskQueuePanel({ className }: { className?: string }) {
   const [showIntake, setShowIntake] = useState(false);
   const [session, setSession] = useState<WorkSession | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const [replyItem, setReplyItem] = useState<DeskQueueItem | null>(null);
+  const [followItem, setFollowItem] = useState<DeskQueueItem | null>(null);
+  const [createItem, setCreateItem] = useState<DeskQueueItem | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [entityOverrides, setEntityOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const sync = () => setSession(readWorkSession());
@@ -232,13 +390,17 @@ export function DeskQueuePanel({ className }: { className?: string }) {
   });
 
   const visible = useMemo(() => {
-    const serverItems = (query.data?.items ?? []).filter((i) => !hiddenIds.has(i.id));
+    const serverItems = (query.data?.items ?? [])
+      .filter((i) => !hiddenIds.has(i.id))
+      .map((i) =>
+        entityOverrides[i.id] ? { ...i, entityId: entityOverrides[i.id]! } : i,
+      );
     const local: DeskQueueItem[] = [];
     if (session && !hiddenIds.has(`work:session:${session.startedAt}`)) {
       local.push(workSessionItem(session, nowMs));
     }
     return [...local, ...serverItems].slice(0, VISIBLE);
-  }, [query.data?.items, hiddenIds, session, nowMs]);
+  }, [query.data?.items, hiddenIds, session, nowMs, entityOverrides]);
 
   const remaining =
     Math.max(0, (query.data?.totalOpen ?? 0) + (session ? 1 : 0) - hiddenIds.size) -
@@ -247,7 +409,7 @@ export function DeskQueuePanel({ className }: { className?: string }) {
   async function act(
     item: DeskQueueItem,
     action: "done" | "snoozed" | "ignored",
-    gmailSideEffect?: "mark_read" | "trash",
+    gmailSideEffect?: GmailSideEffect,
   ) {
     if (item.kind === "work_session") {
       if (action === "ignored") {
@@ -280,18 +442,22 @@ export function DeskQueuePanel({ className }: { className?: string }) {
         action === "done"
           ? item.kind === "draft"
             ? "Åpnet utkast"
-            : item.kind === "mail"
+            : gmailSideEffect === "mark_read"
               ? "Ferdig — markert lest"
               : "Ferdig"
           : action === "snoozed"
             ? "Utsatt til i morgen"
-            : item.kind === "draft"
-              ? "Utkast slettet"
-              : "Fjernet";
+            : gmailSideEffect === "archive"
+              ? "Arkivert i Gmail"
+              : gmailSideEffect === "trash"
+                ? "Slettet i Gmail"
+                : item.kind === "draft"
+                  ? "Utkast slettet"
+                  : "Fjernet";
       toast(label, {
         duration: 6000,
         action:
-          action === "ignored" && item.kind === "draft"
+          gmailSideEffect === "trash"
             ? undefined
             : {
                 label: "Angre",
@@ -337,9 +503,114 @@ export function DeskQueuePanel({ className }: { className?: string }) {
       return;
     }
     if (item.href && (item.kind === "follow_up" || item.kind === "no_plan")) {
-      window.location.href = item.href;
+      if (item.entityId && onOpenContact) {
+        onOpenContact(item.entityId);
+      } else {
+        window.location.href = item.href;
+      }
     }
     void act(item, "done", item.kind === "mail" ? "mark_read" : undefined);
+  }
+
+  function openContactFor(item: DeskQueueItem) {
+    const entityId = item.entityId ?? entityOverrides[item.id];
+    if (entityId && onOpenContact) {
+      onOpenContact(entityId);
+      return;
+    }
+    setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
+    setCreateItem(item);
+  }
+
+  async function ensureEntity(item: DeskQueueItem): Promise<string | null> {
+    const existing = item.entityId ?? entityOverrides[item.id];
+    if (existing) return existing;
+    if (!item.fromEmail) {
+      toast.error("Ingen e-post å knytte kontakt til");
+      return null;
+    }
+    const name =
+      item.fromName?.trim() ||
+      item.fromEmail.split("@")[0] ||
+      item.fromEmail;
+    const res = await runCreateContact({
+      data: {
+        name,
+        email: item.fromEmail,
+        entityType: "person",
+        reason: "Fra Desk-kø",
+      },
+    });
+    setEntityOverrides((prev) => ({ ...prev, [item.id]: res.entityId }));
+    void qc.invalidateQueries({ queryKey: ["customers"] });
+    return res.entityId as string;
+  }
+
+  async function submitCreateContact() {
+    if (!createItem) return;
+    const name = createName.trim();
+    if (!name) {
+      toast.error("Skriv et navn");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await runCreateContact({
+        data: {
+          name,
+          email: createItem.fromEmail,
+          entityType: "person",
+          reason: "Fra Desk-kø",
+        },
+      });
+      setEntityOverrides((prev) => ({ ...prev, [createItem.id]: res.entityId }));
+      toast.success(res.created ? "Kontakt opprettet" : "Kontakt finnes allerede");
+      setCreateItem(null);
+      onOpenContact?.(res.entityId);
+      void qc.invalidateQueries({ queryKey: ["customers"] });
+      void qc.invalidateQueries({ queryKey: ["desk-queue"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke opprette");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function openFollowUp(item: DeskQueueItem) {
+    try {
+      const entityId = await ensureEntity(item);
+      if (!entityId) return;
+      setFollowItem({ ...item, entityId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke åpne oppfølging");
+    }
+  }
+
+  async function submitFollowUp(input: {
+    action: string;
+    preset: FollowUpPreset;
+    pickDate?: string;
+  }) {
+    const entityId = followItem?.entityId;
+    if (!entityId) return;
+    setFollowBusy(true);
+    try {
+      await runScheduleFollowUp({
+        data: {
+          entityId,
+          action: input.action,
+          preset: input.preset,
+          followUpDate: input.pickDate ?? null,
+        },
+      });
+      toast.success("Oppfølging planlagt");
+      setFollowItem(null);
+      void qc.invalidateQueries({ queryKey: ["desk-queue"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke lagre");
+    } finally {
+      setFollowBusy(false);
+    }
   }
 
   async function submitManual() {
@@ -373,7 +644,7 @@ export function DeskQueuePanel({ className }: { className?: string }) {
           </p>
           <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">Kø</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Opptil {VISIBLE} synlige — signaler, ikke AI-anbefalinger
+            Like valg for all mail — ikke AI-anbefalinger
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -465,6 +736,19 @@ export function DeskQueuePanel({ className }: { className?: string }) {
                     item.kind === "draft" ? "trash" : undefined,
                   )
                 }
+                onOpenContact={() => openContactFor(item)}
+                onFollowUp={() => void openFollowUp(item)}
+                onReply={() => setReplyItem(item)}
+                onArchive={() => void act(item, "ignored", "archive")}
+                onTrash={() => {
+                  if (window.confirm("Slette denne mailen i Gmail også?")) {
+                    void act(item, "ignored", "trash");
+                  }
+                }}
+                onCreateContact={() => {
+                  setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
+                  setCreateItem(item);
+                }}
               />
             ))}
           </ul>
@@ -478,6 +762,82 @@ export function DeskQueuePanel({ className }: { className?: string }) {
             : `${query.data.totalOpen + (session ? 1 : 0)} åpne signaler totalt`
           : "—"}
       </footer>
+
+      {replyItem?.gmailMessageId && (
+        <GmailReplyDrawer
+          open={!!replyItem}
+          onOpenChange={(open) => {
+            if (!open) setReplyItem(null);
+          }}
+          messageId={replyItem.gmailMessageId}
+          fallbackSubject={replyItem.title}
+          fallbackSender={replyItem.fromName ?? replyItem.fromEmail ?? undefined}
+          fallbackSnippet={replyItem.subtitle ?? undefined}
+          onSaved={({ markHandled }) => {
+            if (markHandled && replyItem) {
+              void act(replyItem, "done", "mark_read");
+            }
+            setReplyItem(null);
+          }}
+        />
+      )}
+
+      <Sheet
+        open={!!followItem}
+        onOpenChange={(open) => {
+          if (!open) setFollowItem(null);
+        }}
+      >
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Lag oppfølging</SheetTitle>
+            <SheetDescription>
+              {followItem?.fromName || followItem?.fromEmail || "Kontakt"}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <PlanFollowUpPanel
+              defaultAction={followItem?.title ? `Følg opp: ${followItem.title}` : ""}
+              busy={followBusy}
+              onSchedule={(input) => void submitFollowUp(input)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={!!createItem}
+        onOpenChange={(open) => {
+          if (!open) setCreateItem(null);
+        }}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Opprett kontakt</SheetTitle>
+            <SheetDescription>
+              {createItem?.fromEmail
+                ? `Knyttes til ${createItem.fromEmail}`
+                : "Ny person i Kontakter"}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <Input
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Navn"
+              className="h-11 rounded-xl"
+            />
+            <Button
+              type="button"
+              className="h-11 w-full rounded-xl"
+              disabled={creating || !createName.trim()}
+              onClick={() => void submitCreateContact()}
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Opprett"}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </aside>
   );
 }
