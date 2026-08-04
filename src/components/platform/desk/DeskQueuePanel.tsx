@@ -492,11 +492,15 @@ function workSessionItem(session: WorkSession, nowMs: number): DeskQueueItem {
 export function DeskQueuePanel({
   className,
   onOpenContact,
+  variant = "rail",
 }: {
   className?: string;
-  /** Open contact on same Desk page (panel/sheet). */
+  /** Open contact on same page (panel/sheet). */
   onOpenContact?: (entityId: string) => void;
+  /** rail = side panel; dashboard = Hele livet Topp 3 (same actions). */
+  variant?: "rail" | "dashboard";
 }) {
+  const isDashboard = variant === "dashboard";
   const qc = useQueryClient();
   const fetchQueue = useServerFn(getDeskQueue);
   const createManual = useServerFn(createDeskManualSignal);
@@ -812,18 +816,25 @@ export function DeskQueuePanel({
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-full flex-col border-border/60 bg-background/40",
+        "flex min-h-0 w-full flex-col",
+        isDashboard
+          ? "os-glass max-h-[min(72vh,52rem)] overflow-hidden rounded-2xl"
+          : "h-full border-border/60 bg-background/40",
         className,
       )}
     >
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            I dag
+            {isDashboard ? "Topp 3" : "I dag"}
           </p>
-          <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">Kø</h2>
+          <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">
+            {isDashboard ? "Dagens kø" : "Kø"}
+          </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Like valg per kilde — ikke AI-anbefalinger
+            {isDashboard
+              ? "Samme kø og handlinger — tre om gangen"
+              : "Like valg per kilde — ikke AI-anbefalinger"}
           </p>
         </div>
         <div className="flex items-center gap-1">

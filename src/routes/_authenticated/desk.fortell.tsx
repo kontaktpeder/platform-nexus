@@ -3,9 +3,9 @@ import { DeskHome } from "@/components/platform/desk/DeskHome";
 import { NexusOsHeader } from "@/components/platform/os/NexusOsHeader";
 import { mockMeta } from "@/lib/os/mock-data";
 
-/** Fortell + signal queue — Innboks under OS shell. */
+/** Fortell only — signal queue lives on Hele livet as Topp 3. */
 export const Route = createFileRoute("/_authenticated/desk/fortell")({
-  head: () => ({ meta: [{ title: "Innboks — Nexus" }] }),
+  head: () => ({ meta: [{ title: "Fortell — Nexus" }] }),
   component: DeskFortellPage,
 });
 
@@ -13,8 +13,8 @@ function DeskFortellPage() {
   return (
     <>
       <NexusOsHeader
-        title="Innboks"
-        subtitle="Signaler, mail og Fortell"
+        title="Fortell"
+        subtitle="Samtale og hjelp — køen ligger på I dag"
         dateLabel={mockMeta.dateLabel}
         kontekst="hele"
       />

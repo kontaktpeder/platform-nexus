@@ -4,10 +4,10 @@ import {
   CalendarDays,
   CheckSquare,
   CircleHelp,
-  Inbox,
   LayoutDashboard,
   Lightbulb,
   Map,
+  MessageCircle,
   Settings,
   Sparkles,
   StickyNote,
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ICONS: Record<OsNavId, typeof LayoutDashboard> = {
   "i-dag": LayoutDashboard,
-  innboks: Inbox,
+  innboks: MessageCircle,
   kalender: CalendarDays,
   oppgaver: CheckSquare,
   mal: Target,

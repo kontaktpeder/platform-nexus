@@ -9,8 +9,8 @@ type NavigateFn = (opts: {
 }) => unknown | Promise<unknown>;
 
 /**
- * After login: desktop → /desk (OS overview), mobile → /hjem (capture CTAs).
- * Fortell/Innboks lives at /desk/fortell. Mission / Felt under Profil.
+ * After login: desktop → /desk (OS overview + Topp 3 kø), mobile → /hjem.
+ * Fortell lives at /desk/fortell. Mission / Felt under Profil.
  */
 export async function redirectAfterLogin(navigate?: NavigateFn): Promise<void> {
   clearPasswordRecoveryPending();

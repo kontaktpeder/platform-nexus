@@ -34,7 +34,7 @@ export const OS_NAV_ITEMS: {
   badge?: number;
 }[] = [
   { id: "i-dag", label: "I dag", to: "/desk" },
-  { id: "innboks", label: "Innboks", to: "/desk/fortell", badge: 6 },
+  { id: "innboks", label: "Fortell", to: "/desk/fortell" },
   { id: "kalender", label: "Kalender", to: "/desk" },
   { id: "oppgaver", label: "Oppgaver", to: "/desk" },
   { id: "mal", label: "Mål", to: "/desk" },
