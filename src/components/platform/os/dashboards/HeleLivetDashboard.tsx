@@ -36,7 +36,6 @@ export function HeleLivetDashboard() {
         <div className="lg:col-span-5">
           <DeskQueuePanel
             variant="dashboard"
-            className="h-full min-h-[28rem]"
             onOpenContact={setPanelEntityId}
           />
         </div>

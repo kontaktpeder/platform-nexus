@@ -1,5 +1,3 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import {
   Archive,
   Check,
@@ -7,6 +5,7 @@ import {
   ExternalLink,
   Loader2,
   Mail,
+  MoreHorizontal,
   Play,
   Plus,
   RefreshCw,
@@ -22,6 +21,13 @@ import { GmailReplyDrawer } from "@/components/platform/mission/GmailReplyDrawer
 import { InvoiceComposeSheet } from "@/components/platform/mission/InvoiceComposeSheet";
 import { PlanFollowUpPanel } from "@/components/platform/relation/PlanFollowUpPanel";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -58,7 +64,10 @@ import {
   stopWorkSession,
   type WorkSession,
 } from "@/lib/work-session";
+import { useWeekFocus } from "@/hooks/useWeekFocus";
 import { cn } from "@/lib/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 
 const VISIBLE = 3;
 
@@ -110,6 +119,7 @@ type GmailSideEffect = "mark_read" | "archive" | "trash";
 function QueueCard({
   item,
   busy,
+  compact = false,
   onPrimary,
   onSnooze,
   onRemove,
@@ -126,6 +136,8 @@ function QueueCard({
 }: {
   item: DeskQueueItem;
   busy: boolean;
+  /** Fixed-height dashboard row: primary + ⋯ menu for the rest. */
+  compact?: boolean;
   onPrimary: () => void;
   onSnooze: () => void;
   onRemove: () => void;
@@ -155,7 +167,6 @@ function QueueCard({
   );
   const ctaPurring = item.ctaKind === "purring";
   const ctaOpenLink = item.ctaKind === "open_link";
-  // Don't show CTA if it's the same URL as unsubscribe.
   const ctaDistinct =
     ctaPurring ||
     ctaOpenLink ||
@@ -167,6 +178,122 @@ function QueueCard({
   const avatarTone = financeInv
     ? "bg-emerald-500/15 text-emerald-950 dark:text-emerald-100"
     : "bg-sky-500/15 text-sky-950 dark:text-sky-100";
+
+  if (compact) {
+    return (
+      <li
+        className={cn(
+          "flex h-[5.75rem] flex-col justify-between rounded-xl border bg-card/95 px-3 py-2.5 shadow-sm",
+          isDraft
+            ? "border-rose-300/50"
+            : item.kind === "appointment"
+              ? "border-teal-300/50"
+              : isWork
+                ? "border-violet-300/50"
+                : financeInv
+                  ? "border-emerald-300/40"
+                  : "border-border/70",
+        )}
+      >
+        <div className="flex min-h-0 items-start gap-2">
+          <span
+            className={cn(
+              "mt-0.5 shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+              tone,
+            )}
+          >
+            {item.sourceLabel}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-snug">
+              {item.intent || item.title}
+            </p>
+            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+              {item.nextStep || item.subtitle || displayName || "—"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 flex-1 gap-1 rounded-lg text-xs"
+            disabled={busy}
+            onClick={onPrimary}
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isDraft ? (
+              <Play className="h-3.5 w-3.5" />
+            ) : isWork ? (
+              <Square className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            {label}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0 rounded-lg"
+                disabled={busy}
+                aria-label="Flere handlinger"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {ctaDistinct && (
+                <DropdownMenuItem onClick={onOpenCta}>
+                  {item.ctaLabel || "Neste steg"}
+                </DropdownMenuItem>
+              )}
+              {item.href && (
+                <DropdownMenuItem onClick={onOpenModule}>
+                  {gmailMail ? "Åpne i Gmail" : "Åpne"}
+                </DropdownMenuItem>
+              )}
+              {gmailMail && (
+                <DropdownMenuItem onClick={onReply}>Svar</DropdownMenuItem>
+              )}
+              {(gmailMail || financeInv) && (
+                <DropdownMenuItem onClick={onFollowUp}>Oppfølging</DropdownMenuItem>
+              )}
+              {(gmailMail || financeInv) && (
+                <DropdownMenuItem onClick={onOpenContact}>Kontakt</DropdownMenuItem>
+              )}
+              {(gmailMail || financeInv) && !item.entityId && (
+                <DropdownMenuItem onClick={onCreateContact}>
+                  Opprett kontakt
+                </DropdownMenuItem>
+              )}
+              {gmailMail && hasUnsub && (
+                <DropdownMenuItem onClick={onUnsubscribe}>Meld av</DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              {!gmailMail && (
+                <DropdownMenuItem onClick={onSnooze} disabled={isWork}>
+                  Utsett
+                </DropdownMenuItem>
+              )}
+              {gmailMail && (
+                <DropdownMenuItem onClick={onArchive}>Arkiver</DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={gmailMail ? onTrash : onRemove}
+                className="text-destructive focus:text-destructive"
+              >
+                {isDraft || gmailMail ? "Slett" : "Fjern"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li
@@ -501,6 +628,9 @@ export function DeskQueuePanel({
   variant?: "rail" | "dashboard";
 }) {
   const isDashboard = variant === "dashboard";
+  const { focus: weekFocus } = useWeekFocus();
+  const focusHint =
+    weekFocus.unlock.trim() || weekFocus.bottleneck.trim() || null;
   const qc = useQueryClient();
   const fetchQueue = useServerFn(getDeskQueue);
   const createManual = useServerFn(createDeskManualSignal);
@@ -818,23 +948,25 @@ export function DeskQueuePanel({
       className={cn(
         "flex min-h-0 w-full flex-col",
         isDashboard
-          ? "os-glass max-h-[min(72vh,52rem)] overflow-hidden rounded-2xl"
+          ? "os-glass h-[26.5rem] shrink-0 overflow-hidden rounded-2xl"
           : "h-full border-border/60 bg-background/40",
         className,
       )}
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-4">
-        <div>
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-3">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {isDashboard ? "Topp 3" : "I dag"}
           </p>
-          <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight">
+          <h2 className="mt-0.5 font-heading text-base font-semibold tracking-tight">
             {isDashboard ? "Dagens kø" : "Kø"}
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {isDashboard
-              ? "Samme kø og handlinger — tre om gangen"
-              : "Like valg per kilde — ikke AI-anbefalinger"}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {isDashboard && focusHint
+              ? `Fokus nå: ${focusHint}`
+              : isDashboard
+                ? "Tre kort · handlinger i ⋯"
+                : "Like valg per kilde — ikke AI-anbefalinger"}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -911,12 +1043,13 @@ export function DeskQueuePanel({
             </p>
           </div>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className={cn("space-y-2", isDashboard && "space-y-2")}>
             {visible.map((item) => (
               <QueueCard
                 key={item.id}
                 item={item}
                 busy={busyId === item.id}
+                compact={isDashboard}
                 onPrimary={() => onPrimary(item)}
                 onSnooze={() => void act(item, "snoozed")}
                 onRemove={() =>
