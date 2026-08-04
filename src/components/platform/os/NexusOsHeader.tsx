@@ -1,11 +1,25 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, Search, Sun } from "lucide-react";
+import { Moon, Plus, Search, Sunset, Sun } from "lucide-react";
+import { useDayAtmosphere } from "@/hooks/useDayAtmosphere";
 import {
   OS_CONTEXTS,
   OS_CONTEXT_LABELS,
   type OsContext,
 } from "@/lib/os/context";
+import { isDarkPhase, type DayPhase } from "@/lib/os/day-atmosphere";
 import { cn } from "@/lib/utils";
+
+function PhaseIcon({ phase }: { phase: DayPhase }) {
+  if (phase === "night") return <Moon className="size-5 text-violet-200" aria-hidden />;
+  if (phase === "evening" || phase === "afternoon")
+    return <Sunset className="size-5 text-orange-300" aria-hidden />;
+  if (phase === "dawn") return <SunriseIcon />;
+  return <Sun className="size-5 text-amber-400" aria-hidden />;
+}
+
+function SunriseIcon() {
+  return <Sun className="size-5 text-orange-400" aria-hidden />;
+}
 
 export function NexusOsHeader({
   title,
@@ -20,33 +34,76 @@ export function NexusOsHeader({
   kontekst: OsContext;
   showSun?: boolean;
 }) {
+  const atmosphere = useDayAtmosphere();
+  const dark = isDarkPhase(atmosphere.phase);
+
   return (
-    <header className="shrink-0 border-b border-border/50 bg-background/80 px-6 py-4 backdrop-blur-sm">
+    <header
+      className={cn(
+        "shrink-0 border-b px-6 py-4 backdrop-blur-md transition-colors duration-700",
+        dark
+          ? "border-white/10 bg-black/20 text-white"
+          : "border-white/40 bg-white/35 text-foreground",
+      )}
+    >
       <div className="flex flex-wrap items-start gap-4 lg:items-center">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {showSun && <Sun className="size-5 text-warning" aria-hidden />}
-            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
+            {showSun && <PhaseIcon phase={atmosphere.phase} />}
+            <h1
+              className={cn(
+                "font-heading text-xl font-semibold tracking-tight",
+                dark ? "text-white" : "text-foreground",
+              )}
+            >
               {title}
             </h1>
+            <span
+              className={cn(
+                "hidden rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide sm:inline",
+                dark ? "bg-white/15 text-white/80" : "bg-primary/10 text-primary",
+              )}
+            >
+              {atmosphere.label}
+            </span>
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p
+            className={cn(
+              "mt-0.5 text-sm",
+              dark ? "text-white/70" : "text-muted-foreground",
+            )}
+          >
             {dateLabel}
             {subtitle ? ` · ${subtitle}` : null}
           </p>
         </div>
 
-        <div className="order-last flex w-full max-w-md flex-1 items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 text-sm text-muted-foreground shadow-soft lg:order-none lg:mx-auto">
+        <div
+          className={cn(
+            "order-last flex w-full max-w-md flex-1 items-center gap-2 rounded-xl px-3 py-2 text-sm shadow-soft backdrop-blur-sm lg:order-none lg:mx-auto",
+            dark
+              ? "border border-white/15 bg-white/10 text-white/70"
+              : "border border-white/60 bg-white/70 text-muted-foreground",
+          )}
+        >
           <Search className="size-4 shrink-0 opacity-60" />
           <span className="flex-1 truncate">Søk i alt...</span>
-          <kbd className="hidden rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
+          <kbd
+            className={cn(
+              "hidden rounded-md px-1.5 py-0.5 font-mono text-[10px] sm:inline",
+              dark ? "bg-white/15 text-white/70" : "bg-muted text-muted-foreground",
+            )}
+          >
             ⌘K
           </kbd>
         </div>
 
         <div className="flex items-center gap-3">
           <div
-            className="flex rounded-xl bg-muted/80 p-1"
+            className={cn(
+              "flex rounded-xl p-1 backdrop-blur-sm",
+              dark ? "bg-white/10" : "bg-white/60",
+            )}
             role="tablist"
             aria-label="Kontekst"
           >
@@ -63,7 +120,9 @@ export function NexusOsHeader({
                     "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm",
                     active
                       ? "bg-primary text-primary-foreground shadow-soft"
-                      : "text-muted-foreground hover:text-foreground",
+                      : dark
+                        ? "text-white/70 hover:text-white"
+                        : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {OS_CONTEXT_LABELS[id]}

@@ -1,8 +1,6 @@
 import {
-  DeltaBadge,
   Initials,
   OsCard,
-  ProgressBar,
   RingProgress,
   Sparkline,
   StatusDot,
@@ -29,7 +27,7 @@ export function HeleLivetDashboard() {
       </OsCard>
 
       <div className="flex flex-col gap-4 lg:col-span-3">
-        <OsCard title="Dagens 3 viktigste">
+        <OsCard title="Dagens 3 viktigste" tone="soft">
           <ol className="space-y-3">
             {d.topThree.map((item, i) => (
               <li key={item} className="flex gap-3">
@@ -44,19 +42,24 @@ export function HeleLivetDashboard() {
           </ol>
         </OsCard>
 
-        <OsCard title="Fokus nå">
-          <div className="rounded-xl bg-primary-soft p-4">
-            <p className="text-sm font-semibold text-foreground">{d.focusNow}</p>
-            <p className="mt-3 text-xs text-muted-foreground">Fremdrift i dag</p>
-            <ProgressBar pct={d.progressToday.pct} className="mt-1.5" />
-            <p className="mt-1.5 text-xs text-muted-foreground">
+        <OsCard title="Fokus nå" tone="hero">
+          <div className="rounded-xl bg-white/15 p-4 backdrop-blur-sm">
+            <p className="text-sm font-semibold text-white">{d.focusNow}</p>
+            <p className="mt-3 text-xs text-white/75">Fremdrift i dag</p>
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+              <div
+                className="h-full rounded-full bg-warning"
+                style={{ width: `${d.progressToday.pct}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-white/75">
               {d.progressToday.done} av {d.progressToday.total} viktige fullført
             </p>
           </div>
         </OsCard>
       </div>
 
-      <OsCard title="Energi & rutiner" className="lg:col-span-3" footer="Se detaljer">
+      <OsCard title="Energi & rutiner" className="lg:col-span-3" footer="Se detaljer" tone="soft">
         <div className="flex flex-wrap justify-around gap-4">
           {d.energy.map((e) => (
             <div key={e.label} className="flex flex-col items-center gap-1.5">
@@ -72,21 +75,21 @@ export function HeleLivetDashboard() {
         </div>
       </OsCard>
 
-      <OsCard title="Business-puls" className="lg:col-span-3" footer="Se business">
+      <OsCard title="Business-puls" className="lg:col-span-3" footer="Se business" tone="hero">
         <div className="grid grid-cols-2 gap-3">
           {d.businessPulse.map((k) => (
             <div key={k.label}>
-              <p className="text-xs text-muted-foreground">{k.label}</p>
-              <p className="text-sm font-semibold tabular-nums text-foreground">
+              <p className="text-xs text-white/70">{k.label}</p>
+              <p className="text-sm font-semibold tabular-nums text-white">
                 {k.value}
               </p>
-              <DeltaBadge value={k.delta} good={k.good} />
+              <span className="text-xs font-medium text-warning">{k.delta}</span>
             </div>
           ))}
         </div>
         <div className="mt-4">
-          <Sparkline values={d.sparkline} />
-          <p className="mt-1 text-[11px] text-muted-foreground">Siste 12 mnd mot mål</p>
+          <Sparkline values={d.sparkline} stroke="oklch(0.85 0.12 85)" />
+          <p className="mt-1 text-[11px] text-white/65">Siste 12 mnd mot mål</p>
         </div>
       </OsCard>
 

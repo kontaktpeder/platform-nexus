@@ -66,25 +66,25 @@
   --popover: oklch(1 0.002 85);
   --popover-foreground: oklch(0.22 0.02 250);
 
-  /* Deep petrol */
-  --primary: oklch(0.42 0.055 210);
+  /* Deep petrol — slightly richer chroma for energy */
+  --primary: oklch(0.44 0.08 210);
   --primary-foreground: oklch(0.98 0.005 85);
-  --primary-soft: color-mix(in oklab, var(--primary) 10%, var(--background));
+  --primary-soft: color-mix(in oklab, var(--primary) 14%, var(--background));
 
-  --secondary: oklch(0.55 0.05 200);
+  --secondary: oklch(0.58 0.1 175);
   --secondary-foreground: oklch(0.98 0.005 85);
 
   --muted: oklch(0.94 0.01 85);
   --muted-foreground: oklch(0.48 0.02 250);
-  --accent: oklch(0.93 0.012 85);
+  --accent: oklch(0.93 0.02 85);
   --accent-foreground: oklch(0.25 0.02 250);
 
-  /* Coral for risk only */
-  --destructive: oklch(0.62 0.16 25);
+  /* Coral for risk + energetic accents */
+  --destructive: oklch(0.64 0.18 25);
   --destructive-foreground: oklch(0.99 0.005 85);
-  /* Muted green / amber */
-  --success: oklch(0.58 0.1 155);
-  --warning: oklch(0.72 0.12 75);
+  /* Muted green / amber — a bit more saturated */
+  --success: oklch(0.58 0.13 155);
+  --warning: oklch(0.78 0.15 75);
 
   --border: oklch(0.9 0.01 85);
   --input: oklch(0.9 0.01 85);
@@ -195,4 +195,22 @@
 @keyframes nexus-breathe {
   0%, 100% { transform: scale(1); filter: brightness(1); }
   50% { transform: scale(1.04); filter: brightness(1.08); }
+}
+
+@keyframes os-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, 4%) scale(1.06); }
+  66% { transform: translate(-2%, 2%) scale(0.96); }
+}
+
+@utility os-glass {
+  background-color: color-mix(in oklab, var(--card) 78%, transparent);
+  border: 1px solid color-mix(in oklab, white 55%, var(--border));
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-soft), 0 0 0 1px color-mix(in oklab, white 40%, transparent);
+}
+
+@utility os-hero-wash {
+  background-image: var(--os-hero, linear-gradient(135deg, var(--primary), var(--secondary)));
+  color: white;
 }

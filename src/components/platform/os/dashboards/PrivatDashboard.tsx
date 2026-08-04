@@ -14,22 +14,22 @@ export function PrivatDashboard() {
 
   return (
     <div className="grid gap-4 p-6 lg:grid-cols-12 lg:gap-5">
-      <OsCard title="Livsbalanse" className="lg:col-span-4" footer="Se detaljer">
+      <OsCard title="Livsbalanse" className="lg:col-span-4" footer="Se detaljer" tone="hero">
         <div className="flex items-center gap-6">
           <RingProgress pct={d.balanceScore} size={120} stroke={8}>
             <div>
-              <p className="text-2xl font-semibold tabular-nums text-foreground">
+              <p className="text-2xl font-semibold tabular-nums text-white">
                 {d.balanceScore}
               </p>
             </div>
           </RingProgress>
           <div className="flex-1 space-y-2">
-            <p className="text-sm font-semibold text-foreground">{d.balanceLabel}</p>
+            <p className="text-sm font-semibold text-white">{d.balanceLabel}</p>
             <ul className="space-y-1.5">
               {d.balanceAreas.map((a) => (
                 <li key={a.label} className="flex items-center gap-2 text-sm">
                   <StatusDot status={a.status} />
-                  <span className="text-muted-foreground">{a.label}</span>
+                  <span className="text-white/80">{a.label}</span>
                 </li>
               ))}
             </ul>
@@ -98,19 +98,19 @@ export function PrivatDashboard() {
         </ul>
       </OsCard>
 
-      <OsCard title="Privatøkonomi" className="lg:col-span-4" footer="Se økonomi">
+      <OsCard title="Privatøkonomi" className="lg:col-span-4" footer="Se økonomi" tone="soft">
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <div>
+          <div className="rounded-xl bg-primary/10 p-2.5">
             <p className="text-xs text-muted-foreground">Tilgjengelig</p>
             <p className="text-sm font-semibold tabular-nums">{d.economy.available}</p>
           </div>
-          <div>
+          <div className="rounded-xl bg-success/15 p-2.5">
             <p className="text-xs text-muted-foreground">Spart i mnd</p>
             <p className="text-sm font-semibold tabular-nums text-success">
               {d.economy.saved}
             </p>
           </div>
-          <div>
+          <div className="rounded-xl bg-warning/20 p-2.5">
             <p className="text-xs text-muted-foreground">Buffer</p>
             <p className="text-sm font-semibold tabular-nums">{d.economy.buffer}</p>
           </div>

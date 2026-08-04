@@ -17,23 +17,53 @@ export function CoreDashboard() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <div className="grid gap-4 lg:grid-cols-12 lg:gap-5">
-        {d.kpis.map((k) => (
-          <OsCard key={k.label} className="lg:col-span-3">
+        {d.kpis.map((k, i) => (
+          <OsCard key={k.label} className="lg:col-span-3" tone={i === 0 ? "hero" : "glass"}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">{k.label}</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight">
+                <p
+                  className={cn(
+                    "text-xs",
+                    i === 0 ? "text-white/70" : "text-muted-foreground",
+                  )}
+                >
+                  {k.label}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 text-xl font-semibold tabular-nums tracking-tight",
+                    i === 0 ? "text-white" : "text-foreground",
+                  )}
+                >
                   {k.value}
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p
+                  className={cn(
+                    "mt-0.5 text-xs",
+                    i === 0 ? "text-white/65" : "text-muted-foreground",
+                  )}
+                >
                   {k.pct}% av mål
                 </p>
                 <div className="mt-1">
-                  <DeltaBadge value={`${k.delta} vs i fjor`} />
+                  {i === 0 ? (
+                    <span className="text-xs font-medium text-warning">
+                      {k.delta} vs i fjor
+                    </span>
+                  ) : (
+                    <DeltaBadge value={`${k.delta} vs i fjor`} />
+                  )}
                 </div>
               </div>
               <RingProgress pct={k.pct} size={48} stroke={4}>
-                <span className="text-[9px] font-semibold tabular-nums">{k.pct}%</span>
+                <span
+                  className={cn(
+                    "text-[9px] font-semibold tabular-nums",
+                    i === 0 ? "text-white" : "text-foreground",
+                  )}
+                >
+                  {k.pct}%
+                </span>
               </RingProgress>
             </div>
           </OsCard>
@@ -44,6 +74,7 @@ export function CoreDashboard() {
           subtitle="Faktisk · Prognose · Mål"
           className="lg:col-span-7"
           footer="Se detaljer"
+          tone="soft"
         >
           <Sparkline values={d.growthSeries.actual} className="h-28" />
           <div className="mt-3 grid grid-cols-3 gap-3 text-sm">

@@ -14,21 +14,51 @@ export function BusinessDashboard() {
 
   return (
     <div className="grid gap-4 p-6 lg:grid-cols-12 lg:gap-5">
-      {d.kpis.map((k) => (
-        <OsCard key={k.label} className="lg:col-span-3">
+      {d.kpis.map((k, i) => (
+        <OsCard key={k.label} className="lg:col-span-3" tone={i === 0 ? "hero" : "glass"}>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs text-muted-foreground">{k.label}</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight">
+              <p
+                className={cn(
+                  "text-xs",
+                  i === 0 ? "text-white/70" : "text-muted-foreground",
+                )}
+              >
+                {k.label}
+              </p>
+              <p
+                className={cn(
+                  "mt-1 text-xl font-semibold tabular-nums tracking-tight",
+                  i === 0 ? "text-white" : "text-foreground",
+                )}
+              >
                 {k.value}
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Mål: {k.goal}</p>
+              <p
+                className={cn(
+                  "mt-0.5 text-xs",
+                  i === 0 ? "text-white/65" : "text-muted-foreground",
+                )}
+              >
+                Mål: {k.goal}
+              </p>
               <div className="mt-1">
-                <DeltaBadge value={k.delta} />
+                {i === 0 ? (
+                  <span className="text-xs font-medium text-warning">{k.delta}</span>
+                ) : (
+                  <DeltaBadge value={k.delta} />
+                )}
               </div>
             </div>
             <RingProgress pct={k.pct} size={48} stroke={4}>
-              <span className="text-[9px] font-semibold tabular-nums">{k.pct}%</span>
+              <span
+                className={cn(
+                  "text-[9px] font-semibold tabular-nums",
+                  i === 0 ? "text-white" : "text-foreground",
+                )}
+              >
+                {k.pct}%
+              </span>
             </RingProgress>
           </div>
         </OsCard>

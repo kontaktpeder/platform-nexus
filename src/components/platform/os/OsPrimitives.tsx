@@ -8,29 +8,51 @@ export function OsCard({
   title,
   subtitle,
   footer,
+  tone = "glass",
 }: {
   children: ReactNode;
   className?: string;
   title?: string;
   subtitle?: string;
   footer?: string;
+  /** glass = frosted white; hero = day-atmosphere wash; soft = tinted wash */
+  tone?: "glass" | "hero" | "soft" | "solid";
 }) {
+  const isHero = tone === "hero";
+
   return (
     <section
       className={cn(
-        "flex flex-col rounded-2xl border border-border/60 bg-card p-5 shadow-soft",
+        "flex flex-col rounded-2xl p-5 transition-shadow duration-300",
+        tone === "glass" && "os-glass",
+        tone === "solid" && "border border-border/60 bg-card shadow-soft",
+        tone === "hero" && "os-hero-wash shadow-lift border-0",
+        tone === "soft" &&
+          "border border-white/40 bg-white/55 shadow-soft backdrop-blur-md",
         className,
       )}
     >
       {(title || subtitle) && (
         <header className="mb-4 shrink-0">
           {title && (
-            <h2 className="font-heading text-base font-semibold tracking-tight text-foreground">
+            <h2
+              className={cn(
+                "font-heading text-base font-semibold tracking-tight",
+                isHero ? "text-white" : "text-foreground",
+              )}
+            >
               {title}
             </h2>
           )}
           {subtitle && (
-            <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+            <p
+              className={cn(
+                "mt-0.5 text-sm",
+                isHero ? "text-white/80" : "text-muted-foreground",
+              )}
+            >
+              {subtitle}
+            </p>
           )}
         </header>
       )}
@@ -38,7 +60,12 @@ export function OsCard({
       {footer && (
         <button
           type="button"
-          className="mt-4 inline-flex items-center gap-0.5 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+          className={cn(
+            "mt-4 inline-flex items-center gap-0.5 text-sm font-medium transition-colors",
+            isHero
+              ? "text-white/90 hover:text-white"
+              : "text-primary hover:text-primary/80",
+          )}
         >
           {footer}
           <ChevronRight className="size-3.5" />
