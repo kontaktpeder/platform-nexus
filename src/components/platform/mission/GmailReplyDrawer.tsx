@@ -216,9 +216,15 @@ export function GmailReplyDrawer({
                   </a>
                 )}
                 {!unsub?.url && unsub?.oneClickUrl && (
-                  <p className="text-xs text-muted-foreground">
-                    One-click-avmelding finnes — bruk «Meld av» på køkortet (POST).
-                  </p>
+                  <a
+                    href={unsub.oneClickUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Åpne avmeldingslenke
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                 )}
               </div>
             </div>

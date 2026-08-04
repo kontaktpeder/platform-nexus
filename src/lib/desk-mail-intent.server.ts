@@ -426,10 +426,12 @@ export async function enrichDeskGmailItems(
     const enrich = byId.get(item.id);
     const unsub = unsubById.get(item.id);
     const title = cleanMailText(item.title) || item.title;
+    const unsubUrl = unsub?.url ?? null;
+    const unsubOneClick = unsub?.oneClickUrl ?? null;
     const unsubFields = {
       hasUnsubscribe: unsub?.has ?? item.hasUnsubscribe,
-      unsubscribeUrl: unsub?.url ?? null,
-      unsubscribeOneClickUrl: unsub?.oneClickUrl ?? null,
+      unsubscribeUrl: unsubUrl,
+      unsubscribeOneClickUrl: unsubOneClick,
       unsubscribeMailto: unsub?.mailto ?? null,
     };
     if (!enrich) {
@@ -440,6 +442,16 @@ export async function enrichDeskGmailItems(
         ...unsubFields,
       };
     }
+    // Never use unsubscribe endpoints as “neste steg”.
+    let ctaUrl = enrich.ctaUrl;
+    if (
+      ctaUrl &&
+      (ctaUrl === unsubUrl ||
+        ctaUrl === unsubOneClick ||
+        /unsubscribe|opt[-_]?out|email_unsubscribe/i.test(ctaUrl))
+    ) {
+      ctaUrl = null;
+    }
     return {
       ...item,
       title,
@@ -448,9 +460,9 @@ export async function enrichDeskGmailItems(
         item.subtitle,
       intent: enrich.intent,
       nextStep: enrich.nextStep,
-      ctaUrl: enrich.ctaUrl,
-      ctaLabel: enrich.ctaLabel,
-      ctaKind: enrich.ctaKind,
+      ctaUrl,
+      ctaLabel: ctaUrl ? enrich.ctaLabel : null,
+      ctaKind: ctaUrl ? enrich.ctaKind : enrich.ctaKind === "open_link" ? "fyi" : enrich.ctaKind,
       ...unsubFields,
     };
   });

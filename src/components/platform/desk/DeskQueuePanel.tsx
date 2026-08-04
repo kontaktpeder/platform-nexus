@@ -38,7 +38,6 @@ import {
 import {
   createDeskManualSignal,
   getDeskQueue,
-  oneClickUnsubscribe,
 } from "@/lib/desk-queue.functions";
 import type { DeskQueueItem, DeskQueueSource } from "@/lib/desk-queue.types";
 import { scheduleEntityFollowUp } from "@/lib/field.functions";
@@ -115,6 +114,8 @@ function QueueCard({
   onArchive,
   onTrash,
   onCreateContact,
+  onOpenGmail,
+  onOpenCta,
   onUnsubscribe,
   primaryLabel,
 }: {
@@ -129,6 +130,8 @@ function QueueCard({
   onArchive?: () => void;
   onTrash?: () => void;
   onCreateContact?: () => void;
+  onOpenGmail?: () => void;
+  onOpenCta?: () => void;
   onUnsubscribe?: () => void;
   primaryLabel?: string;
 }) {
@@ -138,6 +141,18 @@ function QueueCard({
   const tone = toneFor(item);
   const label = primaryLabel ?? (isDraft ? "Fortsett" : isWork ? "Stopp" : "Ferdig");
   const displayName = item.fromName || item.fromEmail || null;
+  const hasUnsub = !!(
+    item.unsubscribeUrl ||
+    item.unsubscribeOneClickUrl ||
+    item.unsubscribeMailto
+  );
+  // Don't show CTA if it's the same URL as unsubscribe.
+  const ctaDistinct =
+    !!item.ctaUrl &&
+    item.ctaUrl !== item.unsubscribeUrl &&
+    item.ctaUrl !== item.unsubscribeOneClickUrl;
+  const openSlots =
+    (item.href ? 1 : 0) + (ctaDistinct ? 1 : 0) + (hasUnsub ? 1 : 0);
 
   return (
     <li
@@ -206,34 +221,54 @@ function QueueCard({
         <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground/80">{item.title}</p>
       )}
 
-      {gmailMail && item.ctaUrl && (
-        <Button
-          type="button"
-          size="sm"
-          className="mt-3 h-9 w-full gap-1.5 rounded-xl text-xs"
-          disabled={busy}
-          onClick={() => {
-            window.open(item.ctaUrl!, "_blank", "noopener,noreferrer");
-          }}
+      {gmailMail && openSlots > 0 && (
+        <div
+          className={cn(
+            "mt-3 grid gap-1.5",
+            openSlots === 1 && "grid-cols-1",
+            openSlots === 2 && "grid-cols-2",
+            openSlots >= 3 && "grid-cols-3",
+          )}
         >
-          <ExternalLink className="h-3.5 w-3.5" />
-          {item.ctaLabel || "Åpne lenke"}
-        </Button>
-      )}
-
-      {gmailMail &&
-        (item.unsubscribeUrl || item.unsubscribeOneClickUrl || item.unsubscribeMailto) && (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="mt-1.5 h-9 w-full gap-1.5 rounded-xl text-xs"
-          disabled={busy}
-          onClick={onUnsubscribe}
-        >
-          <Unlink className="h-3.5 w-3.5" />
-          Meld av
-        </Button>
+          {item.href && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1 rounded-xl px-1.5 text-[11px]"
+              disabled={busy}
+              onClick={onOpenGmail}
+            >
+              <Mail className="h-3.5 w-3.5 shrink-0" />
+              I Gmail
+            </Button>
+          )}
+          {ctaDistinct && (
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 gap-1 rounded-xl px-1.5 text-[11px]"
+              disabled={busy}
+              onClick={onOpenCta}
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{item.ctaLabel || "Neste steg"}</span>
+            </Button>
+          )}
+          {hasUnsub && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-9 gap-1 rounded-xl px-1.5 text-[11px] text-muted-foreground"
+              disabled={busy}
+              onClick={onUnsubscribe}
+            >
+              <Unlink className="h-3.5 w-3.5 shrink-0" />
+              Meld av
+            </Button>
+          )}
+        </div>
       )}
 
       {gmailMail ? (
@@ -385,7 +420,6 @@ export function DeskQueuePanel({
   const runUndo = useServerFn(undoMorningItem);
   const runCreateContact = useServerFn(createContactFromSuggestion);
   const runScheduleFollowUp = useServerFn(scheduleEntityFollowUp);
-  const runOneClickUnsub = useServerFn(oneClickUnsubscribe);
 
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -570,22 +604,11 @@ export function DeskQueuePanel({
     setCreateItem(item);
   }
 
-  async function handleUnsubscribe(item: DeskQueueItem) {
-    // Prefer browser-safe body link; one-click header needs POST (not GET).
-    if (item.unsubscribeUrl) {
-      window.open(item.unsubscribeUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (item.unsubscribeOneClickUrl) {
-      setBusyId(item.id);
-      try {
-        await runOneClickUnsub({ data: { url: item.unsubscribeOneClickUrl } });
-        toast.success("Avmelding sendt");
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Kunne ikke melde av");
-      } finally {
-        setBusyId(null);
-      }
+  function handleUnsubscribe(item: DeskQueueItem) {
+    // Always send user to a page/mailto — no silent one-click POST + fake certainty toast.
+    const url = item.unsubscribeUrl || item.unsubscribeOneClickUrl;
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
     if (item.unsubscribeMailto) {
@@ -820,7 +843,17 @@ export function DeskQueuePanel({
                   setCreateName(item.fromName || item.fromEmail?.split("@")[0] || "");
                   setCreateItem(item);
                 }}
-                onUnsubscribe={() => void handleUnsubscribe(item)}
+                onOpenGmail={() => {
+                  if (item.href) {
+                    window.open(item.href, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                onOpenCta={() => {
+                  if (item.ctaUrl) {
+                    window.open(item.ctaUrl, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                onUnsubscribe={() => handleUnsubscribe(item)}
               />
             ))}
           </ul>
