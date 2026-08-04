@@ -278,9 +278,9 @@ function ProfilPage() {
               <Sparkles className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold">AI-forbruk</h2>
+              <h2 className="text-sm font-semibold">Forbruk & tjenester</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Nexus bruker Google Gemini direkte. Følg spend her (ikke i Lovable).
+                Gemini og Logo.dev — følg usage her (ikke i Lovable).
               </p>
               <ul className="mt-3 space-y-2">
                 <li>
@@ -313,6 +313,17 @@ function ProfilPage() {
                     className="flex items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted/40"
                   >
                     <span className="min-w-0 flex-1">Generative Language API — metrics</span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.logo.dev/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-xl border border-border/70 bg-background px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted/40"
+                  >
+                    <span className="min-w-0 flex-1">Logo.dev — dashboard</span>
                     <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </a>
                 </li>
