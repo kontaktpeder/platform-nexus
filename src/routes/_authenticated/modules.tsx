@@ -13,7 +13,7 @@ function ModulesPage() {
     <PlatformShell>
       <GlobalTopBar
         title="Moduler"
-        subtitle="Hva som er koblet, mangler, og planlagt"
+        subtitle="Dekning på tvers av alle organisasjonene dine"
       />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-10 pt-4">
         <ModulesOverview />

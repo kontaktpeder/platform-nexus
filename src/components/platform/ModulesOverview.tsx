@@ -1,19 +1,14 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import * as Icons from "lucide-react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { toast } from "sonner";
 import { ConnectionStatusBadge } from "@/components/platform/ConnectionStatusBadge";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { useResolvedLastWorkspace } from "@/lib/last-workspace.hooks";
-import {
-  getUserModulesOverview,
-  setWorkspaceModuleEnabled,
-} from "@/lib/modules-overview.functions";
+import { getUserModulesOverview } from "@/lib/modules-overview.functions";
 import type { ModulesOverviewRow } from "@/lib/modules-overview.types";
 import { cn } from "@/lib/utils";
 
@@ -58,15 +53,7 @@ function Section({
   );
 }
 
-function ModuleRow({
-  row,
-  onToggle,
-  toggling,
-}: {
-  row: ModulesOverviewRow;
-  onToggle?: (enabled: boolean) => void;
-  toggling?: boolean;
-}) {
+function ModuleRow({ row }: { row: ModulesOverviewRow }) {
   const Icon = iconFor(row.id);
   const orgLinks = row.connectedOrgs.slice(0, 8);
   const linkLabel = (o: ModulesOverviewRow["connectedOrgs"][number]) => {
@@ -155,14 +142,6 @@ function ModuleRow({
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-2">
-          {row.canToggle && onToggle && (
-            <Switch
-              checked={!!row.enabledOnActiveWorkspace}
-              disabled={toggling}
-              onCheckedChange={onToggle}
-              aria-label={`Slå ${row.name} ${row.enabledOnActiveWorkspace ? "av" : "på"}`}
-            />
-          )}
           {row.configureHref && row.kind !== "planned" && (
             <Button asChild size="sm" variant="ghost" className="h-9 gap-1 px-2 text-xs">
               <a href={row.configureHref}>
@@ -180,10 +159,8 @@ function ModuleRow({
 }
 
 export function ModulesOverview() {
-  const qc = useQueryClient();
   const lastWs = useResolvedLastWorkspace();
   const fetchOverview = useServerFn(getUserModulesOverview);
-  const setEnabled = useServerFn(setWorkspaceModuleEnabled);
 
   const overview = useQuery({
     queryKey: [
@@ -201,32 +178,6 @@ export function ModulesOverview() {
     enabled: !lastWs.isLoading,
     staleTime: 0,
     refetchOnMount: "always",
-  });
-
-  const toggleMut = useMutation({
-    mutationFn: (input: { moduleId: string; enabled: boolean }) => {
-      const wsId = overview.data?.activeWorkspace?.workspaceId;
-      if (!wsId) throw new Error("Ingen aktiv arbeidsflate");
-      return setEnabled({
-        data: {
-          workspaceId: wsId,
-          moduleId: input.moduleId,
-          enabled: input.enabled,
-        },
-      });
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["modules-overview"] });
-      if (lastWs.data) {
-        await qc.invalidateQueries({
-          queryKey: ["workspace-context", lastWs.data.orgSlug, lastWs.data.wsSlug],
-        });
-        await qc.invalidateQueries({
-          queryKey: ["connection-hub", lastWs.data.orgSlug],
-        });
-      }
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   if (lastWs.isLoading || overview.isLoading) {
@@ -274,38 +225,35 @@ export function ModulesOverview() {
         </span>
       </div>
 
-      {data.activeWorkspace ? (
-        <p className="text-sm text-muted-foreground">
-          Toggle gjelder{" "}
-          <span className="font-medium text-foreground">
-            {data.activeWorkspace.orgName} · {data.activeWorkspace.wsName}
-          </span>
-          . Hver organisasjon må kobles til sin egen org i Finance/Work — «Koblet»
-          på en core betyr alle dine Nexus-orger er linked.
+      <div className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3 text-sm">
+        <p className="font-medium text-foreground">Oversikt over alle organisasjonene dine</p>
+        <p className="mt-1 text-muted-foreground">
+          Status og «Koble mangler» gjelder hele porteføljen. Å slå en modul av/på
+          gjøres inne i hver organisasjon — ikke herfra.
         </p>
-      ) : (
-        <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm">
-          <p className="text-muted-foreground">
-            Velg en organisasjon/arbeidsflate for å slå moduler av/på.
+        {data.activeWorkspace ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Hurtiglenke til sist brukte:{" "}
+            <Link
+              to="/o/$orgSlug/w/$wsSlug/modules"
+              params={{
+                orgSlug: data.activeWorkspace.orgSlug,
+                wsSlug: data.activeWorkspace.wsSlug,
+              }}
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+            >
+              {data.activeWorkspace.orgName} · {data.activeWorkspace.wsName}
+            </Link>
           </p>
+        ) : (
           <Button asChild size="sm" variant="outline" className="mt-3 rounded-xl">
             <Link to="/app">Velg organisasjon</Link>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <Section title="Core-moduler">{core.map((row) => (
-        <ModuleRow
-          key={row.id}
-          row={row}
-          toggling={toggleMut.isPending}
-          onToggle={
-            row.canToggle && row.moduleId
-              ? (enabled) =>
-                  toggleMut.mutate({ moduleId: row.moduleId!, enabled })
-              : undefined
-          }
-        />
+        <ModuleRow key={row.id} row={row} />
       ))}</Section>
 
       <Section title="Integrasjoner">{integrations.map((row) => (
@@ -315,22 +263,6 @@ export function ModulesOverview() {
       <Section title="Planlagt">{planned.map((row) => (
         <ModuleRow key={row.id} row={row} />
       ))}</Section>
-
-      {data.activeWorkspace && (
-        <p className={cn("text-center text-xs text-muted-foreground")}>
-          Detaljert kobling per workspace:{" "}
-          <Link
-            to="/o/$orgSlug/w/$wsSlug/modules"
-            params={{
-              orgSlug: data.activeWorkspace.orgSlug,
-              wsSlug: data.activeWorkspace.wsSlug,
-            }}
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            {data.activeWorkspace.wsName} →
-          </Link>
-        </p>
-      )}
     </div>
   );
 }
