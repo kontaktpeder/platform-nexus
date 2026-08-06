@@ -2,6 +2,7 @@
  * Platform surfaces.
  *
  * - desk: /desk — NEXUS OS (primary on all viewports)
+ * - fortell: /desk/fortell — ChatGPT-style chat (persisted thread, full-bleed)
  * - capture: /hjem — quick field CTAs (Fang), reachable from OS dock
  *
  * Share data/functions across surfaces; do not share home/desk UI trees.

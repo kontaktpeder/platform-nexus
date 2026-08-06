@@ -59,6 +59,11 @@ import {
   startWorkSession,
   stopWorkSession,
 } from "@/lib/work-session";
+import {
+  clearFortellThread,
+  readFortellThread,
+  writeFortellThread,
+} from "@/lib/fortell-thread";
 
 const RELATION_KIND_LABEL: Record<FortellRelationProposal["kind"], string> = {
   member_of: "jobber i",
@@ -77,6 +82,7 @@ function relationKey(r: FortellRelationProposal): string {
 
 /**
  * Desk-only Fortell surface — tools with human confirmation.
+ * Same ChatGPT-style thread on mobile and desktop; history persists locally.
  * Keep separate from mobile /hjem capture CTAs.
  */
 export function FortellChat() {
@@ -93,7 +99,9 @@ export function FortellChat() {
   const lastWs = useMemo(() => getLastWorkspace(), []);
 
   const [instruction, setInstruction] = useState("");
-  const [history, setHistory] = useState<FortellChatMessage[]>([]);
+  const [history, setHistory] = useState<FortellChatMessage[]>(() =>
+    typeof window !== "undefined" ? readFortellThread() : [],
+  );
   const [result, setResult] = useState<FortellResult | null>(null);
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
@@ -131,6 +139,10 @@ export function FortellChat() {
     lang: "nb-NO",
     onError: (message) => toast.error(message),
   });
+
+  useEffect(() => {
+    writeFortellThread(history);
+  }, [history]);
 
   function appendTranscript(chunk: string) {
     setInstruction((prev) => {
@@ -620,6 +632,7 @@ export function FortellChat() {
             className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => {
               speech.stop();
+              clearFortellThread();
               setHistory([]);
               setResult(null);
               setWorkStopNote(null);
@@ -647,13 +660,13 @@ export function FortellChat() {
       />
 
       {!hasChat ? (
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-16 pt-10">
-          <div className="mb-10 flex max-w-lg flex-col items-center text-center">
-            <NexusMark size="hero" className="mb-7" />
-            <h1 className="font-heading text-4xl font-semibold tracking-tight sm:text-5xl">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-6 pt-6 sm:px-6 sm:pb-16 sm:pt-10">
+          <div className="mb-8 flex max-w-lg flex-col items-center text-center sm:mb-10">
+            <NexusMark size="hero" className="mb-5 sm:mb-7" />
+            <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-5xl">
               Hva skal vi gjøre?
             </h1>
-            <p className="mt-3 text-base text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground sm:text-base">
               Én inngang til alt — skriv det du trenger, så skjønner Nexus resten.
             </p>
           </div>
@@ -1347,7 +1360,7 @@ export function FortellChat() {
             </div>
           </div>
 
-          <div className="relative z-10 shrink-0 border-t border-border/50 bg-background/70 px-4 py-4 backdrop-blur-md sm:px-8">
+          <div className="relative z-10 shrink-0 border-t border-border/50 bg-background/80 px-3 py-3 backdrop-blur-md sm:px-8 sm:py-4">
             <div className="mx-auto w-full max-w-2xl">{composer}</div>
           </div>
         </>

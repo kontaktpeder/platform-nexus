@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DeskHome } from "@/components/platform/desk/DeskHome";
-import { NexusOsHeader } from "@/components/platform/os/NexusOsHeader";
-import { mockMeta } from "@/lib/os/mock-data";
 
-/** Fortell only — signal queue lives on Hele livet as Topp 3. */
+/**
+ * Fortell — ChatGPT-style full-bleed chat on all viewports.
+ * Signal queue lives on Hele livet (Topp 3). No OS header here —
+ * brand + thread own the surface (especially on mobile).
+ */
 export const Route = createFileRoute("/_authenticated/desk/fortell")({
   head: () => ({ meta: [{ title: "Fortell — Nexus" }] }),
   component: DeskFortellPage,
@@ -11,16 +13,8 @@ export const Route = createFileRoute("/_authenticated/desk/fortell")({
 
 function DeskFortellPage() {
   return (
-    <>
-      <NexusOsHeader
-        title="Fortell"
-        subtitle="Samtale og hjelp — køen ligger på I dag"
-        dateLabel={mockMeta.dateLabel}
-        kontekst="hele"
-      />
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <DeskHome />
-      </div>
-    </>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <DeskHome />
+    </div>
   );
 }
