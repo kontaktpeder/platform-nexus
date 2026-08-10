@@ -214,3 +214,25 @@
   background-image: var(--os-hero, linear-gradient(135deg, var(--primary), var(--secondary)));
   color: white;
 }
+
+/* Evening/night atmosphere: light text on dark canvas (nav stays charcoal). */
+.os-phase-dark {
+  --foreground: oklch(0.96 0.01 260);
+  --muted-foreground: oklch(0.78 0.02 260);
+  --card: oklch(0.3 0.03 260 / 0.78);
+  --card-foreground: oklch(0.96 0.01 260);
+  --popover: oklch(0.26 0.03 260);
+  --popover-foreground: oklch(0.96 0.01 260);
+  --background: oklch(0.24 0.03 260 / 0.55);
+  --surface: oklch(0.28 0.03 260 / 0.7);
+  --surface-elevated: oklch(0.34 0.03 260 / 0.85);
+  --muted: oklch(0.36 0.03 260 / 0.55);
+  --accent: oklch(0.38 0.04 260 / 0.65);
+  --accent-foreground: oklch(0.96 0.01 260);
+  --border: oklch(1 0 0 / 0.16);
+  --input: oklch(1 0 0 / 0.18);
+  --primary: oklch(0.78 0.09 195);
+  --primary-foreground: oklch(0.18 0.03 210);
+  --ring: color-mix(in oklab, var(--primary) 45%, transparent);
+  color: var(--foreground);
+}

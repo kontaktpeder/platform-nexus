@@ -3,11 +3,13 @@ import { NexusOsBottomNav } from "@/components/platform/os/NexusOsBottomNav";
 import { NexusOsSideNav } from "@/components/platform/os/NexusOsSideNav";
 import { WeekFocusHost } from "@/components/platform/os/WeekFocusHost";
 import { useDayAtmosphere } from "@/hooks/useDayAtmosphere";
+import { isDarkPhase } from "@/lib/os/day-atmosphere";
 import { cn } from "@/lib/utils";
 
 /**
  * OS shell — charcoal nav + living day-atmosphere canvas.
  * Desktop: side nav. Mobile: bottom dock. Background follows the clock.
+ * Evening/night flip canvas text tokens so content stays readable.
  */
 export function NexusOsShell({
   children,
@@ -19,6 +21,7 @@ export function NexusOsShell({
   lockMainScroll?: boolean;
 }) {
   const atmosphere = useDayAtmosphere();
+  const dark = isDarkPhase(atmosphere.phase);
 
   return (
     <div
@@ -61,7 +64,8 @@ export function NexusOsShell({
         />
         <div
           className={cn(
-            "relative flex min-h-0 min-w-0 flex-1 flex-col",
+            "os-phase-canvas relative flex min-h-0 min-w-0 flex-1 flex-col",
+            dark && "os-phase-dark",
             lockMainScroll ? "overflow-hidden" : "overflow-y-auto",
           )}
         >

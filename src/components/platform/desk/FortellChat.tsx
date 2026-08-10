@@ -69,6 +69,9 @@ import {
   getActiveFortellThread,
   startNewFortellThread,
 } from "@/lib/fortell-thread.functions";
+import { useDayAtmosphere } from "@/hooks/useDayAtmosphere";
+import { isDarkPhase } from "@/lib/os/day-atmosphere";
+import { cn } from "@/lib/utils";
 
 const RELATION_KIND_LABEL: Record<FortellRelationProposal["kind"], string> = {
   member_of: "jobber i",
@@ -104,6 +107,8 @@ export function FortellChat() {
   const listOrgs = useServerFn(listConnectedModuleOrgs);
   const runCatalog = useServerFn(fetchWorkTimerCatalog);
   const lastWs = useMemo(() => getLastWorkspace(), []);
+  const atmosphere = useDayAtmosphere();
+  const darkPhase = isDarkPhase(atmosphere.phase);
 
   const [instruction, setInstruction] = useState("");
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -690,21 +695,30 @@ export function FortellChat() {
     <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(55% 40% at 18% 12%, oklch(0.92 0.04 20 / 0.55), transparent 70%)," +
-            "radial-gradient(50% 38% at 88% 18%, oklch(0.93 0.03 250 / 0.45), transparent 70%)," +
-            "radial-gradient(60% 50% at 70% 95%, oklch(0.93 0.035 160 / 0.4), transparent 70%)," +
-            "radial-gradient(50% 40% at 8% 90%, oklch(0.93 0.04 300 / 0.35), transparent 70%)",
-        }}
+        className="pointer-events-none absolute inset-0 transition-opacity duration-700"
+        style={
+          darkPhase
+            ? {
+                background:
+                  "radial-gradient(55% 40% at 18% 12%, oklch(0.55 0.08 280 / 0.35), transparent 70%)," +
+                  "radial-gradient(50% 38% at 88% 18%, oklch(0.48 0.08 230 / 0.3), transparent 70%)," +
+                  "radial-gradient(60% 50% at 70% 95%, oklch(0.42 0.07 300 / 0.28), transparent 70%)",
+              }
+            : {
+                background:
+                  "radial-gradient(55% 40% at 18% 12%, oklch(0.92 0.04 20 / 0.55), transparent 70%)," +
+                  "radial-gradient(50% 38% at 88% 18%, oklch(0.93 0.03 250 / 0.45), transparent 70%)," +
+                  "radial-gradient(60% 50% at 70% 95%, oklch(0.93 0.035 160 / 0.4), transparent 70%)," +
+                  "radial-gradient(50% 40% at 8% 90%, oklch(0.93 0.04 300 / 0.35), transparent 70%)",
+              }
+        }
       />
 
       {!hasChat ? (
         <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-6 pt-6 sm:px-6 sm:pb-16 sm:pt-10">
           <div className="mb-8 flex max-w-lg flex-col items-center text-center sm:mb-10">
             <NexusMark size="hero" className="mb-5 sm:mb-7" />
-            <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-5xl">
+            <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
               Hva skal vi gjøre?
             </h1>
             <p className="mt-3 text-sm text-muted-foreground sm:text-base">
@@ -743,21 +757,36 @@ export function FortellChat() {
                   key={`${m.role}-${i}-${m.content.slice(0, 24)}`}
                   className={
                     m.role === "user"
-                      ? "ml-auto max-w-[85%] rounded-3xl rounded-br-lg bg-foreground px-4 py-3 text-sm leading-relaxed text-background"
+                      ? cn(
+                          "ml-auto max-w-[85%] rounded-3xl rounded-br-lg px-4 py-3 text-sm leading-relaxed",
+                          darkPhase
+                            ? "bg-white/18 text-white backdrop-blur-sm"
+                            : "bg-foreground text-background",
+                        )
                       : "max-w-[95%] space-y-1"
                   }
                 >
                   {m.role === "assistant" && (
                     <div className="mb-1.5 flex items-center gap-2">
                       <NexusMark size="sm" alt="" />
-                      <p className="text-xs font-medium text-muted-foreground">Nexus</p>
+                      <p
+                        className={cn(
+                          "text-xs font-medium",
+                          darkPhase ? "text-white/65" : "text-muted-foreground",
+                        )}
+                      >
+                        Nexus
+                      </p>
                     </div>
                   )}
                   <p
                     className={
                       m.role === "user"
                         ? "whitespace-pre-wrap"
-                        : "whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                        : cn(
+                            "whitespace-pre-wrap text-sm leading-relaxed",
+                            darkPhase ? "text-white/92" : "text-foreground",
+                          )
                     }
                   >
                     {m.content}
