@@ -25,9 +25,10 @@ export function buildPersonalContextPromptBlock(
     : `Dossier sist lagret: ${record.updatedAt.slice(0, 10)}.`;
 
   return [
-    "PERSONLIG KONTEKST (bruker-forfattet dossier — ikke oppfunnet av deg):",
+    "PERSONLIG KONTEKST (dossier + Fortell-minne — ikke oppfunnet av deg):",
     generated,
     "Business-status eldre enn ~30 dager skal verifiseres før viktige råd.",
+    "Preferanser i Fortell-minne gjelder inntil brukeren sier noe annet.",
     "---",
     capped,
     "---",

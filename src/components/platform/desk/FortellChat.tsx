@@ -65,6 +65,10 @@ import {
   readFortellThread,
   writeFortellThread,
 } from "@/lib/fortell-thread";
+import {
+  getActiveFortellThread,
+  startNewFortellThread,
+} from "@/lib/fortell-thread.functions";
 
 const RELATION_KIND_LABEL: Record<FortellRelationProposal["kind"], string> = {
   member_of: "jobber i",
@@ -83,13 +87,15 @@ function relationKey(r: FortellRelationProposal): string {
 
 /**
  * Desk-only Fortell surface — tools with human confirmation.
- * Same ChatGPT-style thread on mobile and desktop; history persists locally.
- * Keep separate from mobile /hjem capture CTAs.
+ * ChatGPT-style thread; history on server + local cache.
+ * Soft prefs auto-merge into personal context; hard writes still confirm.
  */
 export function FortellChat() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const run = useServerFn(runFortell);
+  const loadThread = useServerFn(getActiveFortellThread);
+  const newThread = useServerFn(startNewFortellThread);
   const applyContact = useServerFn(applyFortellContactProposal);
   const applyAgreement = useServerFn(applyFortellControlAgreement);
   const applyRelation = useServerFn(applySuggestedRelation);
@@ -100,6 +106,7 @@ export function FortellChat() {
   const lastWs = useMemo(() => getLastWorkspace(), []);
 
   const [instruction, setInstruction] = useState("");
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [history, setHistory] = useState<FortellChatMessage[]>(() =>
     typeof window !== "undefined" ? readFortellThread() : [],
   );
@@ -146,6 +153,24 @@ export function FortellChat() {
     writeFortellThread(history);
   }, [history]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadThread()
+      .then((payload) => {
+        if (cancelled) return;
+        setThreadId(payload.threadId);
+        if (payload.messages.length > 0) {
+          setHistory(payload.messages.slice(-32));
+        }
+      })
+      .catch(() => {
+        // Keep local cache if server history is unavailable
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadThread]);
+
   function appendTranscript(chunk: string) {
     setInstruction((prev) => {
       const base = prev.trimEnd();
@@ -169,7 +194,8 @@ export function FortellChat() {
       return run({
         data: {
           instruction: text,
-          history,
+          threadId,
+          history: history.slice(-16),
           preferredOrgSlug:
             session?.platformOrgSlug ?? lastWs?.orgSlug ?? null,
           activeSession: session
@@ -186,8 +212,9 @@ export function FortellChat() {
     },
     onSuccess: (res) => {
       speech.stop();
+      if (res.threadId) setThreadId(res.threadId);
       setHistory((prev) =>
-        [...prev, { role: "assistant" as const, content: res.answer }].slice(-16),
+        [...prev, { role: "assistant" as const, content: res.answer }].slice(-32),
       );
       setResult(res);
       setDraftDone(false);
@@ -348,7 +375,7 @@ export function FortellChat() {
     setResult(null);
     setInstruction("");
     setHistory((prev) =>
-      [...prev, { role: "user" as const, content: text }].slice(-16),
+      [...prev, { role: "user" as const, content: text }].slice(-32),
     );
     mut.mutate(text);
   }
@@ -635,10 +662,21 @@ export function FortellChat() {
             className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => {
               speech.stop();
-              clearFortellThread();
-              setHistory([]);
-              setResult(null);
-              setWorkStopNote(null);
+              void newThread()
+                .then((payload) => {
+                  setThreadId(payload.threadId);
+                  clearFortellThread();
+                  setHistory([]);
+                  setResult(null);
+                  setWorkStopNote(null);
+                })
+                .catch(() => {
+                  clearFortellThread();
+                  setThreadId(null);
+                  setHistory([]);
+                  setResult(null);
+                  setWorkStopNote(null);
+                });
             }}
           >
             Ny chat

@@ -149,10 +149,12 @@ export type FortellResult = {
   relationProposals: FortellRelationProposal[];
   agreementProposal: FortellAgreementProposal | null;
   manualSignalSaved: boolean;
+  threadId: string | null;
 };
 
 const Input = z.object({
   instruction: z.string().min(2).max(2000),
+  threadId: z.string().uuid().nullable().optional(),
   preferredOrgSlug: z.string().max(80).nullable().optional(),
   history: z
     .array(
@@ -1288,6 +1290,7 @@ export const runFortell = createServerFn({ method: "POST" })
       personalBlock ?? "",
       forcedContextBlock,
       "Du har samtalehistorikk: les tidligere meldinger og hold kontekst (oppfølgingsspørsmål, tidligere beslutninger).",
+      "Myke preferanser fra tidligere Fortell-samtaler ligger i PERSONLIG KONTEKST — bruk dem. Hard lagring (kontakt/relasjon/Control) krever fortsatt foreslå-tools + brukerbekreftelse.",
       "Du har KUN disse verktøyene:",
       "1) readContact — les person/selskap i Nexus",
       "2) searchWeb / lookupBrregCompany / getBrregRoles — finn mer info på nett/Brreg",
@@ -1384,8 +1387,41 @@ export const runFortell = createServerFn({ method: "POST" })
           : `${out.relationProposals.length} relasjonsforslag klare — godkjenn under.`;
     }
 
+    const finalAnswer = answer || fallback;
+
+    let resolvedThreadId: string | null = null;
+    try {
+      const {
+        absorbFortellMemory,
+        appendFortellTurn,
+        resolveFortellThreadId,
+      } = await import("@/lib/fortell-memory.server");
+      resolvedThreadId = await resolveFortellThreadId(
+        supabase,
+        userId,
+        data.threadId,
+      );
+      await appendFortellTurn(
+        supabase,
+        userId,
+        resolvedThreadId,
+        data.instruction,
+        finalAnswer,
+      );
+      // Soft memory — never block the chat response on extract failures
+      void absorbFortellMemory(
+        supabase,
+        userId,
+        data.instruction,
+        finalAnswer,
+        data.history ?? [],
+      ).catch(() => undefined);
+    } catch {
+      // History/memory persistence is best-effort; chat still returns
+    }
+
     return {
-      answer: answer || fallback,
+      answer: finalAnswer,
       steps,
       draft: out.draft,
       workProposal: out.workProposal,
@@ -1398,6 +1434,7 @@ export const runFortell = createServerFn({ method: "POST" })
       relationProposals: out.relationProposals,
       agreementProposal: out.agreementProposal,
       manualSignalSaved: out.manualSignalSaved,
+      threadId: resolvedThreadId,
     };
   });
 

@@ -1,6 +1,6 @@
 /**
- * Persist Fortell thread locally so mobile/desktop keep ChatGPT-style history
- * across navigation and refresh. Not synced to server (v0).
+ * Local cache for Fortell thread while server history loads / offline.
+ * Canonical history lives in fortell_threads + fortell_messages.
  */
 
 import type { FortellChatMessage } from "@/lib/fortell.functions";
