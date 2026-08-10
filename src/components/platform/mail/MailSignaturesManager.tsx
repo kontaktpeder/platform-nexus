@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { MAIL_TONE_LABEL, type MailTone } from "@/lib/mail-compose";
 import {
   buildSignatureHtml,
@@ -25,6 +24,7 @@ import { resizeImageFile } from "@/lib/resize-image";
 import {
   deleteMailSignature,
   listMailComposeOptions,
+  uploadMailSignatureLogo,
   upsertMailSignature,
   type MailSignature,
 } from "@/lib/mail-settings.functions";
@@ -97,6 +97,7 @@ export function MailSignaturesManager() {
   const listOpts = useServerFn(listMailComposeOptions);
   const upsert = useServerFn(upsertMailSignature);
   const remove = useServerFn(deleteMailSignature);
+  const uploadLogo = useServerFn(uploadMailSignatureLogo);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const optsQ = useQuery({
@@ -187,15 +188,24 @@ export function MailSignaturesManager() {
         maxHeight: 120,
         quality: 0.85,
       });
-      const path = `${user.id}/mail-logo-${editingId ?? "new"}-${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("avatars").upload(path, blob, {
-        upsert: true,
-        contentType: mimeType,
-        cacheControl: "86400",
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const s = String(reader.result ?? "");
+          resolve(s.includes(",") ? s.slice(s.indexOf(",") + 1) : s);
+        };
+        reader.onerror = () => reject(new Error("Kunne ikke lese bildet"));
+        reader.readAsDataURL(blob);
       });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
-      setDraft((d) => ({ ...d, logoUrl: `${pub.publicUrl}?t=${Date.now()}` }));
+      const res = await uploadLogo({
+        data: {
+          dataBase64,
+          mimeType,
+          ext,
+          signatureId: editingId,
+        },
+      });
+      setDraft((d) => ({ ...d, logoUrl: res.logoUrl }));
       toast.success("Logo lastet opp (komprimert)");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Opplasting feilet";

@@ -230,3 +230,53 @@ export const deleteMailSignature = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+const MAIL_LOGOS_BUCKET = "mail-logos";
+
+/** Ensure public mail-logos bucket exists, then upload resized logo (service role). */
+export const uploadMailSignatureLogo = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        /** Base64 without data: URL prefix. */
+        dataBase64: z.string().min(1).max(2_000_000),
+        mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+        ext: z.enum(["jpg", "png", "webp", "gif"]),
+        signatureId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true; logoUrl: string }> => {
+    const { userId } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = supabaseAdmin;
+
+    const { data: buckets, error: listErr } = await admin.storage.listBuckets();
+    if (listErr) throw listErr;
+    if (!buckets?.some((b) => b.id === MAIL_LOGOS_BUCKET || b.name === MAIL_LOGOS_BUCKET)) {
+      const { error: createErr } = await admin.storage.createBucket(MAIL_LOGOS_BUCKET, {
+        public: true,
+        fileSizeLimit: 1_048_576,
+        allowedMimeTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+      });
+      if (createErr && !/already exists|duplicate/i.test(createErr.message)) {
+        throw createErr;
+      }
+    }
+
+    const bytes = Buffer.from(data.dataBase64, "base64");
+    if (bytes.length < 32) throw new Error("Ugyldig bilde");
+    if (bytes.length > 1_048_576) throw new Error("Logo er for stor (maks 1 MB)");
+
+    const path = `${userId}/mail-logo-${data.signatureId ?? "new"}-${Date.now()}.${data.ext}`;
+    const { error: upErr } = await admin.storage.from(MAIL_LOGOS_BUCKET).upload(path, bytes, {
+      upsert: true,
+      contentType: data.mimeType,
+      cacheControl: "86400",
+    });
+    if (upErr) throw upErr;
+
+    const { data: pub } = admin.storage.from(MAIL_LOGOS_BUCKET).getPublicUrl(path);
+    return { ok: true, logoUrl: `${pub.publicUrl}?t=${Date.now()}` };
+  });
