@@ -24,6 +24,7 @@ import {
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
 import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
+import { MailDraftBodyField } from "@/components/platform/mail/MailDraftBodyField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,6 +108,7 @@ export function InboxAssistantCard({
     fromDisplayName: null,
     signatureId: null,
     signatureBody: null,
+    signatureHtml: null,
   });
 
   const speech = useSpeechToText({
@@ -240,6 +242,7 @@ export function InboxAssistantCard({
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          signatureHtml: sel.signatureHtml,
           attachments: draftAttachments.length ? draftAttachments : undefined,
         },
       });
@@ -423,13 +426,10 @@ export function InboxAssistantCard({
                 maxLength={300}
                 className="h-11 rounded-xl bg-background"
               />
-              <Textarea
+              <MailDraftBodyField
                 value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                placeholder="Melding… (signatur legges på ved lagre/send)"
+                onChange={setDraftBody}
                 disabled={draftSent}
-                rows={8}
-                className="rounded-xl bg-background text-base"
               />
               {!draftSent && (
                 <>

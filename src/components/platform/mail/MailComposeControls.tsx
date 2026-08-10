@@ -26,6 +26,7 @@ export type MailComposeSelection = {
   fromDisplayName: string | null;
   signatureId: string | null;
   signatureBody: string | null;
+  signatureHtml: string | null;
 };
 
 type Props = {
@@ -103,6 +104,7 @@ export function MailComposeControls({
       fromDisplayName: sender?.displayName ?? null,
       signatureId: sig?.id ?? null,
       signatureBody: sig?.body ?? null,
+      signatureHtml: sig?.htmlBody ?? null,
     };
   }, [senders, signatures, fromEmail, signatureId]);
 
@@ -112,6 +114,8 @@ export function MailComposeControls({
     onChangeRef.current?.(selection);
   }, [selection]);
 
+  const sig = signatures.find((s) => s.id === signatureId) ?? null;
+  const sigPreviewHtml = sig?.htmlBody?.trim() || null;
   const sigPreview = selection.signatureBody?.trim() || null;
 
   return (
@@ -185,15 +189,27 @@ export function MailComposeControls({
         </p>
       )}
 
-      {sigPreview && (
+      {sigPreviewHtml ? (
         <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-2">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Signatur forhåndsvisning
           </p>
-          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-muted-foreground">
-            {sigPreview}
-          </pre>
+          <div
+            className="max-w-full overflow-hidden text-xs leading-relaxed [&_img]:max-h-10"
+            dangerouslySetInnerHTML={{ __html: sigPreviewHtml }}
+          />
         </div>
+      ) : (
+        sigPreview && (
+          <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Signatur forhåndsvisning
+            </p>
+            <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-muted-foreground">
+              {sigPreview}
+            </pre>
+          </div>
+        )
       )}
     </div>
   );

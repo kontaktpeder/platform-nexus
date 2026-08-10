@@ -770,23 +770,47 @@ function encodeAttachmentBytes(data: Uint8Array): string {
   return btoa(binary);
 }
 
+function buildAlternativePart(body: string, bodyHtml?: string | null): string {
+  const html = (bodyHtml ?? "").trim();
+  if (!html) {
+    return [
+      `Content-Type: text/plain; charset="UTF-8"`,
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      body,
+    ].join("\r\n");
+  }
+  const altBoundary = `nexus_alt_${Date.now().toString(36)}`;
+  return [
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    "",
+    `--${altBoundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    body,
+    `--${altBoundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    html,
+    `--${altBoundary}--`,
+  ].join("\r\n");
+}
+
 function buildMultipartRaw(opts: {
   to: string;
   cc?: string;
   subject: string;
   body: string;
+  bodyHtml?: string | null;
   attachments: GmailAttachmentBytes[];
   from?: { email: string; displayName?: string | null } | null;
   inReplyTo?: string;
   references?: string;
 }): string {
   const boundary = `nexus_${Date.now().toString(36)}`;
-  const textPart = [
-    `Content-Type: text/plain; charset="UTF-8"`,
-    "Content-Transfer-Encoding: 8bit",
-    "",
-    opts.body,
-  ].join("\r\n");
+  const textPart = buildAlternativePart(opts.body, opts.bodyHtml);
 
   const fileParts = opts.attachments.map((att) => {
     const filename = safeAttachmentFilename(att.filename);
@@ -919,6 +943,7 @@ function buildComposeRaw(opts: {
   to: string;
   subject: string;
   body: string;
+  bodyHtml?: string | null;
   from?: { email: string; displayName?: string | null } | null;
   cc?: string;
   inReplyTo?: string;
@@ -926,12 +951,14 @@ function buildComposeRaw(opts: {
   attachments?: GmailAttachmentBytes[];
 }): string {
   const attachments = opts.attachments?.filter((a) => a.data.length > 0) ?? [];
+  const html = (opts.bodyHtml ?? "").trim();
   if (attachments.length > 0) {
     return buildMultipartRaw({
       to: opts.to,
       cc: opts.cc,
       subject: opts.subject,
       body: opts.body,
+      bodyHtml: html || null,
       from: opts.from,
       inReplyTo: opts.inReplyTo,
       references: opts.references,
@@ -943,6 +970,33 @@ function buildComposeRaw(opts: {
     opts.inReplyTo && !opts.subject.toLowerCase().startsWith("re:")
       ? `Re: ${opts.subject}`
       : opts.subject;
+  if (html) {
+    const boundary = `nexus_alt_${Date.now().toString(36)}`;
+    const mime = [
+      ...(fromHeader ? [`From: ${fromHeader}`] : []),
+      `To: ${opts.to}`,
+      ...(opts.cc?.trim() ? [`Cc: ${opts.cc}`] : []),
+      `Subject: ${encodeHeaderValue(subject)}`,
+      ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+      ...(opts.references ? [`References: ${opts.references}`] : []),
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      opts.body,
+      `--${boundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      html,
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+    return base64UrlEncode(mime);
+  }
   const lines = [
     ...(fromHeader ? [`From: ${fromHeader}`] : []),
     `To: ${opts.to}`,
@@ -958,11 +1012,12 @@ function buildComposeRaw(opts: {
   return base64UrlEncode(lines.join("\r\n"));
 }
 
-/** Send email (plain or with file/image attachments). */
+/** Send email (plain, HTML signature, and/or file attachments). */
 export async function sendGmailMessage(opts: {
   to: string;
   subject: string;
   body: string;
+  bodyHtml?: string | null;
   from?: { email: string; displayName?: string | null } | null;
   cc?: string;
   attachments?: GmailAttachmentBytes[];
@@ -986,6 +1041,7 @@ export async function createGmailComposeDraft(opts: {
   to: string;
   subject: string;
   body: string;
+  bodyHtml?: string | null;
   from?: { email: string; displayName?: string | null } | null;
   cc?: string;
   attachments?: GmailAttachmentBytes[];

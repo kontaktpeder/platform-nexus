@@ -1,5 +1,7 @@
 /** Shared mail compose helpers (client + server safe). */
 
+import { plainBodyToHtml } from "@/lib/mail-signature-build";
+
 export type MailTone = "casual" | "professional";
 
 export const MAIL_TONE_LABEL: Record<MailTone, string> = {
@@ -29,6 +31,17 @@ export function appendMailSignature(
   if (!sig) return base;
   if (base.endsWith(sig)) return base;
   return `${base}\n\n${sig}`;
+}
+
+/** Escape body to HTML and append HTML signature (when present). */
+export function appendMailSignatureHtml(
+  body: string,
+  signatureHtml: string | null | undefined,
+): string | null {
+  const sig = (signatureHtml ?? "").trim();
+  if (!sig) return null;
+  const base = stripTrailingSignOff(body);
+  return `${plainBodyToHtml(base)}<br>${sig}`;
 }
 
 export function pickDefaultSignatureId<

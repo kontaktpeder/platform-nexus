@@ -786,6 +786,7 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
         fromEmail: z.string().email().nullable().optional(),
         fromDisplayName: z.string().max(80).nullable().optional(),
         signatureBody: z.string().max(4000).nullable().optional(),
+        signatureHtml: z.string().max(20000).nullable().optional(),
         attachments: z
           .array(
             z.object({
@@ -801,9 +802,10 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const gmail = await import("@/lib/inbox/gmail.server");
-    const { appendMailSignature } = await import("@/lib/mail-compose");
+    const { appendMailSignature, appendMailSignatureHtml } = await import("@/lib/mail-compose");
     const { validateMailAttachments } = await import("@/lib/mail-attachments");
     const body = appendMailSignature(data.body, data.signatureBody);
+    const bodyHtml = appendMailSignatureHtml(data.body, data.signatureHtml);
     const from = data.fromEmail
       ? { email: data.fromEmail, displayName: data.fromDisplayName ?? null }
       : null;
@@ -821,6 +823,7 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
         to: data.to,
         subject: data.subject,
         body,
+        bodyHtml,
         from,
         attachments,
       });
@@ -835,6 +838,7 @@ export const sendAssistantDraft = createServerFn({ method: "POST" })
       to: data.to,
       subject: data.subject,
       body,
+      bodyHtml,
       from,
       attachments,
     });

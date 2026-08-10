@@ -20,6 +20,7 @@ import {
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
 import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
+import { MailDraftBodyField } from "@/components/platform/mail/MailDraftBodyField";
 import { NexusMark } from "@/components/platform/NexusMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,6 +131,7 @@ export function FortellChat() {
     fromDisplayName: null,
     signatureId: null,
     signatureBody: null,
+    signatureHtml: null,
   });
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
@@ -245,6 +247,7 @@ export function FortellChat() {
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          signatureHtml: sel.signatureHtml,
           attachments: draftAttachments.length ? draftAttachments : undefined,
         },
       });
@@ -1279,13 +1282,10 @@ export function FortellChat() {
                 maxLength={300}
                 className="h-11 rounded-xl bg-background"
               />
-              <Textarea
+              <MailDraftBodyField
                 value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                placeholder="Melding… (signatur legges på ved lagre/send)"
+                onChange={setDraftBody}
                 disabled={draftDone}
-                rows={7}
-                className="rounded-xl bg-background text-base"
               />
               {!draftDone && (
                 <>

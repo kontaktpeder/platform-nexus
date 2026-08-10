@@ -12,9 +12,9 @@ import {
   type MailComposeSelection,
 } from "@/components/platform/mail/MailComposeControls";
 import { MailAttachmentsField } from "@/components/platform/mail/MailAttachmentsField";
+import { MailDraftBodyField } from "@/components/platform/mail/MailDraftBodyField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { generateContactEmailDraft, sendContactEmail } from "@/lib/contact-email.functions";
 import { setContactEmail } from "@/lib/customers.functions";
 import { stripTrailingSignOff } from "@/lib/mail-compose";
@@ -45,6 +45,7 @@ export function ContactEmailSection({
     fromDisplayName: null,
     signatureId: null,
     signatureBody: null,
+    signatureHtml: null,
   });
 
   const emailMut = useMutation({
@@ -88,6 +89,7 @@ export function ContactEmailSection({
           fromEmail: sel.fromEmail,
           fromDisplayName: sel.fromDisplayName,
           signatureBody: sel.signatureBody,
+          signatureHtml: sel.signatureHtml,
           attachments: attachments.length ? attachments : undefined,
         },
       });
@@ -195,12 +197,11 @@ export function ContactEmailSection({
               maxLength={300}
               className="h-11 rounded-xl"
             />
-            <Textarea
-              placeholder={`Skriv til ${contactName}… (signatur legges på ved send)`}
+            <MailDraftBodyField
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={6}
-              className="rounded-xl text-base"
+              onChange={setBody}
+              placeholder={`Skriv til ${contactName}… (signatur legges på ved send)`}
+              size="default"
             />
 
             <div className="flex gap-2">
