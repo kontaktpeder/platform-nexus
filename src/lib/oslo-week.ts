@@ -42,6 +42,43 @@ export function osloWeekKey(date = new Date()): string {
   return `${weekYear}-W${week}`;
 }
 
+/** Oslo calendar date as YYYY-MM-DD. */
+export function osloDayKey(date = new Date()): string {
+  const { y, m, d } = osloYmd(date);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Shift an Oslo day_key by ±N calendar days. */
+export function shiftOsloDayKey(dayKey: string, deltaDays: number): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey.trim());
+  if (!m) return osloDayKey();
+  const utc = new Date(
+    Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0),
+  );
+  utc.setUTCDate(utc.getUTCDate() + deltaDays);
+  const y = utc.getUTCFullYear();
+  const mo = utc.getUTCMonth() + 1;
+  const d = utc.getUTCDate();
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Human label for an Oslo day_key (nb-NO). */
+export function formatOsloDayLabel(dayKey: string, ref = new Date()): string {
+  const today = osloDayKey(ref);
+  if (dayKey === today) return "I dag";
+  if (dayKey === shiftOsloDayKey(today, -1)) return "I går";
+  if (dayKey === shiftOsloDayKey(today, 1)) return "I morgen";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey.trim());
+  if (!m) return dayKey;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0));
+  return new Intl.DateTimeFormat("nb-NO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(d);
+}
+
 export function isSameOsloWeek(isoDate: string | null, ref = new Date()): boolean {
   if (!isoDate) return false;
   const d = new Date(isoDate);

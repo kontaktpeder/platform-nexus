@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DeskQueuePanel } from "@/components/platform/desk/DeskQueuePanel";
+import { DailyAlignmentSection } from "@/components/platform/os/DailyAlignmentCard";
 import {
   Initials,
   OsCard,
@@ -18,6 +19,16 @@ export function HeleLivetDashboard() {
   return (
     <>
       <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-12 lg:gap-5">
+        <DailyAlignmentSection />
+
+        {/* Kø = Topp 3 — full actions, adapted width */}
+        <div className="lg:col-span-5">
+          <DeskQueuePanel
+            variant="dashboard"
+            onOpenContact={setPanelEntityId}
+          />
+        </div>
+
         <OsCard title="Dagens flyt" className="lg:col-span-3" footer="Se kalender">
           <ol className="relative space-y-4 border-l border-border/80 pl-4">
             {d.timeline.map((item) => (
@@ -31,14 +42,6 @@ export function HeleLivetDashboard() {
             ))}
           </ol>
         </OsCard>
-
-        {/* Kø = Topp 3 — full actions, adapted width */}
-        <div className="lg:col-span-5">
-          <DeskQueuePanel
-            variant="dashboard"
-            onOpenContact={setPanelEntityId}
-          />
-        </div>
 
         <OsCard title="Energi & rutiner" className="lg:col-span-4" footer="Se detaljer" tone="soft">
           <div className="flex flex-wrap justify-around gap-4">

@@ -1197,6 +1197,10 @@ export const runFortell = createServerFn({ method: "POST" })
       "@/lib/personal-context.server"
     );
     const personalBlock = await loadPersonalContextPromptBlock(supabase, userId);
+    const { loadDailyAlignmentPromptBlock } = await import(
+      "@/lib/daily-alignment.server"
+    );
+    const alignmentBlock = await loadDailyAlignmentPromptBlock(supabase, userId);
 
     // Hard evening / tomorrow check — do not rely on the model choosing tools.
     let forcedContextBlock = "";
@@ -1288,6 +1292,7 @@ export const runFortell = createServerFn({ method: "POST" })
       `I dag er ${osloToday()} (Europe/Oslo).`,
       sessionLine,
       personalBlock ?? "",
+      alignmentBlock ?? "",
       forcedContextBlock,
       "Du har samtalehistorikk: les tidligere meldinger og hold kontekst (oppfølgingsspørsmål, tidligere beslutninger).",
       "Myke preferanser fra tidligere Fortell-samtaler ligger i PERSONLIG KONTEKST — bruk dem. Hard lagring (kontakt/relasjon/Control) krever fortsatt foreslå-tools + brukerbekreftelse.",

@@ -76,6 +76,45 @@ export type Database = {
           },
         ]
       }
+      daily_alignments: {
+        Row: {
+          created_at: string
+          day_key: string
+          id: string
+          identity_energy: string
+          north_star: string
+          service_focus: string
+          tomorrow_priorities: string
+          updated_at: string
+          user_id: string
+          win_today: string
+        }
+        Insert: {
+          created_at?: string
+          day_key: string
+          id?: string
+          identity_energy?: string
+          north_star?: string
+          service_focus?: string
+          tomorrow_priorities?: string
+          updated_at?: string
+          user_id: string
+          win_today?: string
+        }
+        Update: {
+          created_at?: string
+          day_key?: string
+          id?: string
+          identity_energy?: string
+          north_star?: string
+          service_focus?: string
+          tomorrow_priorities?: string
+          updated_at?: string
+          user_id?: string
+          win_today?: string
+        }
+        Relationships: []
+      }
       entities: {
         Row: {
           created_at: string
