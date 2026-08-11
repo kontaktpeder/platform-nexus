@@ -46,7 +46,7 @@ import {
   type FortellResult,
   type FortellWorkProposal,
 } from "@/lib/fortell.functions";
-import { openDocumentPdfWindow } from "@/lib/document-pdf";
+import { downloadDocumentPdf } from "@/lib/document-pdf";
 import {
   applySuggestedRelation,
   sendAssistantDraft,
@@ -936,15 +936,24 @@ export function FortellChat() {
                 type="button"
                 className="rounded-xl"
                 onClick={() => {
-                  const ok = openDocumentPdfWindow({
-                    title: pdfProposal.title,
-                    body: pdfProposal.body,
-                  });
-                  if (!ok) {
-                    toast.error("Tillat pop-up for å åpne PDF-vinduet");
-                    return;
-                  }
-                  toast.success("Åpnet — velg «Lagre som PDF» i utskriftsdialogen");
+                  void (async () => {
+                    try {
+                      toast.message("Lager PDF…");
+                      await downloadDocumentPdf({
+                        title: pdfProposal.title,
+                        body: pdfProposal.body,
+                        filename: pdfProposal.filename,
+                      });
+                      toast.success("PDF lastet ned");
+                    } catch (err) {
+                      console.error(err);
+                      toast.error(
+                        err instanceof Error
+                          ? err.message
+                          : "Kunne ikke lage PDF",
+                      );
+                    }
+                  })();
                 }}
               >
                 <FileDown className="h-4 w-4" />

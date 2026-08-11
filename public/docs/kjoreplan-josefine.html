@@ -5,66 +5,126 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Kjøreplan og briefing – Marit og Aasmund (Josefine)</title>
   <style>
-    @page { margin: 18mm 16mm; }
-    html, body { margin: 0; min-height: 100%; background: #fff !important; color: #111 !important; }
-    body { font-family: Georgia, serif; font-size: 11pt; line-height: 1.45; }
-    h1 { margin: 0 0 1rem; font-size: 18pt; color: #111; }
-    .meta { color: #555; font-size: 9pt; margin-bottom: 1.25rem; }
-    pre { white-space: pre-wrap; font-family: inherit; font-size: 10.5pt; margin: 0; color: #111; }
-    .no-print { position: sticky; top: 0; display: flex; gap: .5rem; align-items: center; padding: .75rem 1rem; background: #f4f4f5; border-bottom: 1px solid #ddd; font-family: system-ui, sans-serif; font-size: 13px; color: #18181b; }
-    .no-print button { cursor: pointer; border: 0; border-radius: 8px; padding: .45rem .85rem; background: #0f766e; color: #fff; font-weight: 600; }
+    @page { margin: 16mm 14mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #fff !important; color: #121417 !important; }
+    body {
+      font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .brand-bar { height: 6px; background: #0f766e; }
+    main { padding: 1.75rem 1.5rem 2.5rem; max-width: 44rem; margin: 0 auto; }
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+    .meta { margin: 0 0 1rem; color: #5c6570; font-size: 0.85rem; }
+    hr.rule { border: 0; border-top: 1px solid #d5d9de; margin: 0 0 1.25rem; }
+    h2 {
+      margin: 1.4rem 0 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #0f766e;
+      border-bottom: 2px solid #0f766e;
+      padding-bottom: 0.25rem;
+      display: inline-block;
+      min-width: 8rem;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 6.5rem 1fr;
+      gap: 0.65rem;
+      padding: 0.35rem 0;
+      align-items: start;
+      border-bottom: 1px solid #eef0f2;
+    }
+    .time {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #0f5f58;
+      font-size: 0.95rem;
+    }
+    .li {
+      position: relative;
+      padding: 0.28rem 0 0.28rem 1.1rem;
+    }
+    .li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #0f766e;
+      font-weight: 700;
+    }
+    .li.sub { padding-left: 2rem; color: #2c333a; }
+    .li.sub::before { content: "–"; left: 1rem; }
     @media print { .no-print { display: none !important; } }
-    main { padding: 1.5rem 1.25rem 2rem; max-width: 42rem; margin: 0 auto; background: #fff; }
+    .no-print {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+      padding: 0.75rem 1rem; background: #f4f5f6; border-bottom: 1px solid #ddd;
+      font-size: 13px;
+    }
+    .no-print button {
+      cursor: pointer; border: 0; border-radius: 8px;
+      padding: 0.45rem .85rem; background: #0f766e; color: #fff; font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <div class="no-print">
-    <button type="button" onclick="window.print()">Lagre som PDF</button>
-    <span>Velg «Lagre som PDF» i utskriftsdialogen.</span>
+    <button type="button" onclick="window.print()">Skriv ut / lagre PDF</button>
+    <span>I Nexus: bruk «Last ned PDF» for direkte .pdf-fil på Mac/PC.</span>
   </div>
+  <div class="brand-bar"></div>
   <main>
     <h1>Kjøreplan og briefing – Marit og Aasmund (Josefine)</h1>
-    <p class="meta">Nexus</p>
-    <pre>KJØREPLAN OG BRIEFING – MARIT OG AASMUND (JOSEFINE)
+    <p class="meta">Nexus · Briefing for crew</p>
+    <hr class="rule" />
 
-Kontaktinformasjon:
-- Brudepar: Marit og Aasmund (Tlf: 95186266 / 93839355)
-- Vipps for utlegg/oppgjør: 95186266
+    <h2>Kontaktinformasjon</h2>
+    <div class="li">Brudepar: Marit og Aasmund (Tlf: 95186266 / 93839355)</div>
+    <div class="li">Vipps for utlegg/oppgjør: 95186266</div>
 
-TIDSLINJE FOR DAGEN:
+    <h2>Tidslinje for dagen</h2>
+    <div class="row"><span class="time">09:00</span><span>Opprigg innendørs: Peder og Henrik rigger opp lyd og utstyr inne.</span></div>
+    <div class="row"><span class="time">10:00</span><span>Lerret og projektor: Herman ankommer og rigger opp lerret i partyteltet.</span></div>
+    <div class="row"><span class="time">13:00</span><span>Vielse i Uranienborg kirke.</span></div>
+    <div class="row"><span class="time">13:50–14:00</span><span>Gjestene ankommer Josefine.</span></div>
+    <div class="row"><span class="time">14:00–14:45</span><span>Mottakelse i hagen: Live piano i hagen (ca. 45 min). Obs: Ton ned/avbryt piano ved beskjeder eller overganger.</span></div>
+    <div class="row"><span class="time">14:45</span><span>Bakgrunnsmusikk ute: Henrik overtar og setter på spillelisten «Josephin's sjillbeats».</span></div>
+    <div class="row"><span class="time">15:00</span><span>Fingermat serveres i hagen.</span></div>
+    <div class="row"><span class="time">16:15–16:30</span><span>Omrigg ute/inne: Henrik flytter/omrigger anlegget fra hagen og inn til middag/kveld.</span></div>
+    <div class="row"><span class="time">17:00–20:30</span><span>Middag (Toastmaster har egen detaljert plan).</span></div>
+    <div class="li sub">17:00 / 17:15: Forrett</div>
+    <div class="li sub">18:00: Hovedrett</div>
+    <div class="li sub">19:20: Dessert</div>
+    <div class="row"><span class="time">19:00</span><span>Lydsjekk og opprigg: Siste sjekk for kveldens live-sett/band.</span></div>
+    <div class="row"><span class="time">20:30</span><span>Middag avsluttes: Henrik setter på spenningsmusikk mens gjestene samles inne.</span></div>
+    <div class="row"><span class="time">20:45–21:45</span><span>Band på scenen: Bandet går på når alle er samlet inne. Spiller et energisk sett på ca. 1 til 1,5 time.</span></div>
+    <div class="row"><span class="time">21:45–00:45</span><span>DJ-sett: DJ tar over etter bandet og kjører festen i mål.</span></div>
+    <div class="row"><span class="time">01:00</span><span>Josefine stenger. Ferden går videre til PinPin.</span></div>
 
-09:00 – Opprigg innendørs: Peder og Henrik rigger opp lyd og utstyr inne.
-10:00 – Lerret og projektor: Herman ankommer og rigger opp lerret i partyteltet.
-13:00 – Vielse i Uranienborg kirke.
-13:50 – 14:00 – Gjestene ankommer Josefine.
-14:00 – 14:45 – Mottakelse i hagen: Live piano i hagen (ca. 45 min). Obs: Ton ned/avbryt piano ved beskjeder eller overganger.
-14:45 – Bakgrunnsmusikk ute: Henrik overtar og setter på spillelisten &quot;Josephin's sjillbeats&quot;.
-15:00 – Fingermat serveres i hagen.
-16:15 – 16:30 – Omrigg ute/inne: Henrik flytter/omrigger anlegget fra hagen og inn til middag/kveld.
-17:00 – 20:30 – Middag (Toastmaster har egen detaljert plan):
-  * 17:00 / 17:15: Forrett
-  * 18:00: Hovedrett
-  * 19:20: Dessert
-19:00 – Lydsjekk og opprigg: Siste sjekk for kveldens live-sett/band.
-20:30 – Middag avsluttes: Henrik setter på spenningsmusikk mens gjestene samles inne.
-20:45 – 21:45 – Band på scenen: Bandet går på når alle er samlet inne. Spiller et energisk sett på ca. 1 til 1,5 time.
-21:45 – 00:45 – DJ-sett: DJ tar over etter bandet og kjører festen i mål.
-01:00 – Josefine stenger. Ferden går videre til PinPin.
+    <h2>Roller og ansvarsfordeling</h2>
+    <div class="li"><strong>Peder:</strong> Totalansvar, rigging fra kl. 09:00, piano i hagen, avklaringer med brudepar/toastmaster.</div>
+    <div class="li"><strong>Henrik:</strong> Rigging fra kl. 09:00, styring av musikk ute («Josephin's sjillbeats»), omrigg kl. 16:15, lyd/stemning under middag, overgangsmusikk kl. 20:30, samt DJ fra 21:45.</div>
+    <div class="li"><strong>Herman:</strong> Opprigg av lerret og videoutstyr i partyteltet kl. 10:00. Bakgrunnsmusikk/spilleliste etter behov.</div>
+    <div class="li"><strong>Toastmaster:</strong> Har hovedregi under middagen (17:00–20:30).</div>
 
-ROLLER OG ANSVARSFORDELING:
-- Peder: Totalansvar, rigging fra kl. 09:00, piano i hagen, avklaringer med brudepar/toastmaster.
-- Henrik: Rigging fra kl. 09:00, styring av musikk ute (&quot;Josephin's sjillbeats&quot;), omrigg kl. 16:15, lyd/stemning under middag, overgangsmusikk kl. 20:30, samt DJ fra 21:45.
-- Herman: Opprigg av lerret og videoutstyr i partyteltet kl. 10:00. Bakgrunnsmusikk/spilleliste etter behov.
-- Toastmaster: Har hovedregi under middagen (17:00–20:30).
-
-SPESIELLE NOTATER &amp; BRIEFING TIL BAND / DJ:
-- Middag for crew/band: Spises enten underveis dersom det passer med toastmaster, eller rett etter bandsettet (ca. 21:45).
-- Interne punkter:
-  * Marits forlover skal ha shots i løpet av kvelden.
-  * Låtreferanser / highlights: &quot;Stikk den&quot; (Basement Jaxx / sport-vibe), oppbygging mot PinPin fra kl. 01:00.
-  * Sjekk reserveplan dersom Presley ikke kan stille.
-- Stemning og mål: Samle folk på dansegulvet, lese publikum underveis og bygge opp trøkket gradvis fra bandet går på kl. 20:45 til DJ runder av 00:45.
-</pre>
+    <h2>Spesielle notater &amp; briefing til band / DJ</h2>
+    <div class="li">Middag for crew/band: Spises enten underveis dersom det passer med toastmaster, eller rett etter bandsettet (ca. 21:45).</div>
+    <div class="li">Interne punkter:</div>
+    <div class="li sub">Marits forlover skal ha shots i løpet av kvelden.</div>
+    <div class="li sub">Låtreferanser / highlights: «Stikk den» (Basement Jaxx / sport-vibe), oppbygging mot PinPin fra kl. 01:00.</div>
+    <div class="li sub">Sjekk reserveplan dersom Presley ikke kan stille.</div>
+    <div class="li">Stemning og mål: Samle folk på dansegulvet, lese publikum underveis og bygge opp trøkket gradvis fra bandet går på kl. 20:45 til DJ runder av 00:45.</div>
   </main>
 </body>
 </html>

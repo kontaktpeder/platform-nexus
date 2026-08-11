@@ -1126,7 +1126,7 @@ export const runFortell = createServerFn({ method: "POST" })
 
       proposePdfDocument: tool({
         description:
-          "Forbered et dokument for PDF-nedlasting (kjøreplan, briefing, sjekkliste, oppsummering). Lagrer ikke i sky — brukeren laster ned i UI. Bruk når brukeren ber om PDF, «lag dokument», «skriv ut plan», eller eksplisitt vil ha en fil.",
+          "Forbered et dokument for PDF-nedlasting (kjøreplan, briefing, sjekkliste, oppsummering). Lagrer ikke i sky — brukeren laster ned i UI. Bruk når brukeren ber om PDF, «lag dokument», «skriv ut plan», eller eksplisitt vil ha en fil. body MÅ være strukturert: seksjonsoverskrifter i STORE BOKSTAVER (f.eks. KONTAKT:, TIDSLINJE:, ROLLER:), tidslinje som «09:00 – tekst», punkter med «- » og underpunkter med «  * ».",
         inputSchema: z.object({
           title: z.string().min(3).max(200),
           body: z.string().min(20).max(50000),
@@ -1367,7 +1367,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved spørsmål om legge seg, kveld, i morgen, prioritering, eller «hva bør jeg huske»: systemet har allerede hentet mail+kalender (se PÅLAGT KONTEKST). Nevn avtaler og klokkeslett eksplisitt. Ikke gjett at det er «ingenting».",
       "- Ved «noter dette» / WhatsApp / muntlig info: captureManualSignal.",
-      "- Ved «PDF», «lag PDF», «skriv ut», «kjøreplan som fil» eller lignende: proposePdfDocument med full tittel + komplett brødtekst (ikke si at du ikke kan lage PDF).",
+      "- Ved «PDF», «lag PDF», «skriv ut», «kjøreplan som fil» eller lignende: proposePdfDocument med full tittel + komplett brødtekst (ikke si at du ikke kan lage PDF). Strukturer body med STORE BOKSTAVER-seksjoner, tidslinje «HH:MM – …», og «- » / «  * »-punkter — aldri én lang ustyrt tekstblokk.",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
       "- Control-avtaler: Fortell er INNGANGEN — Control eier signering/versjon/arkiv.",
       "- Ved «eksisterende utkast», «se på utkast», «jobb videre», «oppdater avtalen» eller navngitt motpart/utkast i Control: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate. ALDRI opprett nytt i disse tilfellene.",
