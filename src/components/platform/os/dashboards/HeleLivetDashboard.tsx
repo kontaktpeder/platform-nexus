@@ -21,8 +21,8 @@ export function HeleLivetDashboard() {
       <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-12 lg:gap-5">
         <DailyAlignmentSection />
 
-        {/* Kø = Topp 3 — full actions, adapted width */}
-        <div className="lg:col-span-5">
+        {/* Kø = Topp 3 — full width, readable cards */}
+        <div className="lg:col-span-12">
           <DeskQueuePanel
             variant="dashboard"
             onOpenContact={setPanelEntityId}

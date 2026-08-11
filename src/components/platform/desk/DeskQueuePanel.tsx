@@ -186,7 +186,7 @@ function QueueCard({
     return (
       <li
         className={cn(
-          "flex h-[5.75rem] flex-col justify-between rounded-xl border bg-card/95 px-3 py-2.5 shadow-sm",
+          "flex min-h-[9.5rem] flex-col justify-between gap-3 rounded-2xl border bg-card/95 p-4 shadow-soft",
           isDraft
             ? "border-rose-300/50"
             : item.kind === "appointment"
@@ -198,40 +198,38 @@ function QueueCard({
                   : "border-border/70",
         )}
       >
-        <div className="flex min-h-0 items-start gap-2">
+        <div className="min-h-0 space-y-2">
           <span
             className={cn(
-              "mt-0.5 shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+              "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
               tone,
             )}
           >
             {item.sourceLabel}
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-snug">
-              {item.intent || item.title}
-            </p>
-            <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
-              {item.nextStep || item.subtitle || displayName || "—"}
-            </p>
-          </div>
+          <p className="line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground">
+            {item.intent || item.title}
+          </p>
+          <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            {item.nextStep || item.subtitle || displayName || "—"}
+          </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Button
             type="button"
-            size="sm"
-            className="h-8 flex-1 gap-1 rounded-lg text-xs"
+            size="default"
+            className="h-10 flex-1 gap-1.5 rounded-xl text-sm"
             disabled={busy}
             onClick={onPrimary}
           >
             {busy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : isDraft ? (
-              <Play className="h-3.5 w-3.5" />
+              <Play className="h-4 w-4" />
             ) : isWork ? (
-              <Square className="h-3.5 w-3.5" />
+              <Square className="h-4 w-4" />
             ) : (
-              <Check className="h-3.5 w-3.5" />
+              <Check className="h-4 w-4" />
             )}
             {label}
           </Button>
@@ -241,7 +239,7 @@ function QueueCard({
                 type="button"
                 size="icon"
                 variant="outline"
-                className="h-8 w-8 shrink-0 rounded-lg"
+                className="h-10 w-10 shrink-0 rounded-xl"
                 disabled={busy}
                 aria-label="Flere handlinger"
               >
@@ -1008,24 +1006,24 @@ export function DeskQueuePanel({
       className={cn(
         "flex min-h-0 w-full flex-col",
         isDashboard
-          ? "os-glass h-[26.5rem] shrink-0 overflow-hidden rounded-2xl"
+          ? "os-glass shrink-0 overflow-hidden rounded-2xl"
           : "h-full border-border/60 bg-background/40",
         className,
       )}
     >
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-3">
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-4 sm:px-5">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {isDashboard ? "Topp 3" : "I dag"}
           </p>
-          <h2 className="mt-0.5 font-heading text-base font-semibold tracking-tight">
+          <h2 className="mt-1 font-heading text-lg font-semibold tracking-tight sm:text-xl">
             {isDashboard ? "Dagens kø" : "Kø"}
           </h2>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground">
             {isDashboard && focusHint
               ? `Fokus nå: ${focusHint}`
               : isDashboard
-                ? "Tre kort · handlinger i ⋯"
+                ? "Tre neste — Ferdig, eller mer under ⋯"
                 : "Like valg per kilde — ikke AI-anbefalinger"}
           </p>
         </div>
@@ -1034,7 +1032,7 @@ export function DeskQueuePanel({
             type="button"
             size="icon"
             variant="ghost"
-            className="h-9 w-9 rounded-xl"
+            className="h-10 w-10 rounded-xl"
             onClick={() => setShowIntake((v) => !v)}
             aria-label="Legg til manuelt signal"
           >
@@ -1044,7 +1042,7 @@ export function DeskQueuePanel({
             type="button"
             size="icon"
             variant="ghost"
-            className="h-9 w-9 rounded-xl"
+            className="h-10 w-10 rounded-xl"
             disabled={query.isFetching}
             onClick={() => void query.refetch()}
             aria-label="Oppdater kø"
@@ -1055,7 +1053,7 @@ export function DeskQueuePanel({
       </header>
 
       {showIntake && (
-        <div className="shrink-0 border-b border-border/50 px-3 py-3">
+        <div className="shrink-0 border-b border-border/50 px-4 py-3 sm:px-5">
           <Textarea
             value={manualText}
             onChange={(e) => setManualText(e.target.value)}
@@ -1086,7 +1084,12 @@ export function DeskQueuePanel({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+      <div
+        className={cn(
+          "min-h-0 flex-1 overscroll-contain px-4 py-4 sm:px-5",
+          isDashboard ? "overflow-visible" : "overflow-y-auto",
+        )}
+      >
         {query.isLoading ? (
           <div className="grid place-items-center py-16">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -1097,13 +1100,19 @@ export function DeskQueuePanel({
           </div>
         ) : visible.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/80 bg-card/50 px-4 py-10 text-center">
-            <p className="text-sm font-medium">Køen er tom</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-base font-medium">Køen er tom</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               Mail, kalender, oppfølginger — eller legg inn manuelt.
             </p>
           </div>
         ) : (
-          <ul className={cn("space-y-2", isDashboard && "space-y-2")}>
+          <ul
+            className={cn(
+              isDashboard
+                ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                : "space-y-2",
+            )}
+          >
             {visible.map((item) => (
               <QueueCard
                 key={item.id}
@@ -1162,7 +1171,7 @@ export function DeskQueuePanel({
         )}
       </div>
 
-      <footer className="shrink-0 border-t border-border/50 px-4 py-3 text-xs text-muted-foreground">
+      <footer className="shrink-0 border-t border-border/50 px-4 py-3 text-sm text-muted-foreground sm:px-5">
         {query.data
           ? remaining > 0
             ? `${remaining} til i køen når du tar unna`

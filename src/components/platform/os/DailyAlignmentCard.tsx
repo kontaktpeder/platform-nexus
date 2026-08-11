@@ -1,10 +1,10 @@
 /**
  * Vision Board & Daily Alignment — morning/evening check-in on Hele livet.
- * Explicit save (no per-keystroke auto-save).
+ * Filled days show as a presentation board; empty / edit uses the form.
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { OsCard } from "@/components/platform/os/OsPrimitives";
 import { Button } from "@/components/ui/button";
@@ -25,25 +25,56 @@ import {
 } from "@/lib/oslo-week";
 import { cn } from "@/lib/utils";
 
+function hasNorthStar(row: DailyAlignment | null | undefined): boolean {
+  return Boolean(row?.northStar?.trim());
+}
+
+function PresentBlock({
+  label,
+  children,
+  hero = false,
+}: {
+  label: string;
+  children: string;
+  hero?: boolean;
+}) {
+  const text = children.trim();
+  if (!text) return null;
+  return (
+    <div>
+      <p
+        className={cn(
+          "font-semibold uppercase tracking-wide text-primary",
+          hero ? "text-[11px]" : "text-[10px] text-muted-foreground",
+        )}
+      >
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-1 whitespace-pre-wrap leading-snug tracking-tight text-foreground",
+          hero
+            ? "font-heading text-lg font-semibold sm:text-xl"
+            : "text-sm sm:text-[15px]",
+        )}
+      >
+        {text}
+      </p>
+    </div>
+  );
+}
+
 export function NorthStarBanner({ northStar }: { northStar: string }) {
   const text = northStar.trim();
-  if (!text) {
-    return (
-      <div className="lg:col-span-12">
-        <p className="rounded-2xl border border-dashed border-border/70 bg-white/25 px-4 py-3 text-sm text-muted-foreground backdrop-blur-sm">
-          Sett dagens Nordstjerne under — den én viktigste handlingen.
-        </p>
-      </div>
-    );
-  }
+  if (!text) return null;
 
   return (
     <div className="lg:col-span-12">
-      <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-soft backdrop-blur-md sm:px-5">
+      <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-soft backdrop-blur-md sm:px-6 sm:py-5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
           Dagens Nordstjerne
         </p>
-        <p className="mt-1 font-heading text-lg font-semibold leading-snug tracking-tight text-foreground sm:text-xl">
+        <p className="mt-1 font-heading text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl">
           {text}
         </p>
       </div>
@@ -114,6 +145,7 @@ export function DailyAlignmentCard() {
   const [draft, setDraft] = useState<DailyAlignment>(() =>
     emptyDailyAlignment(todayKey),
   );
+  const [editing, setEditing] = useState(false);
   const [saveHint, setSaveHint] = useState<"idle" | "saved" | "error">("idle");
   const hydratedFor = useRef<string | null>(null);
 
@@ -128,6 +160,8 @@ export function DailyAlignmentCard() {
     hydratedFor.current = null;
     setSaveHint("idle");
     setDraft(emptyDailyAlignment(dayKey));
+    // Past days / filled days open as presentation; empty today opens as form
+    setEditing(false);
   }, [dayKey]);
 
   useEffect(() => {
@@ -135,7 +169,10 @@ export function DailyAlignmentCard() {
     if (hydratedFor.current === dayKey) return;
     setDraft(query.data);
     hydratedFor.current = dayKey;
-  }, [query.data, dayKey]);
+    if (!hasNorthStar(query.data) && dayKey === todayKey) {
+      setEditing(true);
+    }
+  }, [query.data, dayKey, todayKey]);
 
   const saveMut = useMutation({
     mutationFn: () =>
@@ -158,6 +195,7 @@ export function DailyAlignmentCard() {
         hydratedFor.current = dayKey;
       }
       setSaveHint("saved");
+      setEditing(false);
       window.setTimeout(
         () => setSaveHint((s) => (s === "saved" ? "idle" : s)),
         2000,
@@ -177,39 +215,87 @@ export function DailyAlignmentCard() {
   const dirty = isDirty(draft, query.data);
   const isToday = dayKey === todayKey;
   const canGoForward = dayKey < todayKey;
+  const showPresentation = hasNorthStar(query.data) && !editing && !dirty;
+
+  const dayNav = (
+    <div className="mb-4 flex items-center justify-between gap-2">
+      <button
+        type="button"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/50 text-foreground transition-colors hover:bg-background"
+        onClick={() => setDayKey((k) => shiftOsloDayKey(k, -1))}
+        aria-label="Forrige dag"
+      >
+        <ChevronLeft className="size-4" />
+      </button>
+      <div className="min-w-0 text-center">
+        <p className="text-sm font-semibold text-foreground">
+          {formatOsloDayLabel(dayKey)}
+        </p>
+        <p className="text-[11px] tabular-nums text-muted-foreground">{dayKey}</p>
+      </div>
+      <button
+        type="button"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/50 text-foreground transition-colors hover:bg-background disabled:opacity-40"
+        onClick={() => setDayKey((k) => shiftOsloDayKey(k, 1))}
+        disabled={!canGoForward}
+        aria-label="Neste dag"
+      >
+        <ChevronRight className="size-4" />
+      </button>
+    </div>
+  );
+
+  if (showPresentation && query.data) {
+    const row = query.data;
+    return (
+      <OsCard
+        title="Dagens tavle"
+        subtitle={isToday ? "Retning for i dag" : "Historikk"}
+        className="lg:col-span-12"
+        tone="glass"
+      >
+        {dayNav}
+        <div className="space-y-5">
+          {!isToday && (
+            <PresentBlock label="Nordstjerne" hero>
+              {row.northStar}
+            </PresentBlock>
+          )}
+          <PresentBlock label="Identitet & energi">{row.identityEnergy}</PresentBlock>
+          <PresentBlock label="Tjenestefokus">{row.serviceFocus}</PresentBlock>
+          {(row.winToday.trim() || row.tomorrowPriorities.trim()) && (
+            <div className="space-y-4 border-t border-border/50 pt-5">
+              <PresentBlock label="Dagens seier">{row.winToday}</PresentBlock>
+              <PresentBlock label="I morgen">{row.tomorrowPriorities}</PresentBlock>
+            </div>
+          )}
+        </div>
+        <div className="mt-5 flex justify-end border-t border-border/50 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => {
+              setDraft(row);
+              setEditing(true);
+            }}
+          >
+            <Pencil className="size-4" />
+            Rediger
+          </Button>
+        </div>
+      </OsCard>
+    );
+  }
 
   return (
     <OsCard
       title="Vision Board & Daily Alignment"
       subtitle="Morgenretning og kveldsplan"
-      className="lg:col-span-7"
+      className="lg:col-span-12"
       tone="glass"
     >
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/50 text-foreground transition-colors hover:bg-background"
-          onClick={() => setDayKey((k) => shiftOsloDayKey(k, -1))}
-          aria-label="Forrige dag"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <div className="min-w-0 text-center">
-          <p className="text-sm font-semibold text-foreground">
-            {formatOsloDayLabel(dayKey)}
-          </p>
-          <p className="text-[11px] tabular-nums text-muted-foreground">{dayKey}</p>
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-background/50 text-foreground transition-colors hover:bg-background disabled:opacity-40"
-          onClick={() => setDayKey((k) => shiftOsloDayKey(k, 1))}
-          disabled={!canGoForward}
-          aria-label="Neste dag"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
+      {dayNav}
 
       <div className="mb-3 flex h-5 items-center gap-2 text-xs text-muted-foreground">
         {query.isLoading ? (
@@ -291,6 +377,20 @@ export function DailyAlignmentCard() {
         </section>
 
         <div className="flex items-center justify-end gap-2 border-t border-border/50 pt-4">
+          {hasNorthStar(query.data) && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="rounded-xl"
+              onClick={() => {
+                if (query.data) setDraft(query.data);
+                setEditing(false);
+                setSaveHint("idle");
+              }}
+            >
+              Avbryt
+            </Button>
+          )}
           <Button
             type="button"
             onClick={() => saveMut.mutate()}
@@ -312,7 +412,7 @@ export function DailyAlignmentCard() {
   );
 }
 
-/** Banner + card wired to today's north star for the dashboard grid. */
+/** Banner + card — presentation when filled, form when empty/editing. */
 export function DailyAlignmentSection() {
   const todayKey = osloDayKey();
   const query = useQuery({
