@@ -1,6 +1,6 @@
 /**
  * Client-side document PDF helpers for Fortell.
- * Uses print-ready HTML so Norwegian (æøå) renders correctly; user saves as PDF.
+ * Opens a print-ready HTML blob so Norwegian (æøå) renders; user saves as PDF.
  */
 
 function escapeHtml(s: string): string {
@@ -14,18 +14,24 @@ function escapeHtml(s: string): string {
 function buildPrintDocumentHtml(title: string, body: string): string {
   const safeTitle = escapeHtml(title.trim() || "Dokument");
   const safeBody = escapeHtml(body.trim());
+  const date = escapeHtml(new Date().toLocaleDateString("nb-NO"));
   return `<!DOCTYPE html>
 <html lang="nb">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${safeTitle}</title>
   <style>
     @page { margin: 18mm 16mm; }
     * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
-      color: #111;
-      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      min-height: 100%;
+      background: #ffffff !important;
+      color: #111111 !important;
+    }
+    body {
+      font-family: Georgia, "Times New Roman", Times, serif;
       font-size: 11pt;
       line-height: 1.45;
       -webkit-print-color-adjust: exact;
@@ -37,10 +43,11 @@ function buildPrintDocumentHtml(title: string, body: string): string {
       font-weight: 650;
       letter-spacing: -0.02em;
       line-height: 1.2;
+      color: #111111;
     }
     .meta {
       margin: 0 0 1.25rem;
-      color: #555;
+      color: #555555;
       font-size: 9pt;
     }
     pre {
@@ -49,6 +56,7 @@ function buildPrintDocumentHtml(title: string, body: string): string {
       word-wrap: break-word;
       font-family: inherit;
       font-size: 10.5pt;
+      color: #111111;
     }
     @media print {
       .no-print { display: none !important; }
@@ -58,12 +66,15 @@ function buildPrintDocumentHtml(title: string, body: string): string {
       top: 0;
       z-index: 2;
       display: flex;
+      flex-wrap: wrap;
       gap: 0.5rem;
+      align-items: center;
       padding: 0.75rem 1rem;
       background: #f4f4f5;
       border-bottom: 1px solid #ddd;
       font-family: ui-sans-serif, system-ui, sans-serif;
       font-size: 13px;
+      color: #18181b;
     }
     .no-print button {
       cursor: pointer;
@@ -71,42 +82,61 @@ function buildPrintDocumentHtml(title: string, body: string): string {
       border-radius: 8px;
       padding: 0.45rem 0.85rem;
       background: #0f766e;
-      color: #fff;
+      color: #ffffff;
       font-weight: 600;
     }
     .no-print button.secondary {
       background: #e4e4e7;
       color: #18181b;
     }
-    main { padding: 1.5rem 1.25rem 2rem; max-width: 42rem; margin: 0 auto; }
+    main {
+      padding: 1.5rem 1.25rem 2rem;
+      max-width: 42rem;
+      margin: 0 auto;
+      background: #ffffff;
+    }
   </style>
 </head>
 <body>
   <div class="no-print">
-    <button type="button" onclick="window.print()">Lagre som PDF</button>
-    <button type="button" class="secondary" onclick="window.close()">Lukk</button>
+    <button type="button" id="print-btn">Lagre som PDF</button>
+    <button type="button" class="secondary" id="close-btn">Lukk</button>
     <span>Velg «Lagre som PDF» i utskriftsdialogen.</span>
   </div>
   <main>
     <h1>${safeTitle}</h1>
-    <p class="meta">Nexus · ${escapeHtml(new Date().toLocaleDateString("nb-NO"))}</p>
+    <p class="meta">Nexus · ${date}</p>
     <pre>${safeBody}</pre>
   </main>
+  <script>
+    document.getElementById("print-btn").addEventListener("click", function () {
+      window.print();
+    });
+    document.getElementById("close-btn").addEventListener("click", function () {
+      window.close();
+    });
+  </script>
 </body>
 </html>`;
 }
 
-/** Open a print-ready document window for PDF export (æøå-safe). */
+/**
+ * Open a print-ready document in a new tab via blob URL.
+ * Avoids window.open(..., "noopener") + document.write (blank white tab).
+ */
 export function openDocumentPdfWindow(input: {
   title: string;
   body: string;
 }): boolean {
   const html = buildPrintDocumentHtml(input.title, input.body);
-  const w = window.open("", "_blank", "noopener,noreferrer,width=840,height=900");
-  if (!w) return false;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
+  if (!w) {
+    URL.revokeObjectURL(url);
+    return false;
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
   return true;
 }
 
