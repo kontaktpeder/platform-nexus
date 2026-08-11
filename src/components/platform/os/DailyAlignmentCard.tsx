@@ -1,11 +1,13 @@
 /**
  * Vision Board & Daily Alignment — morning/evening check-in on Hele livet.
+ * Explicit save (no per-keystroke auto-save).
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { OsCard } from "@/components/platform/os/OsPrimitives";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getDailyAlignmentFn,
@@ -15,7 +17,6 @@ import {
   dailyAlignmentQueryKey,
   emptyDailyAlignment,
   type DailyAlignment,
-  type DailyAlignmentPatch,
 } from "@/lib/daily-alignment.types";
 import {
   formatOsloDayLabel,
@@ -23,8 +24,6 @@ import {
   shiftOsloDayKey,
 } from "@/lib/oslo-week";
 import { cn } from "@/lib/utils";
-
-const SAVE_DEBOUNCE_MS = 500;
 
 export function NorthStarBanner({ northStar }: { northStar: string }) {
   const text = northStar.trim();
@@ -89,6 +88,25 @@ function Field({
   );
 }
 
+function isDirty(draft: DailyAlignment, saved: DailyAlignment | undefined): boolean {
+  if (!saved) {
+    return Boolean(
+      draft.identityEnergy ||
+        draft.northStar ||
+        draft.serviceFocus ||
+        draft.winToday ||
+        draft.tomorrowPriorities,
+    );
+  }
+  return (
+    draft.identityEnergy !== saved.identityEnergy ||
+    draft.northStar !== saved.northStar ||
+    draft.serviceFocus !== saved.serviceFocus ||
+    draft.winToday !== saved.winToday ||
+    draft.tomorrowPriorities !== saved.tomorrowPriorities
+  );
+}
+
 export function DailyAlignmentCard() {
   const qc = useQueryClient();
   const todayKey = osloDayKey();
@@ -96,11 +114,8 @@ export function DailyAlignmentCard() {
   const [draft, setDraft] = useState<DailyAlignment>(() =>
     emptyDailyAlignment(todayKey),
   );
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle",
-  );
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingPatch = useRef<DailyAlignmentPatch>({});
+  const [saveHint, setSaveHint] = useState<"idle" | "saved" | "error">("idle");
+  const hydratedFor = useRef<string | null>(null);
 
   const query = useQuery({
     queryKey: dailyAlignmentQueryKey(dayKey),
@@ -110,62 +125,63 @@ export function DailyAlignmentCard() {
   });
 
   useEffect(() => {
-    if (query.data) setDraft(query.data);
-  }, [query.data]);
-
-  useEffect(() => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    pendingPatch.current = {};
-    setSaveState("idle");
+    hydratedFor.current = null;
+    setSaveHint("idle");
+    setDraft(emptyDailyAlignment(dayKey));
   }, [dayKey]);
 
   useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, []);
+    if (!query.data || query.data.dayKey !== dayKey) return;
+    if (hydratedFor.current === dayKey) return;
+    setDraft(query.data);
+    hydratedFor.current = dayKey;
+  }, [query.data, dayKey]);
 
   const saveMut = useMutation({
-    mutationFn: (args: { dayKey: string; patch: DailyAlignmentPatch }) =>
-      upsertDailyAlignmentFn({ data: args }),
-    onMutate: () => setSaveState("saving"),
+    mutationFn: () =>
+      upsertDailyAlignmentFn({
+        data: {
+          dayKey,
+          patch: {
+            identityEnergy: draft.identityEnergy,
+            northStar: draft.northStar,
+            serviceFocus: draft.serviceFocus,
+            winToday: draft.winToday,
+            tomorrowPriorities: draft.tomorrowPriorities,
+          },
+        },
+      }),
     onSuccess: (row) => {
       qc.setQueryData(dailyAlignmentQueryKey(row.dayKey), row);
-      if (row.dayKey === dayKey) setDraft(row);
-      setSaveState("saved");
-      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1500);
+      if (row.dayKey === dayKey) {
+        setDraft(row);
+        hydratedFor.current = dayKey;
+      }
+      setSaveHint("saved");
+      window.setTimeout(
+        () => setSaveHint((s) => (s === "saved" ? "idle" : s)),
+        2000,
+      );
     },
-    onError: () => setSaveState("error"),
+    onError: () => setSaveHint("error"),
   });
 
-  function scheduleSave(patch: DailyAlignmentPatch) {
-    pendingPatch.current = { ...pendingPatch.current, ...patch };
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      const p = pendingPatch.current;
-      pendingPatch.current = {};
-      saveMut.mutate({ dayKey, patch: p });
-    }, SAVE_DEBOUNCE_MS);
-  }
-
-  function patchField<K extends keyof DailyAlignmentPatch>(
+  function setField<K extends keyof DailyAlignment>(
     key: K,
-    value: NonNullable<DailyAlignmentPatch[K]>,
+    value: DailyAlignment[K],
   ) {
     setDraft((prev) => ({ ...prev, [key]: value }));
-    scheduleSave({ [key]: value });
+    setSaveHint("idle");
   }
 
+  const dirty = isDirty(draft, query.data);
   const isToday = dayKey === todayKey;
   const canGoForward = dayKey < todayKey;
 
   return (
     <OsCard
       title="Vision Board & Daily Alignment"
-      subtitle="Morgenretning og kveldsplan — auto-lagres"
+      subtitle="Morgenretning og kveldsplan"
       className="lg:col-span-7"
       tone="glass"
     >
@@ -201,14 +217,9 @@ export function DailyAlignmentCard() {
             <Loader2 className="size-3.5 animate-spin" />
             Laster…
           </>
-        ) : saveState === "saving" ? (
-          <>
-            <Loader2 className="size-3.5 animate-spin" />
-            Lagrer…
-          </>
-        ) : saveState === "saved" ? (
+        ) : saveHint === "saved" ? (
           <span className="text-success">Lagret</span>
-        ) : saveState === "error" ? (
+        ) : saveHint === "error" ? (
           <span className="text-destructive">Kunne ikke lagre</span>
         ) : query.isError ? (
           <span className="text-destructive">
@@ -219,6 +230,8 @@ export function DailyAlignmentCard() {
                 : query.error.message
               : "Kunne ikke laste"}
           </span>
+        ) : dirty ? (
+          <span>Ulagrede endringer</span>
         ) : (
           <span>{isToday ? "I dag" : "Historikk"}</span>
         )}
@@ -234,7 +247,7 @@ export function DailyAlignmentCard() {
             label="Takkemoment & Identitet"
             hint="Hvilken identitet og energi opererer jeg fra i dag?"
             value={draft.identityEnergy}
-            onChange={(v) => patchField("identityEnergy", v)}
+            onChange={(v) => setField("identityEnergy", v)}
             rows={3}
           />
           <Field
@@ -242,7 +255,7 @@ export function DailyAlignmentCard() {
             label="Dagens Nordstjerne"
             hint="Hva er den én viktigste handlingen i dag som korter ned avstanden til målet?"
             value={draft.northStar}
-            onChange={(v) => patchField("northStar", v)}
+            onChange={(v) => setField("northStar", v)}
             short
           />
           <Field
@@ -250,7 +263,7 @@ export function DailyAlignmentCard() {
             label="Tjenestefokus"
             hint="Hvordan kan jeg hjelpe og gi verdi til kunden/verden i dag?"
             value={draft.serviceFocus}
-            onChange={(v) => patchField("serviceFocus", v)}
+            onChange={(v) => setField("serviceFocus", v)}
             rows={2}
           />
         </section>
@@ -264,7 +277,7 @@ export function DailyAlignmentCard() {
             label="Dagens seier"
             hint="Hva feirer jeg fra i dag?"
             value={draft.winToday}
-            onChange={(v) => patchField("winToday", v)}
+            onChange={(v) => setField("winToday", v)}
             rows={2}
           />
           <Field
@@ -272,10 +285,28 @@ export function DailyAlignmentCard() {
             label="I morgen"
             hint="Hva er de 1–3 viktigste tingene jeg gjør i morgen?"
             value={draft.tomorrowPriorities}
-            onChange={(v) => patchField("tomorrowPriorities", v)}
+            onChange={(v) => setField("tomorrowPriorities", v)}
             rows={3}
           />
         </section>
+
+        <div className="flex items-center justify-end gap-2 border-t border-border/50 pt-4">
+          <Button
+            type="button"
+            onClick={() => saveMut.mutate()}
+            disabled={!dirty || saveMut.isPending || query.isLoading}
+            className="rounded-xl"
+          >
+            {saveMut.isPending ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Lagrer…
+              </>
+            ) : (
+              "Lagre"
+            )}
+          </Button>
+        </div>
       </div>
     </OsCard>
   );
