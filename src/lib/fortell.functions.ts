@@ -135,6 +135,12 @@ export type FortellChatMessage = {
   content: string;
 };
 
+export type FortellPdfProposal = {
+  title: string;
+  body: string;
+  filename: string;
+};
+
 export type FortellResult = {
   answer: string;
   steps: FortellStep[];
@@ -148,6 +154,7 @@ export type FortellResult = {
   contactProposal: FortellContactProposal | null;
   relationProposals: FortellRelationProposal[];
   agreementProposal: FortellAgreementProposal | null;
+  pdfProposal: FortellPdfProposal | null;
   manualSignalSaved: boolean;
   threadId: string | null;
 };
@@ -241,6 +248,7 @@ export const runFortell = createServerFn({ method: "POST" })
       contactProposal: FortellContactProposal | null;
       relationProposals: FortellRelationProposal[];
       agreementProposal: FortellAgreementProposal | null;
+      pdfProposal: FortellPdfProposal | null;
       manualSignalSaved: boolean;
     } = {
       draft: null,
@@ -253,6 +261,7 @@ export const runFortell = createServerFn({ method: "POST" })
       contactProposal: null,
       relationProposals: [],
       agreementProposal: null,
+      pdfProposal: null,
       manualSignalSaved: false,
     };
 
@@ -1115,6 +1124,44 @@ export const runFortell = createServerFn({ method: "POST" })
         },
       }),
 
+      proposePdfDocument: tool({
+        description:
+          "Forbered et dokument for PDF-nedlasting (kjøreplan, briefing, sjekkliste, oppsummering). Lagrer ikke i sky — brukeren laster ned i UI. Bruk når brukeren ber om PDF, «lag dokument», «skriv ut plan», eller eksplisitt vil ha en fil.",
+        inputSchema: z.object({
+          title: z.string().min(3).max(200),
+          body: z.string().min(20).max(50000),
+          filename: z.string().max(120).nullable().optional(),
+        }),
+        execute: async ({ title, body, filename }) => {
+          const cleanTitle = title.trim();
+          const slug =
+            (filename?.trim() || cleanTitle)
+              .normalize("NFKD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .toLowerCase()
+              .replace(/æ/g, "ae")
+              .replace(/ø/g, "o")
+              .replace(/å/g, "a")
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "")
+              .slice(0, 60) || "dokument";
+          out.pdfProposal = {
+            title: cleanTitle,
+            body: body.trim(),
+            filename: slug.endsWith(".pdf") ? slug : `${slug}.pdf`,
+          };
+          steps.push({
+            label: "Forberedte PDF",
+            detail: out.pdfProposal.title,
+          });
+          return {
+            ok: true,
+            note: "PDF klar — brukeren laster ned under.",
+            filename: out.pdfProposal.filename,
+          };
+        },
+      }),
+
       proposeControlAgreement: tool({
         description:
           "Forbered NYTT kontrakts-/avtaleutkast til Control Core. Lagrer IKKE — brukeren bekrefter i UI. Bruk KUN når brukeren eksplisitt vil ha et nytt utkast. Ved eksisterende utkast: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate.",
@@ -1311,6 +1358,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "12) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
       "13) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
       "14) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
+      "15) proposePdfDocument — forbered PDF/kjøreplan/briefing for nedlasting (lagrer ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
@@ -1319,6 +1367,7 @@ export const runFortell = createServerFn({ method: "POST" })
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved spørsmål om legge seg, kveld, i morgen, prioritering, eller «hva bør jeg huske»: systemet har allerede hentet mail+kalender (se PÅLAGT KONTEKST). Nevn avtaler og klokkeslett eksplisitt. Ikke gjett at det er «ingenting».",
       "- Ved «noter dette» / WhatsApp / muntlig info: captureManualSignal.",
+      "- Ved «PDF», «lag PDF», «skriv ut», «kjøreplan som fil» eller lignende: proposePdfDocument med full tittel + komplett brødtekst (ikke si at du ikke kan lage PDF).",
       "- Ved mailutkast: kort norsk, ingen oppdiktede fakta. Ingen signatur/«Vennlig hilsen». Foreslå suggestedTone (casual/professional) og evt. suggestedFromEmail.",
       "- Control-avtaler: Fortell er INNGANGEN — Control eier signering/versjon/arkiv.",
       "- Ved «eksisterende utkast», «se på utkast», «jobb videre», «oppdater avtalen» eller navngitt motpart/utkast i Control: listControlAgreements → readControlAgreement → proposeControlAgreementUpdate. ALDRI opprett nytt i disse tilfellene.",
@@ -1391,6 +1440,9 @@ export const runFortell = createServerFn({ method: "POST" })
           ? `Relasjonsforslag klart: ${out.relationProposals[0].fromName} → ${out.relationProposals[0].toName}. Godkjenn under.`
           : `${out.relationProposals.length} relasjonsforslag klare — godkjenn under.`;
     }
+    if (out.pdfProposal) {
+      fallback = `PDF klar: «${out.pdfProposal.title}». Last ned under.`;
+    }
 
     const finalAnswer = answer || fallback;
 
@@ -1438,6 +1490,7 @@ export const runFortell = createServerFn({ method: "POST" })
       contactProposal: out.contactProposal,
       relationProposals: out.relationProposals,
       agreementProposal: out.agreementProposal,
+      pdfProposal: out.pdfProposal,
       manualSignalSaved: out.manualSignalSaved,
       threadId: resolvedThreadId,
     };

@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Clock,
   ExternalLink,
+  FileDown,
   FileSignature,
   Link2,
   Loader2,
@@ -45,6 +46,7 @@ import {
   type FortellResult,
   type FortellWorkProposal,
 } from "@/lib/fortell.functions";
+import { openDocumentPdfWindow } from "@/lib/document-pdf";
 import {
   applySuggestedRelation,
   sendAssistantDraft,
@@ -620,6 +622,7 @@ export function FortellChat() {
   const stopProposal = result?.stopProposal ?? null;
   const contactProposal = result?.contactProposal ?? null;
   const agreementProposal = result?.agreementProposal ?? null;
+  const pdfProposal = result?.pdfProposal ?? null;
 
   const composer = (
     <div className="w-full space-y-2">
@@ -920,6 +923,35 @@ export function FortellChat() {
                       ))}
                     </ul>
                   )}
+          {pdfProposal && (
+            <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                PDF klar
+              </p>
+              <p className="text-sm font-medium">{pdfProposal.title}</p>
+              <p className="line-clamp-4 whitespace-pre-wrap text-xs text-muted-foreground">
+                {pdfProposal.body}
+              </p>
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={() => {
+                  const ok = openDocumentPdfWindow({
+                    title: pdfProposal.title,
+                    body: pdfProposal.body,
+                  });
+                  if (!ok) {
+                    toast.error("Tillat pop-up for å åpne PDF-vinduet");
+                    return;
+                  }
+                  toast.success("Åpnet — velg «Lagre som PDF» i utskriftsdialogen");
+                }}
+              >
+                <FileDown className="h-4 w-4" />
+                Last ned PDF
+              </Button>
+            </div>
+          )}
           {contactProposal && !contactApplied && (
             <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
