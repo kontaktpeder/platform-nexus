@@ -9,16 +9,25 @@ import {
   Lightbulb,
   Map,
   MessageCircle,
+  PanelLeft,
+  PanelLeftClose,
   Settings,
   Sparkles,
   StickyNote,
   Target,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { NexusMark } from "@/components/platform/NexusMark";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useOsProfile } from "@/hooks/useOsProfile";
 import { useWeeklyPlan } from "@/hooks/useWeeklyPlan";
 import { OS_NAV_ITEMS, type OsNavId } from "@/lib/os/context";
+import { useOsRail } from "@/lib/os/os-rail-context";
 import { openWeekPlanSheet } from "@/lib/os/week-plan-ui";
 import { cn } from "@/lib/utils";
 
@@ -32,8 +41,29 @@ const NAV_ICONS: Record<OsNavId, typeof LayoutDashboard> = {
   innsikt: Sparkles,
 };
 
+function RailTip({
+  label,
+  enabled,
+  children,
+}: {
+  label: string;
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right" className="bg-[#0c1522] text-white">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Bubbly OS sidebar — chrome sphere home, pill nav, ukesmal, capture, profile.
+ * In Fortell note mode the rail stays icon-only until Utvid or note mode ends.
  */
 export function NexusOsSideNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -41,24 +71,42 @@ export function NexusOsSideNav() {
   const onDeskHome = !onFortell && (pathname === "/desk" || pathname === "/desk/");
   const { displayName, avatarUrl, fallbackStyle, initials } = useOsProfile();
   const { focusHint, needsFill } = useWeeklyPlan();
+  const {
+    noteMode,
+    railCollapsed,
+    railPinnedExpanded,
+    setRailPinnedExpanded,
+  } = useOsRail();
+
+  /** Show text labels in the rail (xl only, unless note-mode collapse). */
+  const showLabels = !railCollapsed;
 
   return (
-    <>
-      <aside
+    <aside
+      className={cn(
+        "relative flex h-full w-[5.75rem] shrink-0 flex-col items-center transition-[width] duration-300 ease-out",
+        "bg-gradient-to-b from-[#0c1522] via-[#101a2a] to-[#0a1018]",
+        "text-sidebar-foreground",
+        "border-r border-white/5",
+        showLabels && "xl:w-[15.5rem] xl:items-stretch",
+      )}
+      data-rail-collapsed={railCollapsed ? "true" : "false"}
+    >
+      <div
+        aria-hidden
         className={cn(
-          "relative flex h-full w-[5.75rem] shrink-0 flex-col items-center",
-          "bg-gradient-to-b from-[#0c1522] via-[#101a2a] to-[#0a1018]",
-          "text-sidebar-foreground",
-          "border-r border-white/5",
-          "xl:w-[15.5rem] xl:items-stretch",
+          "pointer-events-none absolute left-1/2 top-6 size-24 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,oklch(0.55_0.12_230/0.45)_0%,transparent_70%)] blur-2xl",
+          showLabels && "xl:left-8 xl:translate-x-0",
+        )}
+      />
+
+      <div
+        className={cn(
+          "relative z-10 flex flex-col items-center gap-1.5 px-2 pb-3 pt-5",
+          showLabels && "xl:flex-row xl:gap-3 xl:px-4",
         )}
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-6 size-24 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,oklch(0.55_0.12_230/0.45)_0%,transparent_70%)] blur-2xl xl:left-8 xl:translate-x-0"
-        />
-
-        <div className="relative z-10 flex flex-col items-center gap-1.5 px-2 pb-3 pt-5 xl:flex-row xl:gap-3 xl:px-4">
+        <RailTip label="NEXUS — I dag" enabled={railCollapsed}>
           <Link
             to="/desk"
             search={{ kontekst: "hele" }}
@@ -79,68 +127,120 @@ export function NexusOsSideNav() {
             />
             <NexusMark size="md" alt="" pulse={onDeskHome} className="relative drop-shadow-lg" />
           </Link>
-          <div className="hidden min-w-0 xl:block">
-            <p className="font-heading text-sm font-semibold tracking-wide text-white">NEXUS</p>
-            <p className="truncate text-[11px] text-white/45">Kontrollsenter</p>
-          </div>
+        </RailTip>
+        <div className={cn("hidden min-w-0", showLabels && "xl:block")}>
+          <p className="font-heading text-sm font-semibold tracking-wide text-white">NEXUS</p>
+          <p className="truncate text-[11px] text-white/45">Kontrollsenter</p>
         </div>
+      </div>
 
-        <nav className="relative z-10 flex flex-1 flex-col items-center gap-1.5 overflow-y-auto px-2 py-2 xl:items-stretch xl:px-3">
-          {OS_NAV_ITEMS.map((item) => {
-            const Icon = NAV_ICONS[item.id];
-            const active =
-              item.id === "innboks"
-                ? onFortell
-                : item.id === "i-dag"
-                  ? onDeskHome
-                  : false;
+      {noteMode && (
+        <div className="relative z-10 mb-1 flex w-full justify-center px-2">
+          <RailTip
+            label={railPinnedExpanded ? "Skjul meny" : "Utvid meny"}
+            enabled={railCollapsed}
+          >
+            <button
+              type="button"
+              onClick={() => setRailPinnedExpanded(!railPinnedExpanded)}
+              className="flex size-10 items-center justify-center rounded-full bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
+              aria-label={railPinnedExpanded ? "Skjul meny" : "Utvid meny"}
+              aria-pressed={railPinnedExpanded}
+            >
+              {railPinnedExpanded ? (
+                <PanelLeftClose className="size-4" />
+              ) : (
+                <PanelLeft className="size-4" />
+              )}
+            </button>
+          </RailTip>
+        </div>
+      )}
 
-            return (
-              <Link
-                key={item.id}
-                to={item.to}
-                search={item.to === "/desk" ? { kontekst: "hele" } : undefined}
-                title={item.label}
+      <nav
+        className={cn(
+          "relative z-10 flex flex-1 flex-col items-center gap-1.5 overflow-y-auto px-2 py-2",
+          showLabels && "xl:items-stretch xl:px-3",
+        )}
+      >
+        {OS_NAV_ITEMS.map((item) => {
+          const Icon = NAV_ICONS[item.id];
+          const active =
+            item.id === "innboks"
+              ? onFortell
+              : item.id === "i-dag"
+                ? onDeskHome
+                : false;
+
+          const link = (
+            <Link
+              to={item.to}
+              search={item.to === "/desk" ? { kontekst: "hele" } : undefined}
+              aria-label={item.label}
+              className={cn(
+                "group relative flex items-center justify-center gap-3 rounded-full px-0 py-2.5 text-sm font-medium transition-all duration-200",
+                showLabels && "xl:justify-start xl:px-3",
+                active
+                  ? "bg-gradient-to-r from-primary to-[oklch(0.5_0.1_195)] text-white shadow-[0_8px_24px_-8px_oklch(0.45_0.1_210/0.7)]"
+                  : "text-white/65 hover:bg-white/8 hover:text-white",
+              )}
+            >
+              <span
                 className={cn(
-                  "group relative flex items-center justify-center gap-3 rounded-full px-0 py-2.5 text-sm font-medium transition-all duration-200",
-                  "xl:justify-start xl:px-3",
+                  "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
                   active
-                    ? "bg-gradient-to-r from-primary to-[oklch(0.5_0.1_195)] text-white shadow-[0_8px_24px_-8px_oklch(0.45_0.1_210/0.7)]"
-                    : "text-white/65 hover:bg-white/8 hover:text-white",
+                    ? "bg-white/20"
+                    : "bg-white/5 group-hover:bg-white/10",
                 )}
               >
-                <span
-                  className={cn(
-                    "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
-                    active
-                      ? "bg-white/20"
-                      : "bg-white/5 group-hover:bg-white/10",
-                  )}
-                >
-                  <Icon className="size-4" />
-                </span>
-                <span className="hidden flex-1 truncate xl:inline">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+                <Icon className="size-4" />
+              </span>
+              <span
+                className={cn(
+                  "hidden flex-1 truncate",
+                  showLabels && "xl:inline",
+                )}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
 
-        <div className="relative z-10 mx-2 mb-2 w-[calc(100%-1rem)] xl:mx-3 xl:w-auto">
+          return (
+            <RailTip key={item.id} label={item.label} enabled={railCollapsed}>
+              {link}
+            </RailTip>
+          );
+        })}
+      </nav>
+
+      <div
+        className={cn(
+          "relative z-10 mx-2 mb-2 w-[calc(100%-1rem)]",
+          showLabels && "xl:mx-3 xl:w-auto",
+        )}
+      >
+        <RailTip
+          label={focusHint ? `Ukesmal: ${focusHint}` : "Ukesmal"}
+          enabled={railCollapsed}
+        >
           <button
             type="button"
             onClick={() => openWeekPlanSheet()}
-            title="Ukesmal"
+            aria-label="Ukesmal"
             className={cn(
-              "flex w-full items-center gap-2 rounded-2xl border border-white/10 px-2 py-2 text-left transition-colors",
+              "flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-2 py-2 text-left transition-colors",
               "bg-white/8 hover:bg-white/12",
-              "xl:px-3",
+              showLabels && "xl:justify-start xl:px-3",
               needsFill && "ring-1 ring-warning/50",
             )}
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning/25 text-warning">
               <Filter className="size-4" />
             </span>
-            <span className="hidden min-w-0 flex-1 xl:block">
+            <span
+              className={cn("hidden min-w-0 flex-1", showLabels && "xl:block")}
+            >
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-white/50">
                 Ukesmal
               </span>
@@ -149,61 +249,84 @@ export function NexusOsSideNav() {
               </span>
             </span>
           </button>
-        </div>
+        </RailTip>
+      </div>
 
-        <div className="relative z-10 mx-2 mb-3 hidden rounded-[1.75rem] border border-white/10 bg-white/95 p-2.5 text-foreground shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)] xl:block">
-          <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Fang noe
-          </p>
-          <div className="flex justify-between gap-1">
-            {(
-              [
-                { label: "Oppgave", icon: CheckSquare, tone: "bg-primary/12 text-primary" },
-                { label: "Notat", icon: StickyNote, tone: "bg-secondary/15 text-secondary" },
-                { label: "Idé", icon: Lightbulb, tone: "bg-warning/25 text-[oklch(0.45_0.12_75)]" },
-              ] as const
-            ).map(({ label, icon: Icon, tone }) => (
-              <button
-                key={label}
-                type="button"
-                title={label}
-                className="flex flex-1 flex-col items-center gap-1 rounded-2xl p-1.5 transition-transform hover:scale-105"
-              >
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-full shadow-soft",
-                    tone,
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                </span>
-                <span className="text-[9px] font-medium">{label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative z-10 mb-2 flex flex-col items-center gap-1.5 xl:hidden">
+      <div
+        className={cn(
+          "relative z-10 mx-2 mb-3 hidden rounded-[1.75rem] border border-white/10 bg-white/95 p-2.5 text-foreground shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)]",
+          showLabels && "xl:block",
+        )}
+      >
+        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Fang noe
+        </p>
+        <div className="flex justify-between gap-1">
           {(
             [
-              { label: "Oppgave", icon: CheckSquare },
-              { label: "Notat", icon: StickyNote },
-              { label: "Idé", icon: Lightbulb },
+              { label: "Oppgave", icon: CheckSquare, tone: "bg-primary/12 text-primary" },
+              { label: "Notat", icon: StickyNote, tone: "bg-secondary/15 text-secondary" },
+              { label: "Idé", icon: Lightbulb, tone: "bg-warning/25 text-[oklch(0.45_0.12_75)]" },
             ] as const
-          ).map(({ label, icon: Icon }) => (
+          ).map(({ label, icon: Icon, tone }) => (
             <button
               key={label}
               type="button"
               title={label}
+              className="flex flex-1 flex-col items-center gap-1 rounded-2xl p-1.5 transition-transform hover:scale-105"
+            >
+              <span
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-full shadow-soft",
+                  tone,
+                )}
+              >
+                <Icon className="size-3.5" />
+              </span>
+              <span className="text-[9px] font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "relative z-10 mb-2 flex flex-col items-center gap-1.5",
+          showLabels && "xl:hidden",
+        )}
+      >
+        {(
+          [
+            { label: "Oppgave", icon: CheckSquare },
+            { label: "Notat", icon: StickyNote },
+            { label: "Idé", icon: Lightbulb },
+          ] as const
+        ).map(({ label, icon: Icon }) => (
+          <RailTip key={label} label={label} enabled={railCollapsed}>
+            <button
+              type="button"
+              aria-label={label}
               className="flex size-9 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/18 hover:text-white"
             >
               <Icon className="size-3.5" />
             </button>
-          ))}
-        </div>
+          </RailTip>
+        ))}
+      </div>
 
-        <div className="relative z-10 mt-auto flex flex-col items-center gap-2 border-t border-white/8 px-2 py-3 xl:flex-row xl:justify-between xl:px-3">
-          <div className="flex flex-col items-center gap-1.5 xl:flex-row xl:gap-1">
+      <div
+        className={cn(
+          "relative z-10 mt-auto flex flex-col items-center gap-2 border-t border-white/8 px-2 py-3",
+          showLabels && "xl:flex-row xl:justify-between xl:px-3",
+        )}
+      >
+        <div
+          className={cn(
+            "flex flex-col items-center gap-1.5",
+            showLabels && "xl:flex-row xl:gap-1",
+          )}
+        >
+          <RailTip label="Varsler" enabled={railCollapsed}>
             <button
               type="button"
               className="flex size-9 items-center justify-center rounded-full bg-white/5 text-white/65 transition-colors hover:bg-white/12 hover:text-white"
@@ -211,6 +334,8 @@ export function NexusOsSideNav() {
             >
               <Bell className="size-4" />
             </button>
+          </RailTip>
+          <RailTip label="Innstillinger" enabled={railCollapsed}>
             <Link
               to="/profil"
               className="flex size-9 items-center justify-center rounded-full bg-white/5 text-white/65 transition-colors hover:bg-white/12 hover:text-white"
@@ -218,18 +343,24 @@ export function NexusOsSideNav() {
             >
               <Settings className="size-4" />
             </Link>
+          </RailTip>
+          <RailTip label="Hjelp" enabled={railCollapsed}>
             <button
               type="button"
-              className="hidden size-9 items-center justify-center rounded-full bg-white/5 text-white/65 transition-colors hover:bg-white/12 hover:text-white xl:flex"
+              className={cn(
+                "hidden size-9 items-center justify-center rounded-full bg-white/5 text-white/65 transition-colors hover:bg-white/12 hover:text-white",
+                showLabels && "xl:flex",
+              )}
               aria-label="Hjelp"
             >
               <CircleHelp className="size-4" />
             </button>
-          </div>
+          </RailTip>
+        </div>
 
+        <RailTip label={displayName} enabled={railCollapsed}>
           <Link
             to="/profil"
-            title={displayName}
             aria-label={`Profil — ${displayName}`}
             className="group relative rounded-full ring-2 ring-white/15 transition-all hover:ring-primary/60 hover:ring-offset-2 hover:ring-offset-[#0c1522]"
           >
@@ -244,8 +375,8 @@ export function NexusOsSideNav() {
               className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-[#0c1522] bg-success"
             />
           </Link>
-        </div>
-      </aside>
-    </>
+        </RailTip>
+      </div>
+    </aside>
   );
 }

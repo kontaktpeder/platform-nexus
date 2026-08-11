@@ -72,6 +72,7 @@ import {
 } from "@/lib/fortell-thread.functions";
 import { useDayAtmosphere } from "@/hooks/useDayAtmosphere";
 import { isDarkPhase } from "@/lib/os/day-atmosphere";
+import { useOsRail } from "@/lib/os/os-rail-context";
 import { cn } from "@/lib/utils";
 
 const RELATION_KIND_LABEL: Record<FortellRelationProposal["kind"], string> = {
@@ -110,9 +111,9 @@ export function FortellChat() {
   const lastWs = useMemo(() => getLastWorkspace(), []);
   const atmosphere = useDayAtmosphere();
   const darkPhase = isDarkPhase(atmosphere.phase);
+  const { noteMode, setNoteMode } = useOsRail();
 
   const [instruction, setInstruction] = useState("");
-  const [noteMode, setNoteMode] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [history, setHistory] = useState<FortellChatMessage[]>(() =>
     typeof window !== "undefined" ? readFortellThread() : [],
