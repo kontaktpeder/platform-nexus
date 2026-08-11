@@ -12,6 +12,7 @@ import {
   MicOff,
   Send,
   Square,
+  StickyNote,
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -111,6 +112,7 @@ export function FortellChat() {
   const darkPhase = isDarkPhase(atmosphere.phase);
 
   const [instruction, setInstruction] = useState("");
+  const [noteMode, setNoteMode] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [history, setHistory] = useState<FortellChatMessage[]>(() =>
     typeof window !== "undefined" ? readFortellThread() : [],
@@ -145,6 +147,7 @@ export function FortellChat() {
     signatureBody: null,
     signatureHtml: null,
   });
+  const noteFieldRef = useRef<HTMLTextAreaElement>(null);
   const [activeSession, setActiveSession] = useState(() =>
     typeof window !== "undefined" ? readWorkSession() : null,
   );
@@ -157,6 +160,27 @@ export function FortellChat() {
   useEffect(() => {
     writeFortellThread(history);
   }, [history]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      if (e.key.toLowerCase() !== "n") return;
+      // Avoid when typing in non-Fortell fields outside this surface
+      e.preventDefault();
+      setNoteMode((v) => !v);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!noteMode) return;
+    speech.stop();
+    const t = window.setTimeout(() => noteFieldRef.current?.focus(), 50);
+    return () => window.clearTimeout(t);
+    // speech.stop is stable enough; avoid re-running on speech identity churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- enter note mode only
+  }, [noteMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +199,10 @@ export function FortellChat() {
       cancelled = true;
     };
   }, [loadThread]);
+
+  function toggleNoteMode() {
+    setNoteMode((v) => !v);
+  }
 
   function appendTranscript(chunk: string) {
     setInstruction((prev) => {
@@ -658,38 +686,116 @@ export function FortellChat() {
             : speech.listening
               ? `Lytter… ${speech.interim ? `"${speech.interim}"` : "snakk nå"}`
               : speech.supported
-                ? "⌘+Enter for å sende · mikrofon for tale"
-                : "⌘+Enter for å sende"}
+                ? "⌘+Enter send · ⌘⇧N notat"
+                : "⌘+Enter send · ⌘⇧N notat"}
         </p>
-        {hasChat && (
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => {
-              speech.stop();
-              void newThread()
-                .then((payload) => {
-                  setThreadId(payload.threadId);
-                  clearFortellThread();
-                  setHistory([]);
-                  setResult(null);
-                  setWorkStopNote(null);
-                })
-                .catch(() => {
-                  clearFortellThread();
-                  setThreadId(null);
-                  setHistory([]);
-                  setResult(null);
-                  setWorkStopNote(null);
-                });
-            }}
+            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            onClick={toggleNoteMode}
+            aria-pressed={noteMode}
           >
-            Ny chat
+            <StickyNote className="h-3.5 w-3.5" />
+            Notat
           </button>
-        )}
+          {hasChat && (
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => {
+                speech.stop();
+                void newThread()
+                  .then((payload) => {
+                    setThreadId(payload.threadId);
+                    clearFortellThread();
+                    setHistory([]);
+                    setResult(null);
+                    setWorkStopNote(null);
+                  })
+                  .catch(() => {
+                    clearFortellThread();
+                    setThreadId(null);
+                    setHistory([]);
+                    setResult(null);
+                    setWorkStopNote(null);
+                  });
+              }}
+            >
+              Ny chat
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
+
+  if (noteMode) {
+    return (
+      <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-8 sm:py-8">
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-1 flex-col">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">Notater</p>
+              <button
+                type="button"
+                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={toggleNoteMode}
+              >
+                ⌘⇧N
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <Textarea
+                ref={noteFieldRef}
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder="Notater…"
+                maxLength={2000}
+                className="h-full min-h-[50vh] resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[17px] leading-relaxed shadow-none focus-visible:ring-0 md:text-[17px]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+              <p className="text-[11px] text-muted-foreground">
+                {instruction.length}/2000
+                {mut.isPending ? " · …" : ""}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-xl text-xs"
+                  onClick={toggleNoteMode}
+                >
+                  Avslutt
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-xl"
+                  disabled={!instruction.trim() || mut.isPending}
+                  onClick={submit}
+                >
+                  {mut.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    "Send"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
