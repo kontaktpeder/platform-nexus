@@ -893,6 +893,42 @@ export const runFortell = createServerFn({ method: "POST" })
         },
       }),
 
+      searchInternalNotes: tool({
+        description:
+          "Søk i INTERNE Nexus-notater: signaler, kontaktfakta, manuelle notater, Fortell-historikk, personlig minne og desk-dokumenter (f.eks. kjøreplaner). Bruk ved spørsmål om tidspunkt, kjøreplan, bryllup, briefing, crew, omrigg, «hva står i notatene» — IKKE mail/Slack. Ved «ikke sjekk mail» er dette riktig verktøy.",
+        inputSchema: z.object({
+          query: z.string().min(2).max(200),
+        }),
+        execute: async ({ query }) => {
+          const { searchInternalNotes } = await import(
+            "@/lib/fortell-internal-notes.server"
+          );
+          steps.push({ label: "Søkte interne notater", detail: query.trim() });
+          try {
+            const { hits, tokens } = await searchInternalNotes({
+              supabase,
+              userId,
+              query,
+            });
+            return {
+              ok: true,
+              count: hits.length,
+              tokens,
+              hits: hits.map((h) => ({
+                source: h.source,
+                title: h.title,
+                snippet: h.snippet,
+                entityName: h.entityName,
+                at: h.at,
+              })),
+            };
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : "Søk feilet";
+            return { ok: false, error: msg, hits: [] };
+          }
+        },
+      }),
+
       searchSlack: tool({
         description:
           "Les Slack denne uken (mentions, DM, #drift/ops og whitelisted kanaler). Bruk når brukeren spør om Slack, vakt, eSkjenk, drift, eller hva som skjer i kanaler. Valgfri filtertekst (f.eks. eskjenk, vakt).",
@@ -1345,25 +1381,28 @@ export const runFortell = createServerFn({ method: "POST" })
       "Myke preferanser fra tidligere Fortell-samtaler ligger i PERSONLIG KONTEKST — bruk dem. Hard lagring (kontakt/relasjon/Control) krever fortsatt foreslå-tools + brukerbekreftelse.",
       "Du har KUN disse verktøyene:",
       "1) readContact — les person/selskap i Nexus",
-      "2) searchWeb / lookupBrregCompany / getBrregRoles — finn mer info på nett/Brreg",
-      "3) proposeContactUpdate — foreslå felt på eksisterende kontakt (lagrer ikke selv)",
-      "4) proposeRelation — foreslå kobling mellom to kontakter (lagrer ikke selv)",
-      "5) searchImportantMail — søk Gmail (viktige/uleste)",
-      "6) listUpcomingEvents — Google Calendar i dag/snart",
-      "7) captureManualSignal — lagre manuelt signal i Desk-køen",
-      "8) searchSlack — les Slack denne uken (#drift, mentions, DM)",
-      "9) listUnpaidInvoices — ubetalte fakturaer fra Finance",
-      "10) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
-      "11) proposeEmailDraft — e-postutkast (sender ikke selv)",
-      "12) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
-      "13) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
-      "14) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
-      "15) proposePdfDocument — forbered PDF/kjøreplan/briefing for nedlasting (lagrer ikke selv)",
+      "2) searchInternalNotes — søk interne notater/signaler/kjøreplaner/Fortell-minne (IKKE mail/Slack)",
+      "3) searchWeb / lookupBrregCompany / getBrregRoles — finn mer info på nett/Brreg",
+      "4) proposeContactUpdate — foreslå felt på eksisterende kontakt (lagrer ikke selv)",
+      "5) proposeRelation — foreslå kobling mellom to kontakter (lagrer ikke selv)",
+      "6) searchImportantMail — søk Gmail (viktige/uleste)",
+      "7) listUpcomingEvents — Google Calendar i dag/snart",
+      "8) captureManualSignal — lagre manuelt signal i Desk-køen",
+      "9) searchSlack — les Slack denne uken (#drift, mentions, DM)",
+      "10) listUnpaidInvoices — ubetalte fakturaer fra Finance",
+      "11) proposeWorkSession / proposeStopWorkSession — Work-økt (starter/stopper ikke selv)",
+      "12) proposeEmailDraft — e-postutkast (sender ikke selv)",
+      "13) listControlAgreements / readControlAgreement — les eksisterende Control-avtaler",
+      "14) proposeControlAgreementUpdate — oppdater eksisterende Control-utkast (lagrer ikke selv)",
+      "15) proposeControlAgreement — NYTT Control-utkast (lagrer ikke selv)",
+      "16) proposePdfDocument — forbered PDF/kjøreplan/briefing for nedlasting (lagrer ikke selv)",
       "Regler:",
       "- Bruk historikk. Hvis bruker sier «send mail» etter kontekst om Josefines/ikke på jobb — bruk den konteksten.",
+      "- Ved tidspunkt/kjøreplan/bryllup/briefing/crew/omrigg/«hva står i notatene»/«interne notater»: searchInternalNotes FØRST (gjerne flere søk: Henrik+omrigg, Josefine, 15. august). readContact er støtte, ikke hovedkilde for tidslinjer.",
+      "- Hvis brukeren sier «ikke mail», «ikke Slack», «kun notater»: ikke kall searchImportantMail eller searchSlack.",
       "- Ved «finn X på nett / fyll kontakt»: readContact → searchWeb (+ Brreg ved selskap) → proposeContactUpdate med entityId.",
       "- Ved daglig leder / eier / «koble X til Y» / handelsnavn↔juridisk: readContact begge → proposeRelation (member_of, owns, related_to, customer_of).",
-      "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold.",
+      "- Oppfinn ALDRI e-post, org.nr, telefon, roller eller Slack-innhold. Svar med konkrete klokkeslett når searchInternalNotes gir treff.",
       "- Ved viktige mail: searchImportantMail. Ved Slack/vakt/eSkjenk: searchSlack.",
       "- Ved spørsmål om legge seg, kveld, i morgen, prioritering, eller «hva bør jeg huske»: systemet har allerede hentet mail+kalender (se PÅLAGT KONTEKST). Nevn avtaler og klokkeslett eksplisitt. Ikke gjett at det er «ingenting».",
       "- Ved «noter dette» / WhatsApp / muntlig info: captureManualSignal.",
